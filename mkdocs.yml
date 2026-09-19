@@ -24,8 +24,12 @@ theme:
     - navigation.tracking
     - content.action.edit
 
+markdown_extensions:
+  - pymdownx.snippets:
+      base_path: docs
+
 nav:
-  - Home: user-guides.md
+  - Home: index.md
   - Getting Started:
       - Getting Started with CAIME: user-guide-getting-started.md
       - Main Interface Guide: user-guide-main-interface.md
