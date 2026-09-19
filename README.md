@@ -19,7 +19,7 @@ Games supported:
 **GitHub workflow**:
 1. Branch from *main* and give a meaningful name for your branch (like a feature name);
 2. Commit all your changes and push them to this repo;
-3. Create a pull request (PR) (*your_branch* -> *main*) and assign either @victimized0 or @MrJox as a reviewer;
+3. Create a pull request (PR) (*your_branch* -> *main*) and assign either @victimized0, @robert-d-schultz or @MrJox as a reviewer;
 4. Your PR will be reviewed and either a) returned to your for improvements/fixes or b) approved;
 5. If your PR was returned to you, please, perform the requested improvements/fixes and request merge again.
 
@@ -35,10 +35,11 @@ Games supported:
 - Daniu - ESF library;
 - Mitch - Details on some aspects of the campaign map;
 - Celebdil - Research and work on borders.pbd file;
-- Leoman - Research on tilemapping and help with figuring out hlp_data and spd_data (together with Ophis);
+- justLeo - Research on tilemapping and help with figuring out hlp_data and spd_data (together with Ophis);
 
 **Contributors**:
 - MrJox - Architecture and vast majority of the source code programming;
+- ChaosRobbie - QoL improvements; New features; Reverse engineering & polishing;
 - Celebdil - Borders exporter code;
 - CharlesWoodhill - Hex spacing setting in preferences;
 - TadeoM - Painting tool feature;
