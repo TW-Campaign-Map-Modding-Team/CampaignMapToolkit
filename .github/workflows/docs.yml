@@ -5,50 +5,45 @@ on:
     branches: [ main ]
     paths:
       - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  publish-wiki:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Checkout wiki
-        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          repository: ${{ github.repository }}.wiki
-          path: wiki
-          token: ${{ secrets.GITHUB_TOKEN }}
+          python-version: '3.x'
 
-      # docs/user-guides.md is the in-app help index; reuse it as the wiki
-      # landing page (Home.md) and as the wiki's left-hand nav (_Sidebar.md),
-      # in addition to publishing every guide under its own page name so
-      # in-app help links (which point at the .md filenames) keep working.
-      - name: Build wiki content
-        run: |
-          rm -rf /tmp/wiki-content
-          mkdir -p /tmp/wiki-content
-          cp docs/*.md /tmp/wiki-content/
-          cp docs/user-guides.md /tmp/wiki-content/Home.md
-          cp docs/user-guides.md /tmp/wiki-content/_Sidebar.md
+      - name: Install MkDocs Material
+        run: pip install mkdocs-material
 
-      - name: Sync into wiki checkout
-        run: rsync -a --delete --exclude='.git' /tmp/wiki-content/ wiki/
+      - name: Build site
+        run: mkdocs build --strict
 
-      - name: Commit and push
-        working-directory: wiki
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No doc changes to publish."
-          else
-            git commit -m "Sync docs from ${{ github.sha }}"
-            git push
-          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

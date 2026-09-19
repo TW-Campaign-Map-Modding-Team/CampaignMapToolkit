@@ -1,0 +1,44 @@
+site_name: CAIME User Guides
+site_url: https://tw-campaign-map-modding-team.github.io/CampaignMapToolkit/
+repo_url: https://github.com/TW-Campaign-Map-Modding-Team/CampaignMapToolkit
+repo_name: CampaignMapToolkit
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - content.action.edit
+
+nav:
+  - Home: user-guides.md
+  - Getting Started:
+      - Getting Started with CAIME: user-guide-getting-started.md
+      - Main Interface Guide: user-guide-main-interface.md
+      - Settings & Preferences: user-guide-settings-and-preferences.md
+  - Creating & Editing Maps:
+      - Creating a New Campaign Map: user-guide-creating-a-new-map.md
+      - Modifying an Existing Campaign Map: user-guide-modifying-an-existing-map.md
+      - Creating and Sharing Map Templates: user-guide-creating-a-template.md
+  - Painting:
+      - The Painting Toolbar: user-guide-toolbar-painting-tools.md
+      - Painting with Swatches: user-guide-painting-with-swatches.md
+      - Layers Reference: user-guide-layers-reference.md
+  - Tools & Output:
+      - The Tools Menu: user-guide-tools-menu.md
+      - Processing & Exporting: user-guide-processing-and-exporting.md
+      - Command Line Interface (CLI): user-guide-command-line-interface.md

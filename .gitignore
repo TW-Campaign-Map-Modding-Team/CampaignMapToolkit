@@ -352,3 +352,6 @@ backups/
 # CAIME tools and libs
 /CAIME/Tools/*
 !/CAIME/Tools/.gitkeep
+
+# MkDocs build output
+/site/
