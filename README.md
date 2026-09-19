@@ -32,6 +32,7 @@ Games supported:
 - Causeless - Info on some aspects of the campaign map, some implementation ideas;
 - Ophis - A lot of helpful info of various aspects: campaign map, database, startpos, tilemapping and a lot more;
 - PeteCA - General info on how some aspects of campaign work as well as some details on file formats;
+- OtherTomCA - For providing Rome 2, Attila and Thrones of Britannia campaign map raw files (map.hex, trees.png);
 - Daniu - ESF library;
 - Mitch - Details on some aspects of the campaign map;
 - Celebdil - Research and work on borders.pbd file;
