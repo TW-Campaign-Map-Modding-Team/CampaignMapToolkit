@@ -78,11 +78,14 @@ jobs:
 
       # Publish the Velopack packages as a GitHub Release.
       # This replaces the old Compress-Archive + softprops/action-gh-release steps.
+      # --merge lets this upload attach to a release that already exists for the
+      # tag (e.g. one drafted/published through the GitHub UI) instead of failing.
       - name: Upload Velopack release to GitHub
         run: >
           vpk upload github
           --repoUrl https://github.com/${{ github.repository }}
           --publish
+          --merge
           --releaseName "Release ${{ github.ref_name }}"
           --tag ${{ github.ref_name }}
           --token ${{ secrets.GITHUB_TOKEN }}
