@@ -39,6 +39,39 @@ These are tools for keeping change local and cheap, not a checklist to satisfy
 for its own sake. Do not apply a pattern that adds indirection nobody needs;
 see [Coding style](coding-style.md) on leaving code outside your change alone.
 
+## Design patterns
+
+Reach for a design pattern when it is the well-known, best fit for the problem
+in front of you — not by default, and not because a class could theoretically
+grow a hierarchy of options someday. A pattern is justified by a real problem
+it solves today, not by a speculative future one.
+
+Patterns already earning their place in this codebase:
+
+- **Command** — `RelayCommand` and `ToolCommands` wrap a UI action as an
+  object, which is what lets `ICommand` bindings and undo/redo work the same
+  way for every action.
+- **Strategy** — the `Tool` hierarchy in `CAIME/Models/Editor/Tools/`, the
+  painters in `CAIME/Classes/Editor/Painters/`, and the generators in
+  `CAIME/Classes/Exporters/Pathfinding/Generators/` each vary one algorithm
+  behind a shared shape, so the editor and the exporter can pick one without
+  knowing its details.
+- **MVVM's own Observer** — data binding between a view and a view model is
+  the Observer pattern; see [MVVM](#mvvm) above. Nothing further is needed to
+  get change notification working.
+
+Before adding a new one, check whether it solves a problem you actually have:
+
+- Adding a pattern to a class with one implementation and no planned second
+  one is premature abstraction — plain code is simpler and just as correct.
+- A `Factory` is worth it when construction itself is a decision (which
+  exporter for which game, which tool for which hotkey); it is not worth it
+  for `new` on a single concrete type.
+- A `Singleton` hides a dependency instead of declaring it, and makes testing
+  harder. Prefer passing the instance in.
+- If a pattern's abstraction and its benefit are getting hard to explain in
+  a sentence, that is a sign it doesn't fit — see KISS above.
+
 ## Data layout in hot paths
 
 The processing unit walks every hex, tile, and region in a map, often more
