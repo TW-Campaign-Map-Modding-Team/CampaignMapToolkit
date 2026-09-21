@@ -6,6 +6,8 @@ human or agent. This is the single source of truth; `AGENTS.md` and
 
 Each document covers one concern:
 
+- [Architecture](guidelines/architecture.md) — MVVM, KISS and SOLID, hot-path
+  data layout, and how CAIME's components break down.
 - [Coding style](guidelines/coding-style.md) — how C# is written here.
 - [Documentation](guidelines/documentation.md) — what documentation is for and
   what it may claim.
