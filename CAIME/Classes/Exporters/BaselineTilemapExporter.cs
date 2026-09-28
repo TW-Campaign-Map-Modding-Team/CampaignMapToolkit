@@ -157,14 +157,14 @@ namespace CAIME
 
         private static Bitmap CreateBitmap(int hexMapWidth, int hexMapHeight, byte[] imageData, MapHexFile mapHexFile)
         {
-            //imageData = Utility.FlipRawDataVert(imageData, hexMapWidth);
-
             var bitmap = new Bitmap(hexMapWidth * 2 , (hexMapHeight * 2) +1, PixelFormat.Format8bppIndexed);
 
             var bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
                                             ImageLockMode.WriteOnly, bitmap.PixelFormat);
 
-            var resampledData = Doubled(imageData, hexMapWidth, hexMapHeight);
+            // Hex row 0 is the bottom of the map but image row 0 is the top. Flip after doubling,
+            // not before: Doubled staggers odd columns towards the next hex row, which is north.
+            var resampledData = Utility.FlipRawDataVert(Doubled(imageData, hexMapWidth, hexMapHeight), bitmap.Width);
 
             Utility.CopyRowsToBitmap(resampledData, bmpData, bitmap.Width, bitmap.Height);
 
