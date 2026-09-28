@@ -174,7 +174,6 @@ namespace CAIME
 
             //These in common
             pal.Entries[4] = Color.FromArgb(255, 255, 255, 0); //beach
-            pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
             if (mapHexFile.GameName == "warhammer3")
             {
@@ -184,11 +183,27 @@ namespace CAIME
                 pal.Entries[3] = Color.FromArgb(255, 253, 3, 1); //gen_cliff
 
                 pal.Entries[5] = Color.FromArgb(255, 223, 180, 145); //generic
+                pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
                 pal.Entries[7] = Color.FromArgb(255, 93, 66, 24); //no bridges over rivers (using road)
                 pal.Entries[8] = Color.FromArgb(255, 255, 255, 0); //no river mouths (using beach)
                 pal.Entries[9] = Color.FromArgb(255, 84, 230, 84); //cliff_gen_ends (cliff-beach transition)
                 pal.Entries[10] = Color.FromArgb(255, 223, 180, 145); //no river sources (using generic)
+            }
+            else if (mapHexFile.GameName == "three_kingdoms")
+            {
+                //These for Three Kingdoms, from the tile sets in _tile_database/_settings.bin
+                pal.Entries[1] = Color.FromArgb(255, 93, 0, 24); //roads_tracks, the most common of the three road sets
+                pal.Entries[2] = Color.FromArgb(255, 0, 0, 255); //river
+                pal.Entries[3] = Color.FromArgb(255, 249, 173, 105); //blockout_cliff
+
+                pal.Entries[5] = Color.FromArgb(255, 150, 170, 100); //generic
+                pal.Entries[6] = Color.FromArgb(255, 57, 113, 183); //generic_sea
+
+                pal.Entries[7] = Color.FromArgb(255, 218, 67, 255); //river_crossing_track, to match roads_tracks
+                pal.Entries[8] = Color.FromArgb(255, 204, 204, 255); //river_mouth
+                pal.Entries[9] = Color.FromArgb(255, 159, 34, 42); //blockout_cliff_ends
+                pal.Entries[10] = Color.FromArgb(255, 180, 180, 255); //river_start
             }
             else
             {
@@ -198,6 +213,7 @@ namespace CAIME
                 pal.Entries[3] = Color.FromArgb(255, 254, 0, 0); //cliff
 
                 pal.Entries[5] = Color.FromArgb(255, 90, 118, 71); //some grass01 for land
+                pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
                 pal.Entries[7] = Color.FromArgb(255, 127, 0, 255); //road over river
                 pal.Entries[8] = Color.FromArgb(255, 204, 204, 255); //river ending at beach
