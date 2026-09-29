@@ -15,6 +15,8 @@ namespace CAIME
         private byte[]                  relevantIndices; //road, river, cliff, beach
         private string                  exportFilename;
         private Bitmap                  tilemapImage;
+        private int                     mountainGroundTypeIndex;
+        private byte[]                  mountainTileIndexByClimate;
 
         public static bool Export(Project project)
         {
@@ -61,7 +63,7 @@ namespace CAIME
 
             exportFilename = dialog.FileName;
 
-            return CacheColours(project);
+            return CacheColours(project.MapHexFile);
         }
 
         private void Finalise()
@@ -73,98 +75,140 @@ namespace CAIME
             LoggerViewModel.Log("Successfuly exported baseline tilemap image.", LogLevel.Info);
         }
 
-        private bool CacheColours(Project project)
+        private bool CacheColours(MapHexFile mapHexFile)
         {
-            var mapHexFile = project.MapHexFile;
             relevantIndices = new byte[mapHexFile.Capacity];
+
+            var isThreeKingdoms = mapHexFile.GameName == "three_kingdoms";
+            if (isThreeKingdoms)
+            {
+                CacheMountainTiles(mapHexFile);
+            }
 
             for (int hexIndex = 0; hexIndex < mapHexFile.Capacity; ++hexIndex)
             {
                 Hex hex = mapHexFile.HexData[hexIndex];
 
+                ScanNeighbours(mapHexFile, hex, out bool seaNeighbor, out bool beachNeighbor, out uint riverNeighbors);
 
-                bool isTilemapCliff;
-                bool isTilemapCliffEnd;
-                uint riverNeighbors = 0;
-                if (hex.IsBeach || hex.IsSea)
-                {
-                    isTilemapCliff = false;
-                    isTilemapCliffEnd = false;
-                }
-                else
-                {
-                    bool seaNeighbor = false;
-                    bool beachNeighbor = false;
-                    for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
-                    {
-                        int nbrIndex = mapHexFile.GetNeighbourIndex(hex, dir);
-                        if (nbrIndex == -1)
-                        {
-                            continue;
-                        }
-
-                        var neighbour = mapHexFile.HexData[nbrIndex];
-                        if (neighbour.IsSea)
-                            seaNeighbor = true;
-                        if (neighbour.IsBeach)
-                            beachNeighbor = true;
-                        if (neighbour.IsRiver)
-                            riverNeighbors += 1;
-                    }
-                    isTilemapCliff = seaNeighbor;
-                    isTilemapCliffEnd = isTilemapCliff && beachNeighbor;
-                }
-
-                if (hex.IsSea) //sea overrides all
-                {
-                    relevantIndices[hexIndex] = 6;
-                }
-                else if (isTilemapCliff)
-                {
-                    if (isTilemapCliffEnd)
-                        relevantIndices[hexIndex] = 9; //cliff end
-                    else
-                       relevantIndices[hexIndex] = 3; //normal cliff
-                }
-                else if (hex.IsRoad)
-                {
-                    if (hex.IsRiver)
-                        relevantIndices[hexIndex] = 7; //road over river
-                    else
-                        relevantIndices[hexIndex] = 1; //normal road
-                }
-                else if (hex.IsRiver)
-                {
-                    if (hex.IsBeach)
-                        relevantIndices[hexIndex] = 8; //river ending at beach
-                    else if (riverNeighbors == 1)
-                        relevantIndices[hexIndex] = 10; //river source
-                    else
-                        relevantIndices[hexIndex] = 2; //normal river
-                }
-                else if(hex.IsBeach)
-                {
-                    relevantIndices[hexIndex] = 4; //normal beach
-                }
-                else //(hex.IsLand) everything else gets generic land
-                {
-                    relevantIndices[hexIndex] = 5;
-                }
+                relevantIndices[hexIndex] = isThreeKingdoms
+                    ? ThreeKingdomsTileIndex(hex, seaNeighbor, beachNeighbor, riverNeighbors)
+                    : TileIndex(hex, seaNeighbor, beachNeighbor, riverNeighbors);
             }
 
             return true;
         }
 
+        private static void ScanNeighbours(MapHexFile mapHexFile, Hex hex, out bool seaNeighbor, out bool beachNeighbor, out uint riverNeighbors)
+        {
+            seaNeighbor = false;
+            beachNeighbor = false;
+            riverNeighbors = 0;
+
+            if (hex.IsSea)
+            {
+                return;
+            }
+
+            for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
+            {
+                int nbrIndex = mapHexFile.GetNeighbourIndex(hex, dir);
+                if (nbrIndex == -1)
+                {
+                    continue;
+                }
+
+                var neighbour = mapHexFile.HexData[nbrIndex];
+                if (neighbour.IsSea)
+                    seaNeighbor = true;
+                if (neighbour.IsBeach)
+                    beachNeighbor = true;
+                if (neighbour.IsRiver)
+                    riverNeighbors += 1;
+            }
+        }
+
+        private static byte TileIndex(Hex hex, bool seaNeighbor, bool beachNeighbor, uint riverNeighbors)
+        {
+            bool isTilemapCliff = hex.IsBeach == false && seaNeighbor;
+
+            if (hex.IsSea) //sea overrides all
+                return 6;
+            if (isTilemapCliff)
+                return beachNeighbor ? (byte)9 : (byte)3; //cliff end : normal cliff
+            if (hex.IsRoad)
+                return hex.IsRiver ? (byte)7 : (byte)1; //road over river : normal road
+            if (hex.IsRiver)
+            {
+                if (hex.IsBeach)
+                    return 8; //river ending at beach
+                if (riverNeighbors == 1)
+                    return 10; //river source
+                return 2; //normal river
+            }
+            if (hex.IsBeach)
+                return 4; //normal beach
+            return 5; //(hex.IsLand) everything else gets generic land
+        }
+
+        //3K's map.hex already flags every land hex touching the sea as a beach or a cliff, so the cliff flag is used as is
+        private byte ThreeKingdomsTileIndex(Hex hex, bool seaNeighbor, bool beachNeighbor, uint riverNeighbors)
+        {
+            if (hex.IsSea)
+                return 6; //generic_sea
+            if (hex.IsRiver && seaNeighbor)
+                return 8; //river_mouth, ahead of cliffs because the mouth is itself a coast hex
+            if (hex.IsCliff)
+                return beachNeighbor ? (byte)9 : (byte)3; //blockout_cliff_ends : blockout_cliff
+            if (hex.IsRoad)
+                return hex.IsRiver ? (byte)7 : (byte)1; //river_crossing_track : roads_tracks
+            if (hex.IsRiver)
+                return riverNeighbors == 1 ? (byte)10 : (byte)2; //river_start : river
+            if (hex.IsBeach)
+                return 4; //sea_coast
+            return ThreeKingdomsLandTileIndex(hex);
+        }
+
+        private byte ThreeKingdomsLandTileIndex(Hex hex)
+        {
+            bool isMountain = hex.GroundTypeIndex != Hex.INVALID_GROUND_TYPE_INDEX && hex.GroundTypeIndex == mountainGroundTypeIndex;
+            bool hasClimate = (uint)hex.ClimateIndex < (uint)mountainTileIndexByClimate.Length;
+
+            return isMountain && hasClimate ? mountainTileIndexByClimate[hex.ClimateIndex] : (byte)5; //mountains by climate : generic
+        }
+
+        private void CacheMountainTiles(MapHexFile mapHexFile)
+        {
+            mountainGroundTypeIndex = mapHexFile.LandGroundTypes.IndexOf("mountain");
+            mountainTileIndexByClimate = new byte[mapHexFile.Climates.Count];
+
+            for (int climateIndex = 0; climateIndex < mountainTileIndexByClimate.Length; ++climateIndex)
+            {
+                mountainTileIndexByClimate[climateIndex] = MountainTileIndex(mapHexFile.Climates[climateIndex]);
+            }
+        }
+
+        private static byte MountainTileIndex(string climate)
+        {
+            switch (climate)
+            {
+                case "cold":        return 11; //mountains_cold
+                case "temperate":   return 12; //mountains_temperate
+                case "subtropical": return 13; //mountains_subtropical
+                default:            return 5;  //no mountain set for this climate, use generic
+            }
+        }
+
         private static Bitmap CreateBitmap(int hexMapWidth, int hexMapHeight, byte[] imageData, MapHexFile mapHexFile)
         {
-            //imageData = Utility.FlipRawDataVert(imageData, hexMapWidth);
-
             var bitmap = new Bitmap(hexMapWidth * 2 , (hexMapHeight * 2) +1, PixelFormat.Format8bppIndexed);
 
             var bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
                                             ImageLockMode.WriteOnly, bitmap.PixelFormat);
 
-            var resampledData = Doubled(imageData, hexMapWidth, hexMapHeight);
+            // Hex row 0 is the bottom of the map but image row 0 is the top. Flip after doubling,
+            // not before: Doubled staggers odd columns towards the next hex row, which is north.
+            var resampledData = Utility.FlipRawDataVert(Doubled(imageData, hexMapWidth, hexMapHeight), bitmap.Width);
 
             Utility.CopyRowsToBitmap(resampledData, bmpData, bitmap.Width, bitmap.Height);
 
@@ -174,7 +218,6 @@ namespace CAIME
 
             //These in common
             pal.Entries[4] = Color.FromArgb(255, 255, 255, 0); //beach
-            pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
             if (mapHexFile.GameName == "warhammer3")
             {
@@ -184,11 +227,31 @@ namespace CAIME
                 pal.Entries[3] = Color.FromArgb(255, 253, 3, 1); //gen_cliff
 
                 pal.Entries[5] = Color.FromArgb(255, 223, 180, 145); //generic
+                pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
                 pal.Entries[7] = Color.FromArgb(255, 93, 66, 24); //no bridges over rivers (using road)
                 pal.Entries[8] = Color.FromArgb(255, 255, 255, 0); //no river mouths (using beach)
                 pal.Entries[9] = Color.FromArgb(255, 84, 230, 84); //cliff_gen_ends (cliff-beach transition)
                 pal.Entries[10] = Color.FromArgb(255, 223, 180, 145); //no river sources (using generic)
+            }
+            else if (mapHexFile.GameName == "three_kingdoms")
+            {
+                //These for Three Kingdoms, from the tile sets in _tile_database/_settings.bin
+                pal.Entries[1] = Color.FromArgb(255, 93, 0, 24); //roads_tracks, the most common of the three road sets
+                pal.Entries[2] = Color.FromArgb(255, 0, 0, 255); //river
+                pal.Entries[3] = Color.FromArgb(255, 249, 173, 105); //blockout_cliff
+
+                pal.Entries[5] = Color.FromArgb(255, 150, 170, 100); //generic
+                pal.Entries[6] = Color.FromArgb(255, 57, 113, 183); //generic_sea
+
+                pal.Entries[7] = Color.FromArgb(255, 218, 67, 255); //river_crossing_track, to match roads_tracks
+                pal.Entries[8] = Color.FromArgb(255, 204, 204, 255); //river_mouth
+                pal.Entries[9] = Color.FromArgb(255, 159, 34, 42); //blockout_cliff_ends
+                pal.Entries[10] = Color.FromArgb(255, 180, 180, 255); //river_start
+
+                pal.Entries[11] = Color.FromArgb(255, 24, 32, 193); //mountains_cold
+                pal.Entries[12] = Color.FromArgb(255, 182, 146, 55); //mountains_temperate
+                pal.Entries[13] = Color.FromArgb(255, 83, 176, 33); //mountains_subtropical
             }
             else
             {
@@ -198,6 +261,7 @@ namespace CAIME
                 pal.Entries[3] = Color.FromArgb(255, 254, 0, 0); //cliff
 
                 pal.Entries[5] = Color.FromArgb(255, 90, 118, 71); //some grass01 for land
+                pal.Entries[6] = Color.FromArgb(255, 83, 141, 213); //sea
 
                 pal.Entries[7] = Color.FromArgb(255, 127, 0, 255); //road over river
                 pal.Entries[8] = Color.FromArgb(255, 204, 204, 255); //river ending at beach
