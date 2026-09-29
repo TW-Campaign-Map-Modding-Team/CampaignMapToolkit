@@ -439,12 +439,62 @@ namespace CAIME
             dirtyColourSections.Clear();
         }
 
-        public int GetCellColour(int index, int width, int height)
+        public sealed class CellBatch
         {
-            int chunkIndex = GridSubdivider.FindSectionIndex(index, width, height);
-            int localIndex = GridSubdivider.GlobalIndexToSectionIndex(index, chunkIndex, width, height);
+            internal readonly int[] HexIndices;
+            internal readonly int[] Sections;
+            internal readonly int[] FirstVertices;
+            internal readonly int[] TouchedSections;
 
-            return gridSections[chunkIndex].Geometry.Colors[localIndex * 6 + 0].ToRgba();
+            internal CellBatch(int[] hexIndices, int[] sections, int[] firstVertices, int[] touchedSections)
+            {
+                HexIndices      = hexIndices;
+                Sections        = sections;
+                FirstVertices   = firstVertices;
+                TouchedSections = touchedSections;
+            }
+        }
+
+        public CellBatch CreateCellBatch(int[] hexIndices, int width, int height)
+        {
+            var sections        = new int[hexIndices.Length];
+            var firstVertices   = new int[hexIndices.Length];
+            var touchedSections = new HashSet<int>();
+
+            for (int index = 0; index < hexIndices.Length; ++index)
+            {
+                int chunkIndex = GridSubdivider.FindSectionIndex(hexIndices[index], width, height);
+                int localIndex = GridSubdivider.GlobalIndexToSectionIndex(hexIndices[index], chunkIndex, width, height);
+
+                sections[index]         = chunkIndex;
+                firstVertices[index]    = localIndex * 6;
+                touchedSections.Add(chunkIndex);
+            }
+
+            var touched = new int[touchedSections.Count];
+            touchedSections.CopyTo(touched);
+
+            return new CellBatch(hexIndices, sections, firstVertices, touched);
+        }
+
+        public void UpdateCellColours(CellBatch batch, int[] colours)
+        {
+            for (int index = 0; index < batch.HexIndices.Length; ++index)
+            {
+                var sectionColours  = gridSections[batch.Sections[index]].Geometry.Colors;
+                var colour          = new Color4(colours[batch.HexIndices[index]]);
+                int firstVertex     = batch.FirstVertices[index];
+
+                for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
+                {
+                    sectionColours[firstVertex + dir] = colour;
+                }
+            }
+
+            foreach (int chunkIndex in batch.TouchedSections)
+            {
+                gridSections[chunkIndex].Geometry.UpdateColors();
+            }
         }
 
         public void SetViewport(Viewport3DX viewport)

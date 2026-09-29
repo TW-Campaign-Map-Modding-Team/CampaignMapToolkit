@@ -1,22 +1,73 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Windows.Input;
 
 namespace CAIME
 {
     public class LayersViewModel : BaseViewModel
     {
         private Dictionary<LayerType, Layer> LayersMap;
-        
+        private List<Layer> defaultOrder;
+
+        /// <summary>
+        /// The layers stack, topmost first. A hex shows its visible layers' colours blended from the top down
+        /// by their opacity; see <see cref="LayerCompositor"/>.
+        /// </summary>
         public ObservableCollection<Layer> Layers { get; private set; }
 
-        public LayerType ActiveLayer        { get; private set; }
-        public LayerType TopVisibleLayer    { get; private set; }
-
-        public LayersViewModel()
+        private LayerType activeLayer;
+        public LayerType ActiveLayer
         {
+            get
+            {
+                return activeLayer;
+            }
+            private set
+            {
+                activeLayer = value;
+                OnPropertyChanged(nameof(ActiveLayer));
+                OnPropertyChanged(nameof(ActiveLayerModel));
+            }
         }
 
-        public bool Initialise(GameTemplate game)
+        public Layer ActiveLayerModel => LayersMap != null && LayersMap.TryGetValue(ActiveLayer, out var layer) ? layer : null;
+
+        public LayerType TopVisibleLayer    { get; private set; }
+
+        public ICommand MoveLayerUpCommand          { get; }
+        public ICommand MoveLayerDownCommand        { get; }
+        public ICommand MoveLayerToTopCommand       { get; }
+        public ICommand MoveLayerToBottomCommand    { get; }
+        public ICommand ResetLayerOrderCommand      { get; }
+
+        /// <summary>
+        /// Raised after the layers stack has been re-arranged
+        /// </summary>
+        public event EventHandler LayerOrderChanged;
+
+        public event EventHandler OpacityAdjustmentStarted;
+        public event EventHandler OpacityAdjustmentEnded;
+
+        // The layer commands take object rather than Layer: a discarded row's CommandParameter
+        // becomes WPF's disconnected-item sentinel, which a typed RelayCommand would fail to cast.
+        public LayersViewModel()
+        {
+            MoveLayerUpCommand          = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) - 1), CanMoveUp);
+            MoveLayerDownCommand        = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) + 1), CanMoveDown);
+            MoveLayerToTopCommand       = new RelayCommand<object>(layer => MoveLayer(layer as Layer, 0), CanMoveUp);
+            MoveLayerToBottomCommand    = new RelayCommand<object>(layer => MoveLayer(layer as Layer, Layers.Count - 1), CanMoveDown);
+            ResetLayerOrderCommand      = new RelayCommand<object>(_ => ResetLayerOrder(), _ => IsInDefaultOrder() == false);
+        }
+
+        /// <summary>
+        /// Builds the layers stack for a game in its built-in order, then re-arranges it to
+        /// <paramref name="savedOrder"/> when one is given
+        /// </summary>
+        /// <param name="savedOrder">A previously arranged order, topmost first. Layers it doesn't name keep
+        /// their built-in position; layers the game doesn't have are ignored.</param>
+        public bool Initialise(GameTemplate game, IReadOnlyList<LayerType> savedOrder = null)
         {
             LayersMap = new Dictionary<LayerType, Layer>
             {
@@ -81,7 +132,16 @@ namespace CAIME
                 Layers.Insert(Layers.Count - 4, LayersMap[LayerType.AreasOfInterest]);
             }
 
+            defaultOrder = Layers.ToList();
+
+            if (savedOrder != null)
+            {
+                ArrangeLayers(MergeWithDefaultOrder(savedOrder));
+            }
+
             OnPropertyChanged(nameof(Layers));
+            OnPropertyChanged(nameof(ActiveLayerModel));
+            RefreshCommandStates();
 
             LayersMap[LayerType.GroundTypes].SetActive(isActive: true, raiseEvent: true);
             LayersMap[LayerType.GroundTypes].SetVisible(isVisible: true, raiseEvent: true);
@@ -162,27 +222,155 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Determines whether a colour painted on the given layer can be displayed
+        /// Determines whether a colour painted on the given layer can change what the hex shows,
+        /// i.e. the layer isn't fully transparent and no fully opaque visible layer above it in the
+        /// stack already colours that hex
         /// </summary>
         public bool CanDisplay(Layer layer, int colourIndex)
         {
-            foreach (var topLayer in Layers)
+            if (layer.Opacity == 0)
             {
-                if (topLayer.IsVisible)
+                return false;
+            }
+
+            foreach (var layerAbove in Layers)
+            {
+                if (layerAbove == layer)
                 {
-                    if (topLayer.Colours[colourIndex] != ColourTable.Zero && (int)topLayer.Type < (int)layer.Type)
-                    {
-                        return false;
-                    }
-                    else
-                    if (topLayer.Type == layer.Type)
-                    {
-                        break;
-                    }
+                    return true;
+                }
+
+                if (layerAbove.IsVisible && layerAbove.IsOpaque && layerAbove.Colours[colourIndex] != ColourTable.Zero)
+                {
+                    return false;
                 }
             }
 
             return true;
+        }
+
+        public void BeginOpacityAdjustment()
+        {
+            OpacityAdjustmentStarted?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void EndOpacityAdjustment()
+        {
+            OpacityAdjustmentEnded?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Moves a layer so it sits directly above <paramref name="target"/> (raises <see cref="LayerOrderChanged"/>)
+        /// </summary>
+        public void MoveLayerAbove(Layer layer, Layer target)
+        {
+            var targetIndex = Layers.IndexOf(target);
+            if (targetIndex >= 0)
+            {
+                MoveLayer(layer, Layers.IndexOf(layer) < targetIndex ? targetIndex - 1 : targetIndex);
+            }
+        }
+
+        /// <summary>
+        /// Moves a layer so it sits directly below <paramref name="target"/> (raises <see cref="LayerOrderChanged"/>)
+        /// </summary>
+        public void MoveLayerBelow(Layer layer, Layer target)
+        {
+            var targetIndex = Layers.IndexOf(target);
+            if (targetIndex >= 0)
+            {
+                MoveLayer(layer, Layers.IndexOf(layer) > targetIndex ? targetIndex + 1 : targetIndex);
+            }
+        }
+
+        /// <summary>
+        /// Restores the built-in stack order for the open project's game (raises <see cref="LayerOrderChanged"/>)
+        /// </summary>
+        public void ResetLayerOrder()
+        {
+            if (IsInDefaultOrder())
+            {
+                return;
+            }
+
+            ArrangeLayers(defaultOrder);
+            OnLayerOrderChanged();
+        }
+
+        /// <summary>
+        /// Whether the stack is still in the built-in order for the open project's game
+        /// </summary>
+        public bool IsInDefaultOrder()
+        {
+            return defaultOrder == null || Layers.SequenceEqual(defaultOrder);
+        }
+
+        private void ArrangeLayers(IReadOnlyList<Layer> order)
+        {
+            for (int index = 0; index < order.Count; ++index)
+            {
+                Layers.Move(Layers.IndexOf(order[index]), index);
+            }
+        }
+
+        private List<Layer> MergeWithDefaultOrder(IReadOnlyList<LayerType> savedOrder)
+        {
+            var order = savedOrder.Distinct()
+                                  .Where(LayersMap.ContainsKey)
+                                  .Select(type => LayersMap[type])
+                                  .ToList();
+
+            for (int index = 0; index < defaultOrder.Count; ++index)
+            {
+                if (order.Contains(defaultOrder[index]) == false)
+                {
+                    order.Insert(Math.Min(index, order.Count), defaultOrder[index]);
+                }
+            }
+
+            return order;
+        }
+
+        private void MoveLayer(Layer layer, int newIndex)
+        {
+            var oldIndex = Layers.IndexOf(layer);
+            if (oldIndex < 0 || newIndex < 0 || newIndex >= Layers.Count || oldIndex == newIndex)
+            {
+                return;
+            }
+
+            Layers.Move(oldIndex, newIndex);
+            OnLayerOrderChanged();
+        }
+
+        private void OnLayerOrderChanged()
+        {
+            UpdateTopLayer();
+            RefreshCommandStates();
+            LayerOrderChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        // RelayCommand's CanExecuteChanged only fires when WPF re-queries commands, which it does
+        // after input such as a focus change - dragging a layer by its grip moves no focus.
+        private static void RefreshCommandStates()
+        {
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private int IndexOf(object layer)
+        {
+            return Layers?.IndexOf(layer as Layer) ?? -1;
+        }
+
+        private bool CanMoveUp(object layer)
+        {
+            return IndexOf(layer) > 0;
+        }
+
+        private bool CanMoveDown(object layer)
+        {
+            var index = IndexOf(layer);
+            return index >= 0 && index < Layers.Count - 1;
         }
 
         public Layer GetLayerByName(string name)

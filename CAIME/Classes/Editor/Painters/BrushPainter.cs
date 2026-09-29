@@ -131,7 +131,7 @@ namespace CAIME.Painters
 
             if (canDisplay)
             {
-                editorVM.SetColour(hexIndex, swatch.Colour);
+                editorVM.RefreshHex(hexIndex);
             }
         }
 

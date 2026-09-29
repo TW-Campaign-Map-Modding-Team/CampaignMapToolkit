@@ -16,6 +16,7 @@ namespace CAIME
             context.IsActionsExpanded               = false;
             context.IsMinimapExpanded               = false;
             context.IsLayersExpanded                = false;
+            context.IsLayerOpacityExpanded          = false;
             context.IsToolbarEnabled                = false;
             context.IsSidebarEnabled                = false;
             context.IsViewportEnabled               = false;
@@ -61,6 +62,7 @@ namespace CAIME
         public void UpdateView(AppStateContext context)
         {
             context.IsLayersExpanded                = true;
+            context.IsLayerOpacityExpanded          = true;
             context.IsSwatchesExpanded              = true;
             context.IsActionsExpanded               = true;
             context.IsMinimapExpanded               = true;
@@ -183,6 +185,19 @@ namespace CAIME
             {
                 isLayersExpanded = value;
                 OnPropertyChanged(nameof(IsLayersExpanded));
+            }
+        }
+        private bool isLayerOpacityExpanded;
+        public bool IsLayerOpacityExpanded
+        {
+            get
+            {
+                return isLayerOpacityExpanded;
+            }
+            set
+            {
+                isLayerOpacityExpanded = value;
+                OnPropertyChanged(nameof(IsLayerOpacityExpanded));
             }
         }
         #endregion

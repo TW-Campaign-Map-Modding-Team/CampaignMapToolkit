@@ -3,16 +3,47 @@
                     xmlns:local="clr-namespace:CAIME">
 
     <DataTemplate x:Key="LayerTemplate">
+        <!-- Tag carries the LayersViewModel across to the context menu, which is outside the visual tree -->
         <Border x:Name="layerBorder"
                 Padding="1"
                 BorderThickness="1"
                 Background="{StaticResource BackgroundDarkV5Brush}"
-                BorderBrush="{StaticResource BackgroundDarkV6Brush}">
-            
+                BorderBrush="{StaticResource BackgroundDarkV6Brush}"
+                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Move up"
+                              Command="{Binding PlacementTarget.Tag.MoveLayerUpCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <MenuItem Header="Move down"
+                              Command="{Binding PlacementTarget.Tag.MoveLayerDownCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <MenuItem Header="Move to top"
+                              Command="{Binding PlacementTarget.Tag.MoveLayerToTopCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <MenuItem Header="Move to bottom"
+                              Command="{Binding PlacementTarget.Tag.MoveLayerToBottomCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding}"/>
+                    <Separator/>
+                    <MenuItem Header="Reset layer order"
+                              Command="{Binding PlacementTarget.Tag.ResetLayerOrderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <Separator/>
+                    <MenuItem Header="Opacity">
+                        <MenuItem Header="100% (reset)" Command="{Binding SetOpacityPercentCommand}" CommandParameter="100"/>
+                        <MenuItem Header="75%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="75"/>
+                        <MenuItem Header="50%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="50"/>
+                        <MenuItem Header="25%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="25"/>
+                    </MenuItem>
+                </ContextMenu>
+            </Border.ContextMenu>
+
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <CheckBox x:Name="layerVisibilityBox"
@@ -36,6 +67,29 @@
                                Padding="10 0 0 0"/>
                     
                 </RadioButton>
+
+                <TextBlock x:Name="opacityText"
+                           Grid.Column="2"
+                           Text="{Binding Opacity, Converter={StaticResource OpacityPercentConverter}, StringFormat={}{0:0}%}"
+                           Foreground="{Binding Foreground, ElementName=layerText}"
+                           ToolTip="Layer opacity"
+                           VerticalAlignment="Center"
+                           Margin="4 0"/>
+
+                <!-- Drag grip, the only place a layer drag starts; the dots follow the name's colour so they stay visible on the active row -->
+                <Border x:Name="dragGrip"
+                        Grid.Column="3"
+                        Background="Transparent"
+                        Cursor="SizeAll"
+                        Padding="6 0"
+                        ToolTip="Drag to move this layer; right-click for more options">
+
+                    <StackPanel VerticalAlignment="Center">
+                        <Ellipse Width="3" Height="3" Margin="0 1" Fill="{Binding Foreground, ElementName=layerText}"/>
+                        <Ellipse Width="3" Height="3" Margin="0 1" Fill="{Binding Foreground, ElementName=layerText}"/>
+                        <Ellipse Width="3" Height="3" Margin="0 1" Fill="{Binding Foreground, ElementName=layerText}"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
@@ -44,6 +98,12 @@
                 <Setter TargetName="layerBorder" Property="Background" Value="LightGray"/>
                 <Setter TargetName="layerText" Property="Foreground" Value="Black"/>
                 <Setter TargetName="layerVisibilityBox" Property="Style" Value="{StaticResource DarkVisibilityCheckBox}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsOpaque}" Value="True">
+                <Setter TargetName="opacityText" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Opacity}" Value="0">
+                <Setter TargetName="layerText" Property="Opacity" Value="0.5"/>
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>

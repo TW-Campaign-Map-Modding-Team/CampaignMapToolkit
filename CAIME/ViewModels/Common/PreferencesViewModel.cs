@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace CAIME
@@ -13,9 +14,12 @@ namespace CAIME
     {
         public static readonly PreferencesViewModel Instance = new PreferencesViewModel();
 
+        private const string LAYER_ORDERS_KEY = "LayerOrders";
+
         private readonly string preferencesPath;
         private readonly string[] asskitDirs;
         private readonly string[] vanillaPackPaths;
+        private readonly Dictionary<GameTemplate, List<LayerType>> layerOrders = new Dictionary<GameTemplate, List<LayerType>>();
 
         #region Actual preferences
         private float hexSpacing;
@@ -310,6 +314,8 @@ namespace CAIME
             }
             json["VanillaPackPaths"] = vanillaPacks;
 
+            json[LAYER_ORDERS_KEY] = LayerOrdersJson.ToJson(layerOrders);
+
             File.WriteAllText(preferencesPath, json.ToString());
         }
 
@@ -421,6 +427,15 @@ namespace CAIME
                     }
                 }
 
+                layerOrders.Clear();
+                if (json.TryGetValue(LAYER_ORDERS_KEY, out var layerOrdersToken) && layerOrdersToken is JObject layerOrdersJson)
+                {
+                    foreach (var layerOrder in LayerOrdersJson.FromJson(layerOrdersJson))
+                    {
+                        layerOrders[layerOrder.Key] = layerOrder.Value;
+                    }
+                }
+
                 Save();
             }
             catch
@@ -458,6 +473,31 @@ namespace CAIME
         public string GetVanillaPackPath(GameTemplate game)
         {
             return vanillaPackPaths[(int)game];
+        }
+
+        /// <summary>
+        /// The editor's layers stack order the user arranged for a game, topmost first,
+        /// or null when they kept the built-in order
+        /// </summary>
+        public IReadOnlyList<LayerType> GetLayerOrder(GameTemplate game)
+        {
+            return layerOrders.TryGetValue(game, out var order) ? order : null;
+        }
+
+        /// <summary>
+        /// Remembers the layers stack order for a game; null forgets it so the built-in order applies.
+        /// Call <see cref="Save"/> to persist it.
+        /// </summary>
+        public void SetLayerOrder(GameTemplate game, IEnumerable<LayerType> order)
+        {
+            if (order == null)
+            {
+                layerOrders.Remove(game);
+            }
+            else
+            {
+                layerOrders[game] = order.ToList();
+            }
         }
 
         private void SetDefaults()

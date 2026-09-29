@@ -292,6 +292,7 @@
     <Compile Include="Classes\Common\Rpfm\RpfmRecoveryJournal.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmService.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmWorkflowSession.cs" />
+    <Compile Include="Classes\Common\LayerOrdersJson.cs" />
     <Compile Include="Classes\Common\PreferencesMigration.cs" />
     <Compile Include="Classes\Tools\ShaderResolutionCorrector.cs" />
     <Compile Include="Classes\Editor\ColourTable\PalFile.cs" />
@@ -315,6 +316,9 @@
     <Compile Include="Classes\Editor\Painters\BrushPainter.cs" />
     <Compile Include="Classes\Editor\Painters\ViewportPainter.cs" />
     <Compile Include="Classes\Editor\GridSubdivider.cs" />
+    <Compile Include="Classes\Editor\LayerBlend.cs" />
+    <Compile Include="Classes\Editor\LayerCompositor.cs" />
+    <Compile Include="Classes\Editor\LayerOpacityPreview.cs" />
     <Compile Include="Classes\Exporters\LookupImageExporter.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />
@@ -359,6 +363,7 @@
     <Compile Include="Classes\Validators\ImpassableValidator.cs" />
     <Compile Include="Classes\Validators\SprawlValidator.cs" />
     <Compile Include="Converters\InverseBoolConverter.cs" />
+    <Compile Include="Converters\OpacityPercentConverter.cs" />
     <Compile Include="Converters\RegionTownSizeConverter.cs" />
     <Compile Include="Models\BorderEditor\BorderImage.cs" />
     <Compile Include="Models\BorderEditor\BorderPart.cs" />
@@ -498,6 +503,7 @@
     <Compile Include="Views\Controls\Editor.xaml.cs">
       <DependentUpon>Editor.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\Controls\InsertionLineAdorner.cs" />
     <Compile Include="Views\Controls\Logger.xaml.cs">
       <DependentUpon>Logger.xaml</DependentUpon>
     </Compile>

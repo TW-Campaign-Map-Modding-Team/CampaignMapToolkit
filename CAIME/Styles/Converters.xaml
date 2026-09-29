@@ -5,6 +5,7 @@
     <converters:ColourConverter x:Key="ColourConverter"/>
     <converters:ImageConverter x:Key="ImageConverter"/>
     <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+    <converters:OpacityPercentConverter x:Key="OpacityPercentConverter"/>
     <converters:RegionTownSizeConverter x:Key="RegionTownSizeConverter"/>
     
 </ResourceDictionary>

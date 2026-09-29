@@ -393,6 +393,12 @@ The **Layers** section is one of the most important parts of the application. It
 3. The **Swatches** section above will automatically update to show the swatches for that layer.
 4. You can now paint on the map using your selected tool and swatch.
 
+**How to re-arrange layers:**
+
+Layers higher in the list are drawn on top. To change the order, drag a layer by the **⋮** dots on its right and drop it where the white line shows it will land, or right-click a row and choose **Move up**, **Move down**, **Move to top** or **Move to bottom**. The **Reset order** button under the list restores the built-in order. The order only affects what you see, and CAIME remembers it for each game in your preferences.
+
+The **Layer Opacity** section, between **Actions** and **Layers**, has a slider for the active layer; lower it to let the layers below show through (right-click a row → **Opacity** for presets). Opacity is display only, and every layer starts at 100% when a project opens. See [Layer opacity](user-guide-layers-reference.md#layer-opacity).
+
 **Standard layers** (available in all supported games, listed from top to bottom as shown in the panel):
 
 | Layer Name | What It Controls |

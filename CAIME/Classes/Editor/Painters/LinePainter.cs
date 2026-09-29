@@ -45,8 +45,7 @@ namespace CAIME.Painters
         private class RestoreInfo
         {
             public int HexIndex;
-            public int NewColour;
-            public int OldColour;
+            public int LayerColour;
         }
 
         private static int END_POINT_COLOUR = -13521318;
@@ -289,7 +288,7 @@ namespace CAIME.Painters
 
             if (canDisplay)
             {
-                editorVM.SetColour(hexIndex, swatch.Colour);
+                editorVM.RefreshHex(hexIndex);
             }
         }
 
@@ -331,8 +330,8 @@ namespace CAIME.Painters
                 int hexIndex = path[i];
                 var info = restoreInfo[hexIndex];
 
-                previewLayer.Colours[info.HexIndex] = info.NewColour;
-                viewportVM.UpdateCellColour(info.OldColour, info.HexIndex, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
+                previewLayer.Colours[info.HexIndex] = info.LayerColour;
+                editorVM.RefreshHex(info.HexIndex);
             }
 
             restoreInfo.Clear();
@@ -343,14 +342,10 @@ namespace CAIME.Painters
         {
             if (restoreInfo.ContainsKey(cellIndex) == false)
             {
-                int layerColour         = previewLayer.Colours[cellIndex];
-                int combinedColour      = viewportVM.GetCellColour(cellIndex, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
-
                 restoreInfo[cellIndex]  = new RestoreInfo
                 {
                     HexIndex    = cellIndex,
-                    NewColour   = layerColour,
-                    OldColour   = combinedColour,
+                    LayerColour = previewLayer.Colours[cellIndex],
                 };
             }
         }
