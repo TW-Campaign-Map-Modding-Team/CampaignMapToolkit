@@ -306,6 +306,7 @@ namespace CAIME
         public string   RootPath        { get; private set; }
         public string   ProjectsDir     { get; private set; }
         public string   TemplatesPath   { get; private set; }
+        public string   ToolsPath       { get; private set; }
         public Project  Project         { get; private set; }
 
         public bool     IsProjectOpen   => Project != null;
@@ -315,6 +316,7 @@ namespace CAIME
             RootPath        = GetRootPath();
             ProjectsDir     = $@"{RootPath}Projects\";
             TemplatesPath   = GetTemplatesPath();
+            ToolsPath       = GetToolsPath();
 
             LoggerViewModel.Log($"App root path is {RootPath}", LogLevel.Info);
         }
@@ -337,7 +339,30 @@ namespace CAIME
         /// </summary>
         public static string GetTemplatesPath()
         {
-            return Path.GetFullPath(Path.Combine(GetRootPath(), @"..\Templates\"));
+            return GetBundledFolderPath("Templates", @"..\Templates\");
+        }
+
+        /// <summary>
+        /// Folder containing the native tools (MapDataBuilder), split into Debug and Release subfolders.
+        /// </summary>
+        public static string GetToolsPath()
+        {
+            return GetBundledFolderPath("Tools", @"Tools\");
+        }
+
+        /// <summary>
+        /// An installed release ships its bundled folders next to CAIME.exe, because the installer only
+        /// packs that one folder. A build from the repository finds them relative to the root path instead.
+        /// </summary>
+        private static string GetBundledFolderPath(string folderName, string pathFromRoot)
+        {
+            var besideExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, folderName) + @"\";
+            if (Directory.Exists(besideExe))
+            {
+                return besideExe;
+            }
+
+            return Path.GetFullPath(Path.Combine(GetRootPath(), pathFromRoot));
         }
 
         public Project CreateProject(string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template)
@@ -709,7 +734,7 @@ namespace CAIME
                 return false;
             }
 
-            return ProcessMapData.Process(Project, RootPath);
+            return ProcessMapData.Process(Project, ToolsPath);
         }
 
         public bool ProcessDynamicResourcesEsf()
@@ -726,7 +751,7 @@ namespace CAIME
                 return false;
             }
 
-            return ProcessDynamicResources.Process(Project, RootPath);
+            return ProcessDynamicResources.Process(Project, ToolsPath);
         }
 
         public bool GenerateLookupImage()

@@ -201,7 +201,7 @@ After a validation run, a pop-up will tell you either:
 | **License** | Displays the software licence |
 | **EULA** | Displays the End User Licence Agreement |
 | **Credits** | Lists the contributors to the project |
-| **Tutorials Wiki** | Opens the online tutorial wiki in your browser |
+| **User Guides** | Opens these user guides online in your browser |
 | **Discord support server** | Opens the community Discord server in your browser |
 
 ---

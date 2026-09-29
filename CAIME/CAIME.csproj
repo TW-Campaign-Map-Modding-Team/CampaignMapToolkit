@@ -136,12 +136,6 @@
     <Reference Include="HelixToolkit.Wpf.SharpDX, Version=3.1.2.0, Culture=neutral, PublicKeyToken=52aa3500039caf0d, processorArchitecture=MSIL">
       <HintPath>..\packages\HelixToolkit.Wpf.SharpDX.3.1.2\lib\net48\HelixToolkit.Wpf.SharpDX.dll</HintPath>
     </Reference>
-    <Reference Include="Markdig, Version=0.22.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Markdig.0.22.0\lib\net452\Markdig.dll</HintPath>
-    </Reference>
-    <Reference Include="Markdig.Wpf, Version=0.5.0.1, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Markdig.Wpf.0.5.0.1\lib\net452\Markdig.Wpf.dll</HintPath>
-    </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.3, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.9.0.3\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
     </Reference>
@@ -525,9 +519,6 @@
     <Compile Include="Views\Windows\TextViewerWindow.xaml.cs">
       <DependentUpon>TextViewerWindow.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Views\Windows\UserGuidesWindow.xaml.cs">
-      <DependentUpon>UserGuidesWindow.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Views\Windows\BorderEditorWindow.xaml.cs">
       <DependentUpon>BorderEditorWindow.xaml</DependentUpon>
     </Compile>
@@ -731,10 +722,6 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Views\Windows\UserGuidesWindow.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="Views\Windows\BorderEditorWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -767,7 +754,6 @@
     <Compile Include="Application\AppWindowChangelog.cs" />
     <Compile Include="Application\AppWindowCredits.cs" />
     <Compile Include="Application\AppWindowEula.cs" />
-    <Compile Include="Application\AppWindowGuides.cs" />
     <Compile Include="Application\AppWindowLicense.cs" />
     <Compile Include="Application\EulaAcceptance.cs" />
     <Compile Include="Application\AppInfo.cs" />
@@ -861,13 +847,6 @@
     <Content Include="..\LICENSE">
       <Link>LICENSE</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <!-- User guide markdown files (source of truth lives in the repo docs folder).
-         Copied into bin\docs\ so the User Guides window can read them when run from
-         the IDE; the standalone release copy is handled by build.bat. -->
-    <Content Include="..\docs\*.md">
-      <Link>docs\%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
