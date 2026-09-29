@@ -1230,9 +1230,6 @@ namespace CAIME
             this.RedrawLayersStack();
         }
 
-        /// <summary>
-        /// Fires when user re-arranges the layers stack
-        /// </summary>
         private void LayerOrderChanged(object sender, EventArgs e)
         {
             if (isInit)
@@ -1328,8 +1325,6 @@ namespace CAIME
             isOpacityPreviewDrawn = true;
         }
 
-        // The built-in order is stored as no order at all, so a later change to it still reaches
-        // users who never re-arranged their layers.
         private void SaveLayerOrder()
         {
             var layersVM = SidebarViewModel.LayersVM;

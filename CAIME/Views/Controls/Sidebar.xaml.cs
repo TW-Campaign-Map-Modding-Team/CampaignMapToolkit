@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -14,9 +13,8 @@ namespace CAIME
     /// </summary>
     public partial class Sidebar : UserControl
     {
-        // x:Names of the row border and its drag grip in LayerTemplate.xaml
-        private const string LAYER_ROW_NAME = "layerBorder";
-        private const string DRAG_GRIP_NAME = "dragGrip";
+        private const string LayerRowName = "layerBorder";
+        private const string DragGripName = "dragGrip";
 
         public readonly SidebarViewModel ViewModel = new SidebarViewModel();
 
@@ -70,7 +68,7 @@ namespace CAIME
         private void Layers_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             layerDragStart  = e.GetPosition(null);
-            pressedLayer    = FindNamedAncestor(e.OriginalSource, DRAG_GRIP_NAME)?.DataContext as Layer;
+            pressedLayer    = FindNamedAncestor(e.OriginalSource, DragGripName)?.DataContext as Layer;
         }
 
         private void Layers_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -78,16 +76,21 @@ namespace CAIME
             pressedLayer = null;
         }
 
+        private void Layers_MouseLeave(object sender, MouseEventArgs e)
+        {
+            pressedLayer = null;
+        }
+
         private void Layers_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (FindNamedAncestor(e.OriginalSource, DRAG_GRIP_NAME) != null)
+            if (FindNamedAncestor(e.OriginalSource, DragGripName) != null)
             {
                 return;
             }
 
-            if (FindNamedAncestor(e.OriginalSource, LAYER_ROW_NAME)?.DataContext is Layer layer && layer.IsActive == false)
+            if (FindNamedAncestor(e.OriginalSource, LayerRowName)?.DataContext is Layer layer)
             {
-                ViewModel.LayersVM.SetActiveLayer(layer.Type);
+                ViewModel.LayersVM.ActivateLayer(layer);
             }
         }
 
@@ -107,15 +110,16 @@ namespace CAIME
 
         private void Layers_DragOver(object sender, DragEventArgs e)
         {
-            var targetRow = FindNamedAncestor(e.OriginalSource, LAYER_ROW_NAME);
-            var canDrop   = targetRow != null && e.Data.GetDataPresent(typeof(Layer));
+            var targetRow   = FindNamedAncestor(e.OriginalSource, LayerRowName);
+            var targetLayer = targetRow?.DataContext as Layer;
+            var canDrop     = targetLayer != null && e.Data.GetDataPresent(typeof(Layer));
 
             e.Effects = canDrop ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
 
             if (canDrop)
             {
-                ShowInsertionLine(targetRow, IsDropBelow(targetRow, e));
+                ShowInsertionLine(targetRow, ViewModel.LayersVM.IsDropBelow(targetLayer, IsOverLowerHalf(targetRow, e)));
             }
             else
             {
@@ -133,21 +137,14 @@ namespace CAIME
             HideInsertionLine();
 
             var draggedLayer = e.Data.GetData(typeof(Layer)) as Layer;
-            var targetRow    = FindNamedAncestor(e.OriginalSource, LAYER_ROW_NAME);
+            var targetRow    = FindNamedAncestor(e.OriginalSource, LayerRowName);
             var targetLayer  = targetRow?.DataContext as Layer;
             if (draggedLayer == null || targetLayer == null)
             {
                 return;
             }
 
-            if (IsDropBelow(targetRow, e))
-            {
-                ViewModel.LayersVM.MoveLayerBelow(draggedLayer, targetLayer);
-            }
-            else
-            {
-                ViewModel.LayersVM.MoveLayerAbove(draggedLayer, targetLayer);
-            }
+            ViewModel.LayersVM.DropLayer(draggedLayer, targetLayer, IsOverLowerHalf(targetRow, e));
         }
 
         private bool IsBeyondDragThreshold(Point position)
@@ -157,12 +154,9 @@ namespace CAIME
                 || Math.Abs(offset.Y) >= SystemParameters.MinimumVerticalDragDistance;
         }
 
-        // A layer drops above the row under the cursor. The one exception is the lower half of the
-        // last row, which is the only way to drop a layer at the bottom of the stack.
-        private bool IsDropBelow(FrameworkElement row, DragEventArgs e)
+        private static bool IsOverLowerHalf(FrameworkElement row, DragEventArgs e)
         {
-            return row.DataContext == ViewModel.LayersVM.Layers.LastOrDefault()
-                && e.GetPosition(row).Y > row.ActualHeight / 2;
+            return e.GetPosition(row).Y > row.ActualHeight / 2;
         }
 
         private void ShowInsertionLine(FrameworkElement row, bool isBelow)

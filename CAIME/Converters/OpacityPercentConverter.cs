@@ -8,12 +8,12 @@ namespace CAIME.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            return Layer.OpacityToPercent((byte)value);
+            return OpacityPercent.FromOpacity((byte)value);
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            return Layer.OpacityFromPercent(System.Convert.ToDouble(value, culture));
+            return OpacityPercent.ToOpacity(System.Convert.ToDouble(value, culture));
         }
     }
 }

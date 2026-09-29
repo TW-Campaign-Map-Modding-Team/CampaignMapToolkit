@@ -5,10 +5,6 @@ using Newtonsoft.Json.Linq;
 
 namespace CAIME
 {
-    /// <summary>
-    /// Converts the per-game layers stack orders kept in preferences.json, stored as
-    /// <c>{ "Warhammer3": ["Impassable", "Roads", ...] }</c> with the topmost layer first
-    /// </summary>
     public static class LayerOrdersJson
     {
         public static JObject ToJson(IReadOnlyDictionary<GameTemplate, List<LayerType>> orders)
@@ -22,8 +18,6 @@ namespace CAIME
             return json;
         }
 
-        // Hand-edited or older files may name games or layers this build doesn't know; those entries
-        // are dropped rather than failing the whole preferences load.
         public static Dictionary<GameTemplate, List<LayerType>> FromJson(JObject json)
         {
             var orders = new Dictionary<GameTemplate, List<LayerType>>();
@@ -51,10 +45,10 @@ namespace CAIME
             return orders;
         }
 
-        // Enum.TryParse alone also accepts numeric strings and undefined values.
         private static bool TryParseName<TEnum>(string name, out TEnum value) where TEnum : struct
         {
-            return Enum.TryParse(name, out value) && Enum.IsDefined(typeof(TEnum), value) && char.IsLetter(name.FirstOrDefault());
+            value = default;
+            return Enum.IsDefined(typeof(TEnum), name) && Enum.TryParse(name, out value);
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Windows.Input;
 
@@ -11,10 +12,6 @@ namespace CAIME
         private Dictionary<LayerType, Layer> LayersMap;
         private List<Layer> defaultOrder;
 
-        /// <summary>
-        /// The layers stack, topmost first. A hex shows its visible layers' colours blended from the top down
-        /// by their opacity; see <see cref="LayerCompositor"/>.
-        /// </summary>
         public ObservableCollection<Layer> Layers { get; private set; }
 
         private LayerType activeLayer;
@@ -36,37 +33,28 @@ namespace CAIME
 
         public LayerType TopVisibleLayer    { get; private set; }
 
-        public ICommand MoveLayerUpCommand          { get; }
-        public ICommand MoveLayerDownCommand        { get; }
-        public ICommand MoveLayerToTopCommand       { get; }
-        public ICommand MoveLayerToBottomCommand    { get; }
-        public ICommand ResetLayerOrderCommand      { get; }
+        public ICommand MoveLayerUpCommand            { get; }
+        public ICommand MoveLayerDownCommand          { get; }
+        public ICommand MoveLayerToTopCommand         { get; }
+        public ICommand MoveLayerToBottomCommand      { get; }
+        public ICommand ResetLayerOrderCommand        { get; }
+        public ICommand SetLayerOpacityPercentCommand { get; }
 
-        /// <summary>
-        /// Raised after the layers stack has been re-arranged
-        /// </summary>
         public event EventHandler LayerOrderChanged;
 
         public event EventHandler OpacityAdjustmentStarted;
         public event EventHandler OpacityAdjustmentEnded;
 
-        // The layer commands take object rather than Layer: a discarded row's CommandParameter
-        // becomes WPF's disconnected-item sentinel, which a typed RelayCommand would fail to cast.
         public LayersViewModel()
         {
-            MoveLayerUpCommand          = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) - 1), CanMoveUp);
-            MoveLayerDownCommand        = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) + 1), CanMoveDown);
-            MoveLayerToTopCommand       = new RelayCommand<object>(layer => MoveLayer(layer as Layer, 0), CanMoveUp);
-            MoveLayerToBottomCommand    = new RelayCommand<object>(layer => MoveLayer(layer as Layer, Layers.Count - 1), CanMoveDown);
-            ResetLayerOrderCommand      = new RelayCommand<object>(_ => ResetLayerOrder(), _ => IsInDefaultOrder() == false);
+            MoveLayerUpCommand            = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) - 1), CanMoveUp);
+            MoveLayerDownCommand          = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) + 1), CanMoveDown);
+            MoveLayerToTopCommand         = new RelayCommand<object>(layer => MoveLayer(layer as Layer, 0), CanMoveUp);
+            MoveLayerToBottomCommand      = new RelayCommand<object>(layer => MoveLayer(layer as Layer, Layers.Count - 1), CanMoveDown);
+            ResetLayerOrderCommand        = new RelayCommand<object>(_ => ResetLayerOrder(), _ => IsInDefaultOrder() == false);
+            SetLayerOpacityPercentCommand = new RelayCommand<object>(SetLayerOpacityPercent);
         }
 
-        /// <summary>
-        /// Builds the layers stack for a game in its built-in order, then re-arranges it to
-        /// <paramref name="savedOrder"/> when one is given
-        /// </summary>
-        /// <param name="savedOrder">A previously arranged order, topmost first. Layers it doesn't name keep
-        /// their built-in position; layers the game doesn't have are ignored.</param>
         public bool Initialise(GameTemplate game, IReadOnlyList<LayerType> savedOrder = null)
         {
             LayersMap = new Dictionary<LayerType, Layer>
@@ -183,6 +171,14 @@ namespace CAIME
             LayersMap[ActiveLayer].SetActive(true, raiseEvent: true);
         }
 
+        public void ActivateLayer(Layer layer)
+        {
+            if (layer.IsActive == false)
+            {
+                SetActiveLayer(layer.Type);
+            }
+        }
+
         /// <summary>
         /// Set provided layer to be visible (raises <see cref="Layer.VisibilityChanged"/> event)
         /// </summary>
@@ -222,31 +218,11 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Determines whether a colour painted on the given layer can change what the hex shows,
-        /// i.e. the layer isn't fully transparent and no fully opaque visible layer above it in the
-        /// stack already colours that hex
+        /// Determines whether a colour painted on the given layer can change what the hex shows
         /// </summary>
         public bool CanDisplay(Layer layer, int colourIndex)
         {
-            if (layer.Opacity == 0)
-            {
-                return false;
-            }
-
-            foreach (var layerAbove in Layers)
-            {
-                if (layerAbove == layer)
-                {
-                    return true;
-                }
-
-                if (layerAbove.IsVisible && layerAbove.IsOpaque && layerAbove.Colours[colourIndex] != ColourTable.Zero)
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return LayerCompositor.CanChangeHex(Layers, layer, colourIndex);
         }
 
         public void BeginOpacityAdjustment()
@@ -259,9 +235,23 @@ namespace CAIME
             OpacityAdjustmentEnded?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>
-        /// Moves a layer so it sits directly above <paramref name="target"/> (raises <see cref="LayerOrderChanged"/>)
-        /// </summary>
+        public bool IsDropBelow(Layer target, bool isOverLowerHalf)
+        {
+            return isOverLowerHalf && target == Layers.LastOrDefault();
+        }
+
+        public void DropLayer(Layer layer, Layer target, bool isOverLowerHalf)
+        {
+            if (IsDropBelow(target, isOverLowerHalf))
+            {
+                MoveLayerBelow(layer, target);
+            }
+            else
+            {
+                MoveLayerAbove(layer, target);
+            }
+        }
+
         public void MoveLayerAbove(Layer layer, Layer target)
         {
             var targetIndex = Layers.IndexOf(target);
@@ -271,9 +261,6 @@ namespace CAIME
             }
         }
 
-        /// <summary>
-        /// Moves a layer so it sits directly below <paramref name="target"/> (raises <see cref="LayerOrderChanged"/>)
-        /// </summary>
         public void MoveLayerBelow(Layer layer, Layer target)
         {
             var targetIndex = Layers.IndexOf(target);
@@ -283,9 +270,6 @@ namespace CAIME
             }
         }
 
-        /// <summary>
-        /// Restores the built-in stack order for the open project's game (raises <see cref="LayerOrderChanged"/>)
-        /// </summary>
         public void ResetLayerOrder()
         {
             if (IsInDefaultOrder())
@@ -297,9 +281,6 @@ namespace CAIME
             OnLayerOrderChanged();
         }
 
-        /// <summary>
-        /// Whether the stack is still in the built-in order for the open project's game
-        /// </summary>
         public bool IsInDefaultOrder()
         {
             return defaultOrder == null || Layers.SequenceEqual(defaultOrder);
@@ -350,11 +331,17 @@ namespace CAIME
             LayerOrderChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        // RelayCommand's CanExecuteChanged only fires when WPF re-queries commands, which it does
-        // after input such as a focus change - dragging a layer by its grip moves no focus.
         private static void RefreshCommandStates()
         {
             CommandManager.InvalidateRequerySuggested();
+        }
+
+        private static void SetLayerOpacityPercent(object parameter)
+        {
+            if (parameter is object[] values && values.Length == 2 && values[0] is Layer layer)
+            {
+                layer.Opacity = OpacityPercent.ToOpacity(Convert.ToDouble(values[1], CultureInfo.InvariantCulture));
+            }
         }
 
         private int IndexOf(object layer)

@@ -4,13 +4,9 @@ using System.Windows.Media;
 
 namespace CAIME
 {
-    /// <summary>
-    /// Draws a thick white line along the top or bottom edge of an element, marking where a
-    /// dragged item will be inserted
-    /// </summary>
     public class InsertionLineAdorner : Adorner
     {
-        private const double THICKNESS = 4;
+        private const double LineThickness = 4;
 
         public bool IsBelow { get; }
 
@@ -20,13 +16,12 @@ namespace CAIME
             IsHitTestVisible    = false;
         }
 
-        // Centred on the edge, so between two rows the line straddles the gap the item drops into.
         protected override void OnRender(DrawingContext drawingContext)
         {
             var size  = AdornedElement.RenderSize;
             var edgeY = IsBelow ? size.Height : 0;
 
-            drawingContext.DrawRectangle(Brushes.White, null, new Rect(0, edgeY - THICKNESS / 2, size.Width, THICKNESS));
+            drawingContext.DrawRectangle(Brushes.White, null, new Rect(0, edgeY - LineThickness / 2, size.Width, LineThickness));
         }
     }
 }

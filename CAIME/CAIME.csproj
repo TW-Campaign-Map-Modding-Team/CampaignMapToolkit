@@ -317,6 +317,7 @@
     <Compile Include="Classes\Editor\Painters\ViewportPainter.cs" />
     <Compile Include="Classes\Editor\GridSubdivider.cs" />
     <Compile Include="Classes\Editor\LayerBlend.cs" />
+    <Compile Include="Classes\Editor\OpacityPercent.cs" />
     <Compile Include="Classes\Editor\LayerCompositor.cs" />
     <Compile Include="Classes\Editor\LayerOpacityPreview.cs" />
     <Compile Include="Classes\Exporters\LookupImageExporter.cs" />
@@ -382,6 +383,7 @@
     </Compile>
     <Compile Include="Models\Database\XmlSchema.cs" />
     <Compile Include="Converters\ColourConverter.cs" />
+    <Compile Include="Converters\CommandParametersConverter.cs" />
     <Compile Include="Converters\ImageConverter.cs" />
     <Compile Include="Models\Common\MessageItem.cs" />
     <Compile Include="Models\Editor\Swatch.cs" />

@@ -6,15 +6,10 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CAIME.Tests.Unit
 {
-    /// <summary>
-    /// Covers re-arranging the editor's layers stack. <see cref="LayersViewModel.Layers"/> is the
-    /// compositing order - the viewport blends each hex's visible layers from the top down - so every
-    /// order-dependent query has to follow the stack, not <see cref="LayerType"/>.
-    /// </summary>
     [TestClass]
     public class LayersViewModelTests
     {
-        private const int HEX = 0;
+        private const int Hex = 0;
 
         private LayersViewModel _viewModel;
 
@@ -148,12 +143,10 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(_viewModel.ResetLayerOrderCommand.CanExecute(null), "reset");
         }
 
-        // Regression: a layer dragged by its grip moves no keyboard focus, so nothing else prompts WPF
-        // to re-query the commands and the Reset button stayed disabled after the move.
         [TestMethod]
         public void MovingALayer_TellsBoundControlsToRequeryTheResetCommand()
         {
-            RunQueuedDispatcherWork();  // drain the requery Initialise queued, so only the move's can count
+            RunQueuedDispatcherWork();
             var requeried = false;
             EventHandler onCanExecuteChanged = (sender, e) => requeried = true;
             _viewModel.ResetLayerOrderCommand.CanExecuteChanged += onCanExecuteChanged;
@@ -178,14 +171,14 @@ namespace CAIME.Tests.Unit
             var regions    = LayerOf(LayerType.Regions);
             impassable.SetVisible(true);
             regions.SetVisible(true);
-            regions.Colours[HEX] = 1;
+            regions.Colours[Hex] = 1;
 
-            Assert.IsTrue(_viewModel.CanDisplay(impassable, HEX), "impassable above regions");
+            Assert.IsTrue(_viewModel.CanDisplay(impassable, Hex), "impassable above regions");
 
             _viewModel.MoveLayerAbove(regions, impassable);
 
-            Assert.IsFalse(_viewModel.CanDisplay(impassable, HEX), "regions now covers impassable");
-            Assert.IsTrue(_viewModel.CanDisplay(regions, HEX),     "regions is on top");
+            Assert.IsFalse(_viewModel.CanDisplay(impassable, Hex), "regions now covers impassable");
+            Assert.IsTrue(_viewModel.CanDisplay(regions, Hex),     "regions is on top");
         }
 
         [TestMethod]
@@ -196,28 +189,28 @@ namespace CAIME.Tests.Unit
             _viewModel.MoveLayerAbove(regions, roads);
             roads.SetVisible(true);
 
-            regions.Colours[HEX] = 1;
-            Assert.IsTrue(_viewModel.CanDisplay(roads, HEX), "hidden layer above");
+            regions.Colours[Hex] = 1;
+            Assert.IsTrue(_viewModel.CanDisplay(roads, Hex), "hidden layer above");
 
             regions.SetVisible(true);
-            regions.Colours[HEX] = ColourTable.Zero;
-            Assert.IsTrue(_viewModel.CanDisplay(roads, HEX), "uncoloured hex above");
+            regions.Colours[Hex] = ColourTable.Zero;
+            Assert.IsTrue(_viewModel.CanDisplay(roads, Hex), "uncoloured hex above");
         }
 
         [TestMethod]
-        public void CanDisplay_IsBlockedOnlyByAFullyOpaqueLayerAbove()
+        public void CanDisplay_IsBlockedByAnOpaqueLayerAbove_ButNotByOneTranslucentLayer()
         {
             var roads   = LayerOf(LayerType.Roads);
             var regions = LayerOf(LayerType.Regions);
             _viewModel.MoveLayerAbove(regions, roads);
             roads.SetVisible(true);
             regions.SetVisible(true);
-            regions.Colours[HEX] = 1;
+            regions.Colours[Hex] = 1;
 
-            Assert.IsFalse(_viewModel.CanDisplay(roads, HEX), "opaque regions above");
+            Assert.IsFalse(_viewModel.CanDisplay(roads, Hex), "opaque regions above");
 
             regions.Opacity = Layer.FullyOpaque - 1;
-            Assert.IsTrue(_viewModel.CanDisplay(roads, HEX), "regions lets some of roads through");
+            Assert.IsTrue(_viewModel.CanDisplay(roads, Hex), "regions lets some of roads through");
         }
 
         [TestMethod]
@@ -227,7 +220,7 @@ namespace CAIME.Tests.Unit
             impassable.SetVisible(true);
             impassable.Opacity = 0;
 
-            Assert.IsFalse(_viewModel.CanDisplay(impassable, HEX));
+            Assert.IsFalse(_viewModel.CanDisplay(impassable, Hex));
         }
 
         [TestMethod]
@@ -252,20 +245,87 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void SetOpacityPercentCommand_SetsTheOpacity_AndRaisesOpacityChangedOnlyOnChange()
+        public void SetLayerOpacityPercentCommand_SetsTheOpacity_AndRaisesOpacityChangedOnlyOnChange()
         {
             var roads  = LayerOf(LayerType.Roads);
             var raised = 0;
             roads.OpacityChanged += (sender, e) => ++raised;
 
-            roads.SetOpacityPercentCommand.Execute("50");
-            roads.SetOpacityPercentCommand.Execute("50");
+            _viewModel.SetLayerOpacityPercentCommand.Execute(new object[] { roads, "50" });
+            _viewModel.SetLayerOpacityPercentCommand.Execute(new object[] { roads, "50" });
 
             Assert.AreEqual(128, roads.Opacity);
             Assert.AreEqual(1, raised);
 
-            roads.SetOpacityPercentCommand.Execute("100");
+            _viewModel.SetLayerOpacityPercentCommand.Execute(new object[] { roads, "100" });
             Assert.IsTrue(roads.IsOpaque);
+        }
+
+        [TestMethod]
+        public void SetLayerOpacityPercentCommand_IgnoresADisconnectedRow()
+        {
+            _viewModel.SetLayerOpacityPercentCommand.Execute(new object[] { new object(), "50" });
+
+            Assert.IsTrue(_viewModel.Layers.All(layer => layer.IsOpaque));
+        }
+
+        [TestMethod]
+        public void DropLayer_LandsAboveTheTarget_UnlessOverTheLowerHalfOfTheLastRow()
+        {
+            var roads   = LayerOf(LayerType.Roads);
+            var regions = LayerOf(LayerType.Regions);
+            var bottom  = _viewModel.Layers.Last();
+
+            _viewModel.DropLayer(roads, regions, isOverLowerHalf: true);
+            Assert.AreEqual(_viewModel.Layers.IndexOf(regions) - 1, _viewModel.Layers.IndexOf(roads), "lower half of a middle row");
+
+            _viewModel.DropLayer(roads, bottom, isOverLowerHalf: false);
+            Assert.AreEqual(_viewModel.Layers.IndexOf(bottom) - 1, _viewModel.Layers.IndexOf(roads), "upper half of the last row");
+
+            _viewModel.DropLayer(roads, bottom, isOverLowerHalf: true);
+            Assert.AreSame(roads, _viewModel.Layers.Last(), "lower half of the last row");
+        }
+
+        [TestMethod]
+        public void IsDropBelow_OnlyForTheLowerHalfOfTheLastRow()
+        {
+            var bottom = _viewModel.Layers.Last();
+            var top    = _viewModel.Layers.First();
+
+            Assert.IsTrue(_viewModel.IsDropBelow(bottom, isOverLowerHalf: true));
+            Assert.IsFalse(_viewModel.IsDropBelow(bottom, isOverLowerHalf: false));
+            Assert.IsFalse(_viewModel.IsDropBelow(top, isOverLowerHalf: true));
+        }
+
+        [TestMethod]
+        public void ActivateLayer_MakesAnInactiveLayerActive_AndLeavesAnActiveOneAlone()
+        {
+            var roads   = LayerOf(LayerType.Roads);
+            var raised  = 0;
+            roads.ActiveLayerChanged += (sender, e) => ++raised;
+
+            _viewModel.ActivateLayer(roads);
+            _viewModel.ActivateLayer(roads);
+
+            Assert.AreEqual(LayerType.Roads, _viewModel.ActiveLayer);
+            Assert.AreEqual(1, raised);
+        }
+
+        [TestMethod]
+        public void CanDisplay_IsBlockedByTranslucentLayersAboveThatTogetherHideTheHex()
+        {
+            var roads = LayerOf(LayerType.Roads);
+            roads.SetVisible(true);
+
+            foreach (var layer in _viewModel.Layers.Where(layer => layer != roads).ToList())
+            {
+                _viewModel.MoveLayerAbove(layer, roads);
+                layer.SetVisible(true);
+                layer.Colours[Hex] = 1;
+                layer.Opacity = 200;
+            }
+
+            Assert.IsFalse(_viewModel.CanDisplay(roads, Hex));
         }
 
         [TestMethod]
@@ -350,8 +410,6 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(1, order.Count(type => type == LayerType.GroundTypes));
         }
 
-        // CommandManager raises RequerySuggested from a Background-priority dispatcher operation;
-        // queuing the exit at the same priority lets everything queued before it run first.
         private static void RunQueuedDispatcherWork()
         {
             var frame = new DispatcherFrame();

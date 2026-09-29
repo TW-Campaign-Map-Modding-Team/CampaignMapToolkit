@@ -475,19 +475,11 @@ namespace CAIME
             return vanillaPackPaths[(int)game];
         }
 
-        /// <summary>
-        /// The editor's layers stack order the user arranged for a game, topmost first,
-        /// or null when they kept the built-in order
-        /// </summary>
         public IReadOnlyList<LayerType> GetLayerOrder(GameTemplate game)
         {
             return layerOrders.TryGetValue(game, out var order) ? order : null;
         }
 
-        /// <summary>
-        /// Remembers the layers stack order for a game; null forgets it so the built-in order applies.
-        /// Call <see cref="Save"/> to persist it.
-        /// </summary>
         public void SetLayerOrder(GameTemplate game, IEnumerable<LayerType> order)
         {
             if (order == null)

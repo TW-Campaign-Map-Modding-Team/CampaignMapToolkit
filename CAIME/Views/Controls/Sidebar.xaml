@@ -200,6 +200,7 @@
                                   PreviewMouseLeftButtonUp="Layers_PreviewMouseLeftButtonUp"
                                   MouseLeftButtonUp="Layers_MouseLeftButtonUp"
                                   PreviewMouseMove="Layers_PreviewMouseMove"
+                                  MouseLeave="Layers_MouseLeave"
                                   DragOver="Layers_DragOver"
                                   DragLeave="Layers_DragLeave"
                                   Drop="Layers_Drop">

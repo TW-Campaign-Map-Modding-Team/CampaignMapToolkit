@@ -31,6 +31,26 @@ namespace CAIME
             return blend.Result();
         }
 
+        public static bool CanChangeHex(IReadOnlyList<Layer> stack, Layer layer, int hexIndex)
+        {
+            if (layer.Opacity == 0)
+            {
+                return false;
+            }
+
+            var above = LayerBlend.Start();
+            for (int index = 0; index < stack.Count && stack[index] != layer; ++index)
+            {
+                var layerAbove = stack[index];
+                if (IsContributing(layerAbove) && above.Add(layerAbove.Colours[hexIndex], layerAbove.Opacity))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         internal static void ContributorsBetween(IReadOnlyList<Layer> stack, int start, int end, int hexCount, out int[][] colours, out byte[] opacities)
         {
             var contributors = new List<Layer>(end - start);

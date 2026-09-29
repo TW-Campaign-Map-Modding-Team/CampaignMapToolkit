@@ -5,11 +5,6 @@ using Newtonsoft.Json.Linq;
 
 namespace CAIME.Tests.Unit
 {
-    /// <summary>
-    /// Covers how the editor's per-game layers stack orders are written to and read back from
-    /// preferences.json. The file outlives any one build and can be hand-edited, so reading it must
-    /// drop what it doesn't recognise rather than fail the whole preferences load.
-    /// </summary>
     [TestClass]
     public class LayerOrdersJsonTests
     {
@@ -47,9 +42,10 @@ namespace CAIME.Tests.Unit
         public void FromJson_DropsUnknownGamesAndLayers_AndDuplicates()
         {
             var json = JObject.Parse(@"{
-                ""Warhammer3"":   [""GroundTypes"", ""NotALayer"", ""3"", ""Count"", ""Impassable"", ""GroundTypes""],
+                ""Warhammer3"":   [""GroundTypes"", ""NotALayer"", ""3"", ""Count"", ""Roads, Rivers"", ""Impassable"", ""GroundTypes""],
                 ""NotAGame"":     [""Roads""],
                 ""4"":            [""Roads""],
+                ""Rome2, Attila"": [""Roads""],
                 ""Invalid"":      [""Roads""],
                 ""Attila"":       ""not an array""
             }");

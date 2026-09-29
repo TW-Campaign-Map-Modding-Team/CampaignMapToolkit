@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Globalization;
 using System.Windows;
-using System.Windows.Input;
 
 namespace CAIME
 {
@@ -97,8 +95,6 @@ namespace CAIME
         public readonly LayerType Type;
         public string Name { get; private set; }
 
-        public ICommand SetOpacityPercentCommand { get; }
-
         public event RoutedEventHandler VisibilityChanged;
         public event RoutedEventHandler ActiveLayerChanged;
         public event EventHandler OpacityChanged;
@@ -111,18 +107,6 @@ namespace CAIME
             IsActive        = isActive;
             raiseActive     = true;
             raiseVisible    = true;
-
-            SetOpacityPercentCommand = new RelayCommand<object>(percent => Opacity = OpacityFromPercent(Convert.ToDouble(percent, CultureInfo.InvariantCulture)));
-        }
-
-        public static byte OpacityFromPercent(double percent)
-        {
-            return (byte)Math.Round(Math.Max(0.0, Math.Min(percent, 100.0)) * FullyOpaque / 100.0);
-        }
-
-        public static double OpacityToPercent(byte opacity)
-        {
-            return opacity * 100.0 / FullyOpaque;
         }
 
         /// <summary>

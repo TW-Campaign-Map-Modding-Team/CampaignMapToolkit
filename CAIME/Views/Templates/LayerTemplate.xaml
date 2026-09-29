@@ -3,7 +3,6 @@
                     xmlns:local="clr-namespace:CAIME">
 
     <DataTemplate x:Key="LayerTemplate">
-        <!-- Tag carries the LayersViewModel across to the context menu, which is outside the visual tree -->
         <Border x:Name="layerBorder"
                 Padding="1"
                 BorderThickness="1"
@@ -13,6 +12,20 @@
 
             <Border.ContextMenu>
                 <ContextMenu>
+                    <ContextMenu.Resources>
+                        <Style x:Key="OpacityPresetItem" TargetType="MenuItem">
+                            <Setter Property="Command" Value="{Binding PlacementTarget.Tag.SetLayerOpacityPercentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                            <Setter Property="CommandParameter">
+                                <Setter.Value>
+                                    <MultiBinding Converter="{StaticResource CommandParametersConverter}">
+                                        <Binding/>
+                                        <Binding Path="Tag" RelativeSource="{RelativeSource Self}"/>
+                                    </MultiBinding>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ContextMenu.Resources>
+
                     <MenuItem Header="Move up"
                               Command="{Binding PlacementTarget.Tag.MoveLayerUpCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                               CommandParameter="{Binding}"/>
@@ -30,10 +43,10 @@
                               Command="{Binding PlacementTarget.Tag.ResetLayerOrderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                     <Separator/>
                     <MenuItem Header="Opacity">
-                        <MenuItem Header="100% (reset)" Command="{Binding SetOpacityPercentCommand}" CommandParameter="100"/>
-                        <MenuItem Header="75%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="75"/>
-                        <MenuItem Header="50%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="50"/>
-                        <MenuItem Header="25%"          Command="{Binding SetOpacityPercentCommand}" CommandParameter="25"/>
+                        <MenuItem Header="100% (reset)" Tag="100" Style="{StaticResource OpacityPresetItem}"/>
+                        <MenuItem Header="75%"          Tag="75"  Style="{StaticResource OpacityPresetItem}"/>
+                        <MenuItem Header="50%"          Tag="50"  Style="{StaticResource OpacityPresetItem}"/>
+                        <MenuItem Header="25%"          Tag="25"  Style="{StaticResource OpacityPresetItem}"/>
                     </MenuItem>
                 </ContextMenu>
             </Border.ContextMenu>
@@ -76,7 +89,6 @@
                            VerticalAlignment="Center"
                            Margin="4 0"/>
 
-                <!-- Drag grip, the only place a layer drag starts; the dots follow the name's colour so they stay visible on the active row -->
                 <Border x:Name="dragGrip"
                         Grid.Column="3"
                         Background="Transparent"
