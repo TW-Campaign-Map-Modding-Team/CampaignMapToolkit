@@ -30,6 +30,7 @@ Supported games: **Rome 2, Attila, Thrones of Britannia, Warhammer, Warhammer 2,
    - [Minimap](#minimap)
    - [Swatches](#swatches)
    - [Actions](#actions)
+   - [Layer Opacity](#layer-opacity)
    - [Layers](#layers)
 8. [The Status Bar](#8-the-status-bar)
 9. [Keyboard Shortcuts Reference](#9-keyboard-shortcuts-reference)
@@ -294,7 +295,7 @@ The status bar at the bottom always shows the current hex coordinates under your
 
 ## 7. The Sidebar
 
-The **Sidebar** is the 250-pixel-wide panel on the right side of the editor. It is divided into four collapsible sections. Click any section header to expand or collapse it.
+The **Sidebar** is the 250-pixel-wide panel on the right side of the editor. It is divided into five collapsible sections. Click any section header to expand or collapse it. The diagram shows a Three Kingdoms project, which has every layer, in the built-in layer order.
 
 ```
  ┌─────────────────────────────────────┐
@@ -310,20 +311,27 @@ The **Sidebar** is the 250-pixel-wide panel on the right side of the editor. It 
  │ ▼ Actions                           │
  │  [New]   [Rename]   [Remove]        │
  ├─────────────────────────────────────┤
+ │ ▼ Layer Opacity                     │
+ │  Ground Types                       │
+ │  ───────────────────────●   100%    │
+ ├─────────────────────────────────────┤
  │ ▼ Layers                            │
- │  ☑  ●  Ground Types                 │
- │  ☑      Climates                    │
- │  ☑      Regions                     │
- │  ☑      Attritions                  │
- │  ☑      Trade Routes                │
- │  ☑      Restrictions                │
- │  ☑      Beaches                     │
- │  ☑      Rivers                      │
- │  ☑      Bridges                     │
- │  ☑      Town Sprawl                 │
- │  ☑      Town Slots                  │
- │  ☑      Roads                       │
- │  ☑      Impassable                  │
+ │  ☐     Impassable               ⋮   │
+ │  ☐     Trade Routes             ⋮   │
+ │  ☐     Roads                    ⋮   │
+ │  ☐     Town Slots               ⋮   │
+ │  ☐     Town Sprawl              ⋮   │
+ │  ☐     Bridges                  ⋮   │
+ │  ☐     Rivers                   ⋮   │
+ │  ☐     Beaches                  ⋮   │
+ │  ☐     Restrictions             ⋮   │
+ │  ☐     Region Borders           ⋮   │
+ │  ☐     Areas Of Interest        ⋮   │
+ │  ☑     Regions             60%  ⋮   │
+ │  ☐     Attritions               ⋮   │
+ │  ☐     Climates                 ⋮   │
+ │  ☑  ●  Ground Types             ⋮   │
+ │                      [Reset order]  │
  └─────────────────────────────────────┘
 ```
 
@@ -367,15 +375,28 @@ The **Actions** section shows buttons that perform operations on the active laye
 
 ---
 
+### Layer Opacity
+
+The **Layer Opacity** section sets how see-through the **active** layer is. It shows the layer's name, a slider and the current percentage.
+
+- Drag the slider down to let the visible layers below show through. The canvas follows the slider while you drag it. With the slider focused, the arrow keys move it 1% at a time and Page Up/Page Down 10%.
+- For quick presets, right-click a row in the **Layers** list and choose **Opacity** → **100% (reset)**, **75%**, **50%** or **25%**.
+- Opacity is display only. It never changes your map data or exported files, and every layer starts at 100% when a project opens.
+
+See [Layer opacity](user-guide-layers-reference.md#layer-opacity) for how blending behaves.
+
+---
+
 ### Layers
 
 The **Layers** section is one of the most important parts of the application. It works just like the Layers panel in Photoshop — each layer holds one specific type of map data, and you paint each layer independently.
 
 ```
-  ☑  ●  Ground Types      ← Active layer (highlighted)
-  ☑      Climates
-  ☑      Regions
-  ☒      Roads             ← Hidden layer (unchecked)
+  ☑      Roads                   ⋮   ← Drag handle (⋮)
+  ☑      Regions          60%    ⋮   ← Opacity below 100%
+  ☒      Climates                ⋮   ← Hidden layer (unchecked)
+  ☑  ●  Ground Types             ⋮   ← Active layer (highlighted)
+                     [Reset order]
 ```
 
 **Understanding the Layers List:**
@@ -385,11 +406,13 @@ The **Layers** section is one of the most important parts of the application. It
 | **Checkbox (☑/☒)** | Toggles the layer's visibility on the map canvas. Uncheck to hide a layer without deleting it. |
 | **Radio button (●)** | Marks the **active** layer — the one you are currently painting on. Only one layer can be active at a time. |
 | **Layer name** | The name of the layer. The active layer's name appears highlighted. |
+| **Percentage** | The layer's opacity. Only shown while it is below 100%. |
+| **Three dots (⋮)** | The drag handle for re-arranging layers (see below). |
 
 **How to switch layers:**
 
 1. Find the layer you want to paint on in the **Layers** list.
-2. Click the **radio button** next to its name to make it the active layer.
+2. Click the **radio button** next to its name, or anywhere else on the row except the checkbox and the **⋮** dots, to make it the active layer.
 3. The **Swatches** section above will automatically update to show the swatches for that layer.
 4. You can now paint on the map using your selected tool and swatch.
 
@@ -397,23 +420,23 @@ The **Layers** section is one of the most important parts of the application. It
 
 Layers higher in the list are drawn on top. To change the order, drag a layer by the **⋮** dots on its right and drop it where the white line shows it will land, or right-click a row and choose **Move up**, **Move down**, **Move to top** or **Move to bottom**. The **Reset order** button under the list restores the built-in order. The order only affects what you see, and CAIME remembers it for each game in your preferences.
 
-The **Layer Opacity** section, between **Actions** and **Layers**, has a slider for the active layer; lower it to let the layers below show through (right-click a row → **Opacity** for presets). Opacity is display only, and every layer starts at 100% when a project opens. See [Layer opacity](user-guide-layers-reference.md#layer-opacity).
+To see the layers below one without hiding it, lower its opacity in the [Layer Opacity](#layer-opacity) section.
 
-**Standard layers** (available in all supported games, listed from top to bottom as shown in the panel):
+**Standard layers** (available in all supported games, listed from top to bottom in their built-in order; your own order may differ if you have re-arranged them):
 
 | Layer Name | What It Controls |
 |------------|-----------------|
-| **Ground Types** | The terrain type of each hex (grass, desert, snow, etc.) |
-| **Climates** | Climate zones across the map |
-| **Attritions** | Areas that cause attrition (damage to armies over time) |
-| **Regions** | Which political region each hex belongs to |
-| **Beaches** | Coastal/beach hex locations |
-| **Rivers** | River paths across the map |
-| **Bridges** | Bridge crossing locations |
-| **Town Sprawl** | The visual spread area around settlement hexes |
-| **Town Slots** | The exact hexes where settlements can be placed |
-| **Roads** | Road network paths |
 | **Impassable** | Areas that cannot be entered by armies |
+| **Roads** | Road network paths |
+| **Town Slots** | The exact hexes where settlements can be placed |
+| **Town Sprawl** | The visual spread area around settlement hexes |
+| **Bridges** | Bridge crossing locations |
+| **Rivers** | River paths across the map |
+| **Beaches** | Coastal/beach hex locations |
+| **Regions** | Which political region each hex belongs to |
+| **Attritions** | Areas that cause attrition (damage to armies over time) |
+| **Climates** | Climate zones across the map |
+| **Ground Types** | The terrain type of each hex (grass, desert, snow, etc.) |
 
 **Game-specific layers** (only appear when your project is set to the relevant game):
 
@@ -423,6 +446,8 @@ The **Layer Opacity** section, between **Actions** and **Layers**, has a slider 
 | **Region Borders** | Attila and later |
 | **Restrictions** | Attila and later |
 | **Areas of Interest** | Warhammer 3, Three Kingdoms |
+
+In the built-in order, **Trade Routes** sits just below **Impassable**, and **Restrictions**, **Region Borders** and **Areas of Interest** sit between **Beaches** and **Regions**, in that order.
 
 ---
 

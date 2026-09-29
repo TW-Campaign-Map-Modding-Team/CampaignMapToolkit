@@ -92,7 +92,7 @@ After accepting the EULA, the main editor window opens. Here is what you will se
 | **Quick Settings Bar** | Adjust brush size, image overlay opacity, and flood-fill source layer |
 | **Toolbar** (left strip) | Switch between painting tools (Brush, Flood Fill, Line, Color Picker) |
 | **Map Canvas** (centre) | The hexagonal map you paint on |
-| **Sidebar** (right panel) | Minimap, Swatches (colours), Actions, and Layers |
+| **Sidebar** (right panel) | Minimap, Swatches (colours), Actions, Layer Opacity, and Layers |
 | **Status Bar** (bottom) | Shows the result message of the last action performed |
 
 > **When you first open CAIME with no project loaded**, most menu items and toolbar buttons are greyed out. This is normal — they unlock as soon as a map is open.

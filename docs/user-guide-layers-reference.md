@@ -31,28 +31,29 @@ Layers are the central concept in CAIME. Everything you paint, import, or valida
 
 ## The Layers Panel
 
-The **Layers** panel lives in the sidebar on the right side of the screen, inside a collapsible section labelled **Layers**. Click the **Layers** header to expand or collapse it.
+The **Layers** panel lives in the sidebar on the right side of the screen, inside a collapsible section labelled **Layers**. Click the **Layers** header to expand or collapse it. The diagram shows every layer in its built-in order; your own order may differ if you have [re-arranged the layers](#re-arranging-layers).
 
 ```
 ┌─────────────────────────────────┐
 │  ▼ LAYERS                       │
 │ ┌─────────────────────────────┐ │
-│ │ ☑  ● Impassable             │ │  ← Visible + Active (selected for painting)
-│ │ ☐  ○ Trade Routes           │ │  ← Hidden
-│ │ ☐  ○ Roads                  │ │
-│ │ ☐  ○ Town Slots             │ │
-│ │ ☐  ○ Town Sprawl            │ │
-│ │ ☐  ○ Bridges                │ │
-│ │ ☐  ○ Rivers                 │ │
-│ │ ☐  ○ Beaches                │ │
-│ │ ☐  ○ Region Borders         │ │  (not shown for Rome 2)
-│ │ ☐  ○ Regions                │ │
-│ │ ☐  ○ Attritions             │ │
-│ │ ☐  ○ Climates               │ │
-│ │ ☑  ● Ground Types           │ │  ← Default active layer on startup
-│ │ ☐  ○ Restrictions           │ │  (not shown for Rome 2)
-│ │ ☐  ○ Areas Of Interest      │ │  (Warhammer 3 / Three Kingdoms only)
+│ │ ☑  ● Impassable           ⋮ │ │  ← Visible + Active (selected for painting)
+│ │ ☐  ○ Trade Routes         ⋮ │ │  ← Hidden (Rome 2, Attila, Thrones of Britannia and Three Kingdoms only)
+│ │ ☐  ○ Roads                ⋮ │ │
+│ │ ☐  ○ Town Slots           ⋮ │ │
+│ │ ☐  ○ Town Sprawl          ⋮ │ │
+│ │ ☐  ○ Bridges              ⋮ │ │
+│ │ ☐  ○ Rivers               ⋮ │ │
+│ │ ☐  ○ Beaches              ⋮ │ │
+│ │ ☐  ○ Restrictions         ⋮ │ │  (not shown for Rome 2)
+│ │ ☐  ○ Region Borders       ⋮ │ │  (not shown for Rome 2)
+│ │ ☐  ○ Areas Of Interest    ⋮ │ │  (Warhammer 3 / Three Kingdoms only)
+│ │ ☑  ○ Regions         60%  ⋮ │ │  ← Opacity below 100%; the ⋮ dots are the drag handle
+│ │ ☐  ○ Attritions           ⋮ │ │
+│ │ ☐  ○ Climates             ⋮ │ │
+│ │ ☑  ● Ground Types         ⋮ │ │  ← Default active layer on startup
 │ └─────────────────────────────┘ │
+│                  [Reset order]  │  ← Restores the built-in order
 └─────────────────────────────────┘
 ```
 
