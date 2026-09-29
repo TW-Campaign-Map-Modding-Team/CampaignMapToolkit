@@ -64,6 +64,32 @@ namespace CAIME
                 raiseVisible = true;
             }
         }
+
+        public const byte FullyOpaque = 255;
+
+        private byte opacity = FullyOpaque;
+        public byte Opacity
+        {
+            get
+            {
+                return opacity;
+            }
+            set
+            {
+                if (opacity == value)
+                {
+                    return;
+                }
+
+                opacity = value;
+                OnPropertyChanged(nameof(Opacity));
+                OnPropertyChanged(nameof(IsOpaque));
+                OpacityChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public bool IsOpaque => opacity == FullyOpaque;
+
         public int[] Colours { get; private set; }
 
         public readonly LayerType Type;
@@ -71,6 +97,7 @@ namespace CAIME
 
         public event RoutedEventHandler VisibilityChanged;
         public event RoutedEventHandler ActiveLayerChanged;
+        public event EventHandler OpacityChanged;
 
         public Layer(LayerType type, bool isVisible = false, bool isActive = false)
         {

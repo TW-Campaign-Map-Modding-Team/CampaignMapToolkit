@@ -134,7 +134,56 @@
                 </Border>
                 
             </Expander>
-            
+
+            <Expander Header="Layer Opacity"
+                      Style="{StaticResource DarkSidebarExpander}"
+                      IsExpanded="{Binding Source={x:Static local:AppStateContext.Instance},
+                                           Path=IsLayerOpacityExpanded}">
+
+                <Border x:Name="layerOpacity"
+                        Background="{StaticResource BackgroundDarkV4Brush}">
+
+                    <Grid Margin="5">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Grid.ColumnSpan="2"
+                                   Text="{Binding ActiveLayerModel.Name}"
+                                   Foreground="White"
+                                   Margin="0 0 0 4"/>
+
+                        <Slider x:Name="opacitySlider"
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Minimum="0"
+                                Maximum="100"
+                                SmallChange="1"
+                                LargeChange="10"
+                                VerticalAlignment="Center"
+                                ToolTip="Opacity of the active layer"
+                                Value="{Binding ActiveLayerModel.Opacity, Converter={StaticResource OpacityPercentConverter}}"
+                                Thumb.DragStarted="OpacitySlider_DragStarted"
+                                Thumb.DragCompleted="OpacitySlider_DragCompleted"/>
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   Width="36"
+                                   Margin="6 0 0 0"
+                                   TextAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"
+                                   Text="{Binding ActiveLayerModel.Opacity, Converter={StaticResource OpacityPercentConverter}, StringFormat={}{0:0}%}"/>
+                    </Grid>
+                </Border>
+            </Expander>
+
             <!-- Layers -->
             <Expander Header="Layers"
                       Style="{StaticResource DarkSidebarExpander}"
@@ -145,7 +194,16 @@
                             Background="{StaticResource BackgroundDarkV4Brush}">
 
                     <ItemsControl ItemTemplate="{StaticResource LayerTemplate}"
-                                  ItemsSource="{Binding Layers}">
+                                  ItemsSource="{Binding Layers}"
+                                  AllowDrop="True"
+                                  PreviewMouseLeftButtonDown="Layers_PreviewMouseLeftButtonDown"
+                                  PreviewMouseLeftButtonUp="Layers_PreviewMouseLeftButtonUp"
+                                  MouseLeftButtonUp="Layers_MouseLeftButtonUp"
+                                  PreviewMouseMove="Layers_PreviewMouseMove"
+                                  MouseLeave="Layers_MouseLeave"
+                                  DragOver="Layers_DragOver"
+                                  DragLeave="Layers_DragLeave"
+                                  Drop="Layers_Drop">
                         
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -155,7 +213,16 @@
                         </ItemsControl.ItemsPanel>
                         
                     </ItemsControl>
-                    
+
+                    <Button Content="Reset order"
+                            Command="{Binding ResetLayerOrderCommand}"
+                            ToolTip="Restore the built-in layer order"
+                            ToolTipService.ShowOnDisabled="True"
+                            Style="{StaticResource DarkButton}"
+                            HorizontalAlignment="Right"
+                            Padding="10 3"
+                            Margin="5 0 5 5"/>
+
                 </StackPanel>
             </Expander>
             

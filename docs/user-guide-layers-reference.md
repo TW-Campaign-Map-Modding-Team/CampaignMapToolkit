@@ -31,39 +31,74 @@ Layers are the central concept in CAIME. Everything you paint, import, or valida
 
 ## The Layers Panel
 
-The **Layers** panel lives in the sidebar on the right side of the screen, inside a collapsible section labelled **Layers**. Click the **Layers** header to expand or collapse it.
+The **Layers** panel lives in the sidebar on the right side of the screen, inside a collapsible section labelled **Layers**. Click the **Layers** header to expand or collapse it. The diagram shows every layer in its built-in order; your own order may differ if you have [re-arranged the layers](#re-arranging-layers).
 
 ```
 ┌─────────────────────────────────┐
 │  ▼ LAYERS                       │
 │ ┌─────────────────────────────┐ │
-│ │ ☑  ● Impassable             │ │  ← Visible + Active (selected for painting)
-│ │ ☐  ○ Trade Routes           │ │  ← Hidden
-│ │ ☐  ○ Roads                  │ │
-│ │ ☐  ○ Town Slots             │ │
-│ │ ☐  ○ Town Sprawl            │ │
-│ │ ☐  ○ Bridges                │ │
-│ │ ☐  ○ Rivers                 │ │
-│ │ ☐  ○ Beaches                │ │
-│ │ ☐  ○ Region Borders         │ │  (not shown for Rome 2)
-│ │ ☐  ○ Regions                │ │
-│ │ ☐  ○ Attritions             │ │
-│ │ ☐  ○ Climates               │ │
-│ │ ☑  ● Ground Types           │ │  ← Default active layer on startup
-│ │ ☐  ○ Restrictions           │ │  (not shown for Rome 2)
-│ │ ☐  ○ Areas Of Interest      │ │  (Warhammer 3 / Three Kingdoms only)
+│ │ ☑  ● Impassable           ⋮ │ │  ← Visible + Active (selected for painting)
+│ │ ☐  ○ Trade Routes         ⋮ │ │  ← Hidden (Rome 2, Attila, Thrones of Britannia and Three Kingdoms only)
+│ │ ☐  ○ Roads                ⋮ │ │
+│ │ ☐  ○ Town Slots           ⋮ │ │
+│ │ ☐  ○ Town Sprawl          ⋮ │ │
+│ │ ☐  ○ Bridges              ⋮ │ │
+│ │ ☐  ○ Rivers               ⋮ │ │
+│ │ ☐  ○ Beaches              ⋮ │ │
+│ │ ☐  ○ Restrictions         ⋮ │ │  (not shown for Rome 2)
+│ │ ☐  ○ Region Borders       ⋮ │ │  (not shown for Rome 2)
+│ │ ☐  ○ Areas Of Interest    ⋮ │ │  (Warhammer 3 / Three Kingdoms only)
+│ │ ☑  ○ Regions         60%  ⋮ │ │  ← Opacity below 100%; the ⋮ dots are the drag handle
+│ │ ☐  ○ Attritions           ⋮ │ │
+│ │ ☐  ○ Climates             ⋮ │ │
+│ │ ☑  ● Ground Types         ⋮ │ │  ← Default active layer on startup
 │ └─────────────────────────────┘ │
+│                  [Reset order]  │  ← Restores the built-in order
 └─────────────────────────────────┘
 ```
 
-### Each layer row has two controls:
+### Each layer row has these controls:
 
 | Control | What it does |
 |---|---|
 | **Checkbox** (left side) | Toggles the layer's **visibility** on the canvas. Check it to show the layer; uncheck to hide it. Layers higher in the list are drawn on top. |
-| **Radio button / name** (right side) | Sets this layer as the **active layer** — the one you are currently painting on. Only one layer can be active at a time. The active layer row turns light-coloured to distinguish it. |
+| **Radio button / name** (middle) | Sets this layer as the **active layer** — the one you are currently painting on. Clicking anywhere on the row other than the eye icon and the **⋮** dots does the same. Only one layer can be active at a time. The active layer row turns light-coloured to distinguish it. |
+| **Percentage** (right side, only when below 100%) | The layer's [opacity](#layer-opacity). |
+| **Three dots ⋮** (right side) | The drag handle. Drag the dots to [re-arrange the layers](#re-arranging-layers); dragging anywhere else on the row does nothing. |
 
 > **Important:** A layer does not need to be visible to be active. You can paint on a hidden layer. However, the painted colour will only appear on screen once you make the layer visible.
+
+### Re-arranging layers
+
+The order of the list is the drawing order, and you can change it at any time while you work:
+
+- **Drag and drop** a layer by its **⋮** dots onto another row. While you drag, a thick white line marks where the layer will land: directly above the row under the cursor. To move a layer to the very bottom, drop it on the lower half of the last row; the line then appears below that row.
+- **Right-click** a layer row for **Move up**, **Move down**, **Move to top** and **Move to bottom**.
+- The **Reset order** button under the list (or **Right-click → Reset layer order**) puts every layer back in its built-in order. The button is greyed out while the layers are already in that order.
+
+The canvas and the minimap redraw as soon as the order changes. Re-arranging only changes what is drawn on top; it never changes your map data or exported files.
+
+The order is remembered in your preferences (`%AppData%\CampaignMapToolkit\Caime\preferences.json`), separately for each game, because each game has its own set of layers. It is restored the next time you open or reload a project for that game, including after restarting CAIME.
+
+### Layer opacity
+
+Every layer has an opacity from 0% to 100%. A layer below 100% lets the visible layers underneath it show through, so you can, for example, see your Regions tinted over your Ground Types without switching between them.
+
+- **Layer Opacity panel:** the collapsible **Layer Opacity** section, between **Actions** and **Layers** in the sidebar, controls the active layer. It shows the layer's name, a slider and the current percentage. The canvas follows the slider while you drag it; the arrow keys move it 1% at a time and Page Up/Page Down 10%.
+- **Presets:** **Right-click** any layer row, then **Opacity** → **100% (reset)**, **75%**, **50%** or **25%**.
+- A layer below 100% shows its percentage at the right of its row. At **0%** its name is dimmed: the layer is still visible and you can still paint on it, but it adds nothing to the canvas until you raise its opacity.
+
+How it behaves:
+
+- With every layer at 100%, the canvas looks exactly as it did before opacity existed.
+- Hiding a layer hides it whatever its opacity, and showing it again keeps its opacity. Moving a layer in the stack keeps its opacity too.
+- Where only see-through layers colour a hex, they are blended over the dark canvas background.
+- Painting, erasing, undo and redo show the blended colour straight away, including on a layer that sits under a see-through one.
+- The minimap shows the same blended colours as the canvas.
+- Opacity does **not** reveal the background image: the background image is drawn over the hex grid, so use its own opacity slider in the toolbar for that.
+- Blended colours can look like a different swatch's colour. When you need to read exact colours, set the layer back to 100% or hide the layers above it.
+
+Opacity only changes what is drawn. It never changes your map data, your project file or exported files, and it is not part of undo/redo. Unlike the layer order, it is not remembered: every layer starts at 100% each time you open or reload a project.
 
 ---
 
@@ -397,4 +432,4 @@ Each validator checks for a specific set of rules. The table below explains what
 
 - **If the Validate menu items are greyed out**, you either do not have a project open, or your project has not been fully processed yet. Open a project file first, or check that the project loaded without errors.
 
-- **Layers higher in the Layers panel are drawn on top of layers lower in the list.** For example, the Impassable layer is at the very top, so making it visible will overlay it on everything else. Use the visibility checkboxes strategically to focus on one layer at a time without confusion.
+- **Layers higher in the Layers panel are drawn on top of layers lower in the list.** For example, the Impassable layer starts at the very top, so making it visible will overlay it on everything else. Use the visibility checkboxes strategically to focus on one layer at a time without confusion, [re-arrange the layers](#re-arranging-layers) to bring the one you care about to the top, or lower a layer's [opacity](#layer-opacity) to see through it.

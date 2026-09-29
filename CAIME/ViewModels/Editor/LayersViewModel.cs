@@ -1,22 +1,61 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
+using System.Windows.Input;
 
 namespace CAIME
 {
     public class LayersViewModel : BaseViewModel
     {
         private Dictionary<LayerType, Layer> LayersMap;
-        
+        private List<Layer> defaultOrder;
+
         public ObservableCollection<Layer> Layers { get; private set; }
 
-        public LayerType ActiveLayer        { get; private set; }
+        private LayerType activeLayer;
+        public LayerType ActiveLayer
+        {
+            get
+            {
+                return activeLayer;
+            }
+            private set
+            {
+                activeLayer = value;
+                OnPropertyChanged(nameof(ActiveLayer));
+                OnPropertyChanged(nameof(ActiveLayerModel));
+            }
+        }
+
+        public Layer ActiveLayerModel => LayersMap != null && LayersMap.TryGetValue(ActiveLayer, out var layer) ? layer : null;
+
         public LayerType TopVisibleLayer    { get; private set; }
+
+        public ICommand MoveLayerUpCommand            { get; }
+        public ICommand MoveLayerDownCommand          { get; }
+        public ICommand MoveLayerToTopCommand         { get; }
+        public ICommand MoveLayerToBottomCommand      { get; }
+        public ICommand ResetLayerOrderCommand        { get; }
+        public ICommand SetLayerOpacityPercentCommand { get; }
+
+        public event EventHandler LayerOrderChanged;
+
+        public event EventHandler OpacityAdjustmentStarted;
+        public event EventHandler OpacityAdjustmentEnded;
 
         public LayersViewModel()
         {
+            MoveLayerUpCommand            = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) - 1), CanMoveUp);
+            MoveLayerDownCommand          = new RelayCommand<object>(layer => MoveLayer(layer as Layer, IndexOf(layer) + 1), CanMoveDown);
+            MoveLayerToTopCommand         = new RelayCommand<object>(layer => MoveLayer(layer as Layer, 0), CanMoveUp);
+            MoveLayerToBottomCommand      = new RelayCommand<object>(layer => MoveLayer(layer as Layer, Layers.Count - 1), CanMoveDown);
+            ResetLayerOrderCommand        = new RelayCommand<object>(_ => ResetLayerOrder(), _ => IsInDefaultOrder() == false);
+            SetLayerOpacityPercentCommand = new RelayCommand<object>(SetLayerOpacityPercent);
         }
 
-        public bool Initialise(GameTemplate game)
+        public bool Initialise(GameTemplate game, IReadOnlyList<LayerType> savedOrder = null)
         {
             LayersMap = new Dictionary<LayerType, Layer>
             {
@@ -81,7 +120,16 @@ namespace CAIME
                 Layers.Insert(Layers.Count - 4, LayersMap[LayerType.AreasOfInterest]);
             }
 
+            defaultOrder = Layers.ToList();
+
+            if (savedOrder != null)
+            {
+                ArrangeLayers(MergeWithDefaultOrder(savedOrder));
+            }
+
             OnPropertyChanged(nameof(Layers));
+            OnPropertyChanged(nameof(ActiveLayerModel));
+            RefreshCommandStates();
 
             LayersMap[LayerType.GroundTypes].SetActive(isActive: true, raiseEvent: true);
             LayersMap[LayerType.GroundTypes].SetVisible(isVisible: true, raiseEvent: true);
@@ -123,6 +171,14 @@ namespace CAIME
             LayersMap[ActiveLayer].SetActive(true, raiseEvent: true);
         }
 
+        public void ActivateLayer(Layer layer)
+        {
+            if (layer.IsActive == false)
+            {
+                SetActiveLayer(layer.Type);
+            }
+        }
+
         /// <summary>
         /// Set provided layer to be visible (raises <see cref="Layer.VisibilityChanged"/> event)
         /// </summary>
@@ -162,27 +218,146 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Determines whether a colour painted on the given layer can be displayed
+        /// Determines whether a colour painted on the given layer can change what the hex shows
         /// </summary>
         public bool CanDisplay(Layer layer, int colourIndex)
         {
-            foreach (var topLayer in Layers)
+            return LayerCompositor.CanChangeHex(Layers, layer, colourIndex);
+        }
+
+        public void BeginOpacityAdjustment()
+        {
+            OpacityAdjustmentStarted?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void EndOpacityAdjustment()
+        {
+            OpacityAdjustmentEnded?.Invoke(this, EventArgs.Empty);
+        }
+
+        public bool IsDropBelow(Layer target, bool isOverLowerHalf)
+        {
+            return isOverLowerHalf && target == Layers.LastOrDefault();
+        }
+
+        public void DropLayer(Layer layer, Layer target, bool isOverLowerHalf)
+        {
+            if (IsDropBelow(target, isOverLowerHalf))
             {
-                if (topLayer.IsVisible)
+                MoveLayerBelow(layer, target);
+            }
+            else
+            {
+                MoveLayerAbove(layer, target);
+            }
+        }
+
+        public void MoveLayerAbove(Layer layer, Layer target)
+        {
+            var targetIndex = Layers.IndexOf(target);
+            if (targetIndex >= 0)
+            {
+                MoveLayer(layer, Layers.IndexOf(layer) < targetIndex ? targetIndex - 1 : targetIndex);
+            }
+        }
+
+        public void MoveLayerBelow(Layer layer, Layer target)
+        {
+            var targetIndex = Layers.IndexOf(target);
+            if (targetIndex >= 0)
+            {
+                MoveLayer(layer, Layers.IndexOf(layer) > targetIndex ? targetIndex + 1 : targetIndex);
+            }
+        }
+
+        public void ResetLayerOrder()
+        {
+            if (IsInDefaultOrder())
+            {
+                return;
+            }
+
+            ArrangeLayers(defaultOrder);
+            OnLayerOrderChanged();
+        }
+
+        public bool IsInDefaultOrder()
+        {
+            return defaultOrder == null || Layers.SequenceEqual(defaultOrder);
+        }
+
+        private void ArrangeLayers(IReadOnlyList<Layer> order)
+        {
+            for (int index = 0; index < order.Count; ++index)
+            {
+                Layers.Move(Layers.IndexOf(order[index]), index);
+            }
+        }
+
+        private List<Layer> MergeWithDefaultOrder(IReadOnlyList<LayerType> savedOrder)
+        {
+            var order = savedOrder.Distinct()
+                                  .Where(LayersMap.ContainsKey)
+                                  .Select(type => LayersMap[type])
+                                  .ToList();
+
+            for (int index = 0; index < defaultOrder.Count; ++index)
+            {
+                if (order.Contains(defaultOrder[index]) == false)
                 {
-                    if (topLayer.Colours[colourIndex] != ColourTable.Zero && (int)topLayer.Type < (int)layer.Type)
-                    {
-                        return false;
-                    }
-                    else
-                    if (topLayer.Type == layer.Type)
-                    {
-                        break;
-                    }
+                    order.Insert(Math.Min(index, order.Count), defaultOrder[index]);
                 }
             }
 
-            return true;
+            return order;
+        }
+
+        private void MoveLayer(Layer layer, int newIndex)
+        {
+            var oldIndex = Layers.IndexOf(layer);
+            if (oldIndex < 0 || newIndex < 0 || newIndex >= Layers.Count || oldIndex == newIndex)
+            {
+                return;
+            }
+
+            Layers.Move(oldIndex, newIndex);
+            OnLayerOrderChanged();
+        }
+
+        private void OnLayerOrderChanged()
+        {
+            UpdateTopLayer();
+            RefreshCommandStates();
+            LayerOrderChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private static void RefreshCommandStates()
+        {
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private static void SetLayerOpacityPercent(object parameter)
+        {
+            if (parameter is object[] values && values.Length == 2 && values[0] is Layer layer)
+            {
+                layer.Opacity = OpacityPercent.ToOpacity(Convert.ToDouble(values[1], CultureInfo.InvariantCulture));
+            }
+        }
+
+        private int IndexOf(object layer)
+        {
+            return Layers?.IndexOf(layer as Layer) ?? -1;
+        }
+
+        private bool CanMoveUp(object layer)
+        {
+            return IndexOf(layer) > 0;
+        }
+
+        private bool CanMoveDown(object layer)
+        {
+            var index = IndexOf(layer);
+            return index >= 0 && index < Layers.Count - 1;
         }
 
         public Layer GetLayerByName(string name)

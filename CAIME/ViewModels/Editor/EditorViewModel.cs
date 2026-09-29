@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using CAIME.Controls;
 using CAIME.Painters;
 using CAIME.Tools;
@@ -83,6 +84,11 @@ namespace CAIME
         private TownSlotsActionsControl         townSlotsActionsControl;
 
         private int[]                           gridColours;
+        private bool                            isLayersStackRedrawScheduled;
+        private LayerOpacityPreview             opacityPreview;
+        private ViewportViewModel.CellBatch     opacityPreviewCells;
+        private byte                            opacityBeforePreview;
+        private bool                            isOpacityPreviewDrawn;
         private System.Timers.Timer             updateMinimapTimer;
 
         public ObservableCollection<string>     FloodFillLayersSource { get; private set; }
@@ -256,6 +262,9 @@ namespace CAIME
             SidebarViewModel = viewModel;
             SidebarViewModel.ToolbarVM = ToolbarViewModel;
             SidebarViewModel.SwatchesVM.OnActiveSwatchChanged += (sender, e) => ActiveSwatchChanged(sender, e);
+            SidebarViewModel.LayersVM.LayerOrderChanged += LayerOrderChanged;
+            SidebarViewModel.LayersVM.OpacityAdjustmentStarted += OpacityAdjustmentStarted;
+            SidebarViewModel.LayersVM.OpacityAdjustmentEnded += OpacityAdjustmentEnded;
         }
 
         /// <summary>
@@ -542,6 +551,7 @@ namespace CAIME
             isInit = false;
             hexLayout = null;
             gridColours = null;
+            this.StopOpacityPreview();
 
             ViewportViewModel.DestroyGrid();
 
@@ -556,6 +566,7 @@ namespace CAIME
             {
                 layer.ActiveLayerChanged    -= ActiveLayerChanged;
                 layer.VisibilityChanged     -= LayerVisibilityChanged;
+                layer.OpacityChanged        -= LayerOpacityChanged;
             }
 
             UndoRedoManager.Clear();
@@ -588,19 +599,6 @@ namespace CAIME
                     ReportPostLoadFailure(context, ex);
                 }
             });
-        }
-
-        private void ResetGridColors(bool forceResize)
-        {
-            if (gridColours == null || forceResize)
-            {
-                gridColours = new int[project.MapHexFile.Capacity];
-            }
-
-            for (int index = 0; index < gridColours.Length; ++index)
-            {
-                gridColours[index] = ColourTable.Zero;
-            }
         }
 
         public bool CanExit()
@@ -730,48 +728,18 @@ namespace CAIME
         /// </summary>
         public void UpdateColours(bool resizeColors)
         {
-            // Go through each layer from nogo to ground types
-            // Validate that the layer is visible otherwise ignore it's colours
-            // If current colour has black pixel, set current layer's colour to this pixel instead
-
-            ResetGridColors(resizeColors);
-
-            for (int layerId = 0; layerId < SidebarViewModel.LayersVM.Layers.Count; ++layerId)
+            if (gridColours == null || resizeColors)
             {
-                var layer = SidebarViewModel.LayersVM.Layers[layerId];
-                if (layer.IsVisible == false)
-                {
-                    continue;
-                }
-            
-                for (int index = 0; index < gridColours.Length; ++index)
-                {
-                    if (gridColours[index] == ColourTable.Zero)
-                    {
-                        gridColours[index] = layer.Colours[index];
-                    }
-                }
+                gridColours = new int[project.MapHexFile.Capacity];
             }
 
-            // Finally get our colours in eligible form and set these colours in the viewport
+            LayerCompositor.ComposeAll(SidebarViewModel.LayersVM.Layers, gridColours);
             ViewportViewModel.UpdateGridColours(gridColours, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
         }
 
-        public void SetColour(int index, int colour)
+        public void RefreshHex(int index)
         {
-            if (colour == ColourTable.Zero)
-            {
-                for (int layerId = 0; layerId < SidebarViewModel.LayersVM.Layers.Count; ++layerId)
-                {
-                    var layer = SidebarViewModel.LayersVM.Layers[layerId];
-                    var curColor = layer.Colours[index];
-                    if (layer.IsVisible && curColor != ColourTable.Zero)
-                    {
-                        colour = curColor;
-                        break;
-                    }
-                }
-            }
+            var colour = LayerCompositor.ComposeHex(SidebarViewModel.LayersVM.Layers, index);
 
             gridColours[index] = colour;
             ViewportViewModel.UpdateCellColour(colour, index, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
@@ -798,7 +766,7 @@ namespace CAIME
             beachesActionsControl.ViewModel.Initialise(e.Project);
             townSlotsActionsControl.ViewModel.Initialise(e.Project);
 
-            SidebarViewModel.LayersVM.Initialise(e.Project.Game);
+            SidebarViewModel.LayersVM.Initialise(e.Project.Game, _preferencesViewModel.GetLayerOrder(e.Project.Game));
 
             FloodFillLayersSource.Clear();
             foreach (var layer in SidebarViewModel.LayersVM.Layers)
@@ -807,6 +775,7 @@ namespace CAIME
 
                 layer.ActiveLayerChanged    += ActiveLayerChanged;
                 layer.VisibilityChanged     += LayerVisibilityChanged;
+                layer.OpacityChanged        += LayerOpacityChanged;
             }
 
             this.SubscribeToMapHexEvents();
@@ -1258,12 +1227,118 @@ namespace CAIME
         /// </summary>
         private void LayerVisibilityChanged(object sender, RoutedEventArgs e)
         {
+            this.RedrawLayersStack();
+        }
+
+        private void LayerOrderChanged(object sender, EventArgs e)
+        {
+            if (isInit)
+            {
+                this.RedrawLayersStack();
+                this.SaveLayerOrder();
+            }
+        }
+
+        private void LayerOpacityChanged(object sender, EventArgs e)
+        {
+            if (isInit)
+            {
+                this.ScheduleLayersStackRedraw();
+            }
+        }
+
+        private void OpacityAdjustmentStarted(object sender, EventArgs e)
+        {
+            var layer = SidebarViewModel.LayersVM.ActiveLayerModel;
+            if (isInit == false || layer == null)
+            {
+                return;
+            }
+
+            if (isLayersStackRedrawScheduled)
+            {
+                this.RedrawLayersStack();
+            }
+
+            opacityPreview          = LayerOpacityPreview.Prepare(SidebarViewModel.LayersVM.Layers, layer, gridColours.Length);
+            opacityPreviewCells     = ViewportViewModel.CreateCellBatch(opacityPreview.AffectedHexes, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
+            opacityBeforePreview    = layer.Opacity;
+            isOpacityPreviewDrawn   = false;
+        }
+
+        private void OpacityAdjustmentEnded(object sender, EventArgs e)
+        {
+            if (opacityPreview == null)
+            {
+                return;
+            }
+
+            var layer = opacityPreview.Layer;
+            var needsRedraw = isOpacityPreviewDrawn;
+            this.StopOpacityPreview();
+
+            if (isInit && (needsRedraw || layer.Opacity != opacityBeforePreview))
+            {
+                this.ScheduleLayersStackRedraw();
+            }
+        }
+        #endregion
+
+        private void StopOpacityPreview()
+        {
+            opacityPreview          = null;
+            opacityPreviewCells     = null;
+            isOpacityPreviewDrawn   = false;
+        }
+
+        private void ScheduleLayersStackRedraw()
+        {
+            if (isLayersStackRedrawScheduled)
+            {
+                return;
+            }
+
+            isLayersStackRedrawScheduled = true;
+            Application.Current.Dispatcher.BeginInvoke((Action)(() =>
+            {
+                isLayersStackRedrawScheduled = false;
+                if (isInit == false)
+                {
+                    return;
+                }
+
+                if (opacityPreview != null)
+                {
+                    this.DrawOpacityPreview();
+                }
+                else
+                {
+                    this.RedrawLayersStack();
+                }
+            }), DispatcherPriority.Background);
+        }
+
+        private void DrawOpacityPreview()
+        {
+            opacityPreview.Compose(opacityPreview.Layer.Opacity, gridColours);
+            ViewportViewModel.UpdateCellColours(opacityPreviewCells, gridColours);
+            isOpacityPreviewDrawn = true;
+        }
+
+        private void SaveLayerOrder()
+        {
+            var layersVM = SidebarViewModel.LayersVM;
+            _preferencesViewModel.SetLayerOrder(project.Game, layersVM.IsInDefaultOrder() ? null : layersVM.GetLayers());
+            _preferencesViewModel.Save();
+        }
+
+        private void RedrawLayersStack()
+        {
             this.UpdateColours(resizeColors: false);
 
             SidebarViewModel.LayersVM.UpdateTopLayer();
             SidebarViewModel.MinimapVM.UpdateMinimap((int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight, gridColours);
         }
-        #endregion
 
         /// <summary>
         /// Disposes unmanaged resources from <see cref="CAIME.ViewportViewModel"/>

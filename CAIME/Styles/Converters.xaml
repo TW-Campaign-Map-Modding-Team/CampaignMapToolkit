@@ -3,8 +3,10 @@
                     xmlns:converters="clr-namespace:CAIME.Converters">
 
     <converters:ColourConverter x:Key="ColourConverter"/>
+    <converters:CommandParametersConverter x:Key="CommandParametersConverter"/>
     <converters:ImageConverter x:Key="ImageConverter"/>
     <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+    <converters:OpacityPercentConverter x:Key="OpacityPercentConverter"/>
     <converters:RegionTownSizeConverter x:Key="RegionTownSizeConverter"/>
     
 </ResourceDictionary>
