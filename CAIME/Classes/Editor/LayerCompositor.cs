@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace CAIME
 {
@@ -10,10 +12,13 @@ namespace CAIME
         {
             ContributorsBetween(stack, 0, stack.Count, output.Length, out int[][] colours, out byte[] opacities);
 
-            for (int hexIndex = 0; hexIndex < output.Length; ++hexIndex)
+            Parallel.ForEach(Partitioner.Create(0, output.Length), range =>
             {
-                output[hexIndex] = Blend(colours, opacities, hexIndex).Result();
-            }
+                for (int hexIndex = range.Item1; hexIndex < range.Item2; ++hexIndex)
+                {
+                    output[hexIndex] = Blend(colours, opacities, hexIndex).Result();
+                }
+            });
         }
 
         public static int ComposeHex(IReadOnlyList<Layer> stack, int hexIndex)

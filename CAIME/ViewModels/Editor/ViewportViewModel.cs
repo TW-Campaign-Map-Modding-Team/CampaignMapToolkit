@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Numerics;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -349,13 +351,17 @@ namespace CAIME
             // Write every vertex colour first and upload each section's buffer once at the
             // end - calling UpdateColors() per hex re-uploads whole sections hundreds of
             // thousands of times on a full-map refresh.
-            for (int index = 0; index < colours.Length; ++index)
+            var sectionColours = SectionColours();
+            Parallel.ForEach(Partitioner.Create(0, colours.Length), range =>
             {
-                int chunkIndex = GridSubdivider.FindSectionIndex(index, width, height);
-                int localIndex = GridSubdivider.GlobalIndexToSectionIndex(index, chunkIndex, width, height);
+                for (int index = range.Item1; index < range.Item2; ++index)
+                {
+                    int chunkIndex = GridSubdivider.FindSectionIndex(index, width, height);
+                    int localIndex = GridSubdivider.GlobalIndexToSectionIndex(index, chunkIndex, width, height);
 
-                WriteHexColour(gridSections[chunkIndex].Geometry.Colors, localIndex * 6, colours[index]);
-            }
+                    WriteHexColour(sectionColours[chunkIndex], localIndex * 6, new Color4(colours[index]));
+                }
+            });
 
             for (int index = 0; index < gridSections.Length; ++index)
             {
@@ -381,7 +387,7 @@ namespace CAIME
             int chunkIndex = GridSubdivider.FindSectionIndex(index, width, height);
             int localIndex = GridSubdivider.GlobalIndexToSectionIndex(index, chunkIndex, width, height);
 
-            WriteHexColour(gridSections[chunkIndex].Geometry.Colors, localIndex * 6, newColour);
+            WriteHexColour(gridSections[chunkIndex].Geometry.Colors.GetInternalArray(), localIndex * 6, new Color4(newColour));
 
             dirtyColourSections.Add(chunkIndex);
             ScheduleColourFlush();
@@ -430,61 +436,104 @@ namespace CAIME
 
         public sealed class CellBatch
         {
+            internal readonly int[] SectionStarts;
             internal readonly int[] HexIndices;
-            internal readonly int[] Sections;
             internal readonly int[] FirstVertices;
-            internal readonly int[] TouchedSections;
 
-            internal CellBatch(int[] hexIndices, int[] sections, int[] firstVertices, int[] touchedSections)
+            internal CellBatch(int[] sectionStarts, int[] hexIndices, int[] firstVertices)
             {
+                SectionStarts   = sectionStarts;
                 HexIndices      = hexIndices;
-                Sections        = sections;
                 FirstVertices   = firstVertices;
-                TouchedSections = touchedSections;
             }
         }
 
         public CellBatch CreateCellBatch(int[] hexIndices, int width, int height)
         {
             var sections        = new int[hexIndices.Length];
-            var firstVertices   = new int[hexIndices.Length];
-            var touchedSections = new HashSet<int>();
+            var localVertices   = new int[hexIndices.Length];
+            var sectionStarts   = new int[gridSections.Length + 1];
+
+            Parallel.ForEach(Partitioner.Create(0, hexIndices.Length), range =>
+            {
+                for (int index = range.Item1; index < range.Item2; ++index)
+                {
+                    sections[index]         = GridSubdivider.FindSectionIndex(hexIndices[index], width, height);
+                    localVertices[index]    = GridSubdivider.GlobalIndexToSectionIndex(hexIndices[index], sections[index], width, height) * 6;
+                }
+            });
 
             for (int index = 0; index < hexIndices.Length; ++index)
             {
-                int chunkIndex = GridSubdivider.FindSectionIndex(hexIndices[index], width, height);
-                int localIndex = GridSubdivider.GlobalIndexToSectionIndex(hexIndices[index], chunkIndex, width, height);
-
-                sections[index]         = chunkIndex;
-                firstVertices[index]    = localIndex * 6;
-                touchedSections.Add(chunkIndex);
+                ++sectionStarts[sections[index] + 1];
             }
 
-            var touched = new int[touchedSections.Count];
-            touchedSections.CopyTo(touched);
+            for (int section = 0; section < gridSections.Length; ++section)
+            {
+                sectionStarts[section + 1] += sectionStarts[section];
+            }
 
-            return new CellBatch(hexIndices, sections, firstVertices, touched);
+            var nextSlots       = (int[])sectionStarts.Clone();
+            var orderedHexes    = new int[hexIndices.Length];
+            var firstVertices   = new int[hexIndices.Length];
+
+            for (int index = 0; index < hexIndices.Length; ++index)
+            {
+                int slot = nextSlots[sections[index]]++;
+
+                orderedHexes[slot]  = hexIndices[index];
+                firstVertices[slot] = localVertices[index];
+            }
+
+            return new CellBatch(sectionStarts, orderedHexes, firstVertices);
         }
 
         public void UpdateCellColours(CellBatch batch, int[] colours)
         {
-            for (int index = 0; index < batch.HexIndices.Length; ++index)
-            {
-                WriteHexColour(gridSections[batch.Sections[index]].Geometry.Colors, batch.FirstVertices[index], colours[batch.HexIndices[index]]);
-            }
+            var sectionColours  = SectionColours();
+            var isChanged       = new bool[gridSections.Length];
 
-            foreach (int chunkIndex in batch.TouchedSections)
+            Parallel.For(0, gridSections.Length, section =>
             {
-                gridSections[chunkIndex].Geometry.UpdateColors();
+                var vertexColours = sectionColours[section];
+                for (int index = batch.SectionStarts[section]; index < batch.SectionStarts[section + 1]; ++index)
+                {
+                    var colour      = new Color4(colours[batch.HexIndices[index]]);
+                    int firstVertex = batch.FirstVertices[index];
+
+                    if (vertexColours[firstVertex] != colour)
+                    {
+                        WriteHexColour(vertexColours, firstVertex, colour);
+                        isChanged[section] = true;
+                    }
+                }
+            });
+
+            for (int section = 0; section < gridSections.Length; ++section)
+            {
+                if (isChanged[section])
+                {
+                    gridSections[section].Geometry.UpdateColors();
+                }
             }
         }
 
-        private static void WriteHexColour(Color4Collection sectionColours, int firstVertex, int rgba)
+        private Color4[][] SectionColours()
         {
-            var colour = new Color4(rgba);
-            for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
+            var sectionColours = new Color4[gridSections.Length][];
+            for (int section = 0; section < gridSections.Length; ++section)
             {
-                sectionColours[firstVertex + dir] = colour;
+                sectionColours[section] = gridSections[section].Geometry.Colors.GetInternalArray();
+            }
+
+            return sectionColours;
+        }
+
+        private static void WriteHexColour(Color4[] vertexColours, int firstVertex, Color4 colour)
+        {
+            for (int dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
+            {
+                vertexColours[firstVertex + dir] = colour;
             }
         }
 
