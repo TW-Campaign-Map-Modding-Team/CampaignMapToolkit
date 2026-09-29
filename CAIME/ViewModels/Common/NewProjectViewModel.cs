@@ -128,7 +128,7 @@ namespace CAIME
         public NewProjectViewModel(ProjectManager projectManager)
         {
             _projectManager = projectManager;
-            var templatesFolderPath = $@"{projectManager.RootPath}..\Templates\";
+            var templatesFolderPath = projectManager.TemplatesPath;
 
             if (Directory.Exists(templatesFolderPath))
             {

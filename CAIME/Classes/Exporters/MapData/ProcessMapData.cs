@@ -15,7 +15,7 @@ namespace CAIME.Exporters
         // map. The bound only exists so a wedged child cannot hang the app forever.
         private const int PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
 
-        public static bool Process(Project project, string appRootDir)
+        public static bool Process(Project project, string toolsDir)
         {
             var startInfo = new System.Diagnostics.ProcessStartInfo();
 
@@ -28,18 +28,24 @@ namespace CAIME.Exporters
                 project.Game == GameTemplate.Three_Kingdoms)
             {
 #if DEBUG
-                startInfo.FileName = $@"{appRootDir}Tools\Debug\{EXPORTER_NAME}.x64.exe";
+                startInfo.FileName = $@"{toolsDir}Debug\{EXPORTER_NAME}.x64.exe";
 #else                                                   
-                startInfo.FileName = $@"{appRootDir}Tools\Release\{EXPORTER_NAME}.x64.exe";
+                startInfo.FileName = $@"{toolsDir}Release\{EXPORTER_NAME}.x64.exe";
 #endif                                     
             }                              
             else                           
             {
 #if DEBUG
-                startInfo.FileName = $@"{appRootDir}Tools\Debug\{EXPORTER_NAME}.exe";
+                startInfo.FileName = $@"{toolsDir}Debug\{EXPORTER_NAME}.exe";
 #else
-                startInfo.FileName = $@"{appRootDir}Tools\Release\{EXPORTER_NAME}.exe";
+                startInfo.FileName = $@"{toolsDir}Release\{EXPORTER_NAME}.exe";
 #endif
+            }
+
+            if (File.Exists(startInfo.FileName) == false)
+            {
+                LoggerViewModel.Log($"{EXPORTER_NAME} not found at {startInfo.FileName}. The CAIME installation is incomplete; please reinstall.", LogLevel.ErrorMessageBox);
+                return false;
             }
 
             var asskitPath                              = PreferencesViewModel.Instance.GetAssKitPath(project.Game).Replace('\\', '/');

@@ -244,12 +244,7 @@ namespace CAIME
 
         private void Guides_Click(object sender, RoutedEventArgs e)
         {
-            var win = new UserGuidesWindow
-            {
-                Owner = Window.GetWindow(this),
-            };
-
-            win.Show();
+            System.Diagnostics.Process.Start("https://tw-campaign-map-modding-team.github.io/CampaignMapToolkit/");
         }
 
         private void DiscordSupport_Click(object sender, RoutedEventArgs e)
