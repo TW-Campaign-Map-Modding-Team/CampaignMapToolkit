@@ -40,7 +40,7 @@ Games supported:
 
 **Contributors**:
 - MrJox - Architecture and vast majority of the source code programming;
-- ChaosRobbie - QoL improvements; New features; Reverse engineering & polishing;
+- ChaosRobie - QoL improvements; New features; Reverse engineering & polishing;
 - Celebdil - Borders exporter code;
 - CharlesWoodhill - Hex spacing setting in preferences;
 - TadeoM - Painting tool feature;
