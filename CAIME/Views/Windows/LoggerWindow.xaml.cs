@@ -4,8 +4,8 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace CAIME.Windows
 {
@@ -14,7 +14,7 @@ namespace CAIME.Windows
     /// </summary>
     public partial class LoggerWindow : Window
     {
-        private bool autoScroll = true;
+        private bool scrollToNewestMessagePending;
 
         public LoggerWindow()
         {
@@ -24,33 +24,25 @@ namespace CAIME.Windows
             ((INotifyCollectionChanged)logsContainerListBox.Items).CollectionChanged += Logs_CollectionChanged;
         }
 
-        private void ScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
-        {
-            var scroll = sender as ScrollViewer;
-
-            if (e.ExtentHeightChange == 0)
-            {
-                if (scroll.VerticalOffset == scroll.ScrollableHeight)
-                {
-                    autoScroll = true;
-                }
-                else
-                {
-                    autoScroll = false;
-                }
-            }
-
-            if (autoScroll && e.ExtentHeightChange != 0)
-            {
-                scroll.ScrollToVerticalOffset(scroll.ExtentHeight);
-            }
-        }
-
         private void Logs_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            if (e.Action == NotifyCollectionChangedAction.Add)
+            if (e.Action != NotifyCollectionChangedAction.Add || scrollToNewestMessagePending)
             {
-                logsContainerListBox.ScrollIntoView(e.NewItems[0]);
+                return;
+            }
+
+            scrollToNewestMessagePending = true;
+            Dispatcher.BeginInvoke(new Action(ScrollToNewestMessage), DispatcherPriority.Background);
+        }
+
+        private void ScrollToNewestMessage()
+        {
+            scrollToNewestMessagePending = false;
+
+            var items = logsContainerListBox.Items;
+            if (items.Count > 0)
+            {
+                logsContainerListBox.ScrollIntoView(items[items.Count - 1]);
             }
         }
 
