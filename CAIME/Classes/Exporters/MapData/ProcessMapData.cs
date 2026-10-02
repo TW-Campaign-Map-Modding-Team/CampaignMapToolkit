@@ -64,6 +64,21 @@ namespace CAIME.Exporters
                 return false;
             }
 
+            // With the RPFM database source the regions table is CAIME's own, and its "is_sea" has to
+            // match the map as it is now, not as it was when the project opened.
+            if (project.RpfmSession != null)
+            {
+                try
+                {
+                    project.RpfmSession.UpdateRegionsForMapData(project.MapHexFile);
+                }
+                catch (Exception ex)
+                {
+                    LoggerViewModel.Log($"map_data.esf was not processed: {ex.Message}", LogLevel.ErrorMessageBox);
+                    return false;
+                }
+            }
+
             if (File.Exists(outputFilePath))
             {
                 LoggerViewModel.Log($"Deleted existing map_data.esf file.", LogLevel.Info);

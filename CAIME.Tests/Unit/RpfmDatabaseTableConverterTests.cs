@@ -146,9 +146,8 @@ namespace CAIME.Tests.Unit
             // Two fragments that happen to share the exact same in-pack fragment name (e.g. two packs
             // both shipping a "!!!mod" fragment for this table) - fragment-name sorting alone cannot
             // break this tie, so MergeTsvToXml must fall back to a stable sort and let whichever
-            // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists
-            // fragments in pack-file-name order specifically so this tie resolves alphabetically by
-            // pack name.
+            // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists a
+            // mod's fragments before the game's, so a mod wins this tie.
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
             File.WriteAllText(schemaPath, TwadSchema);
 
@@ -187,6 +186,93 @@ namespace CAIME.Tests.Unit
 
             var reversedRecords = XDocument.Load(reversedOutputXmlPath).Root.Elements("test_table").ToList();
             Assert.AreEqual("222", reversedRecords[0].Element("movement_cost").Value);
+        }
+
+        [TestMethod]
+        public void MergeTsvToXml_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
+        {
+            // The RPFM workflow writes only one campaign map's regions; dropping the rest must not
+            // reorder the ones kept, since CAIME numbers regions by their order in the table.
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
+            var xmlPath    = Path.Combine(_dir, "filtered.xml");
+            File.WriteAllText(schemaPath, TwadSchema);
+            File.WriteAllText(tsvPath,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/rom_test\t\t\t\n" +
+                "zz_kept\t1\ttrue\tfalse\n" +
+                "dropped\t2\ttrue\tfalse\n" +
+                "aa_kept\t3\tfalse\ttrue\n");
+
+            DatabaseTableConverter.MergeTsvToXml(
+                new[] { (tsvPath, "rom_test") }, "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null, xmlPath,
+                new TsvRowFilter("type", new[] { "AA_KEPT", "zz_kept" }));
+
+            var kept = XDocument.Load(xmlPath).Root.Elements("test_table").Select(r => r.Element("type").Value).ToArray();
+            CollectionAssert.AreEqual(new[] { "zz_kept", "aa_kept" }, kept,
+                "Only the selected rows may be written (matched ignoring case), in their original order.");
+        }
+
+        [TestMethod]
+        public void MergeTsvToXml_RowFilterOnAMissingColumn_Throws()
+        {
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
+            File.WriteAllText(schemaPath, TwadSchema);
+            File.WriteAllText(tsvPath, Tsv);
+
+            Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsvToXml(
+                new[] { (tsvPath, "rom_test") }, "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null, Path.Combine(_dir, "never.xml"),
+                new TsvRowFilter("no_such_column", new[] { "x" })),
+                "A filter that cannot be applied must fail rather than silently write every row or none.");
+        }
+
+        [TestMethod]
+        public void SetYesNoField_RewritesListedRecordsOnly_AndWritesNoBom()
+        {
+            var xmlPath = Path.Combine(_dir, "regions.xml");
+            File.WriteAllText(xmlPath,
+@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<dataroot>
+  <regions><key>reg_a</key><is_sea>0</is_sea><r>1</r></regions>
+  <regions><key>reg_b</key><is_sea>1</is_sea><r>2</r></regions>
+  <regions><key>reg_c</key><is_sea>1</is_sea><r>3</r></regions>
+</dataroot>");
+
+            DatabaseTableConverter.SetYesNoField(xmlPath, "regions", "key", "is_sea",
+                new System.Collections.Generic.Dictionary<string, bool> { ["reg_a"] = true, ["reg_b"] = false });
+
+            var records = XDocument.Load(xmlPath).Root.Elements("regions").ToList();
+            CollectionAssert.AreEqual(new[] { "1", "0", "1" }, records.Select(r => r.Element("is_sea").Value).ToArray(),
+                "Listed records take the given value; an unlisted one keeps its own.");
+            CollectionAssert.AreEqual(new[] { "is_sea", "r" }, records[0].Elements().Skip(1).Select(e => e.Name.LocalName).ToArray(),
+                "The field must be rewritten in place, keeping the schema's field order.");
+            Assert.AreNotEqual(0xEF, File.ReadAllBytes(xmlPath)[0], "The Assembly Kit's reader crashes on a UTF-8 BOM.");
+        }
+
+        [TestMethod]
+        public void ReadTsvRows_ReturnsDataRowsByColumnName_SkippingTheMetadataLine()
+        {
+            var tsvPath = Path.Combine(_dir, "campaign_map_regions.tsv");
+            File.WriteAllText(tsvPath,
+                "campaign_map\tregion\n" +
+                "#campaign_map_regions_tables;0;db/campaign_map_regions_tables/data__\t\n" +
+                "main_map\treg_a\n" +
+                "other_map\treg_b\n");
+
+            var rows = DatabaseTableConverter.ReadTsvRows(tsvPath).ToList();
+
+            Assert.AreEqual(2, rows.Count);
+            Assert.AreEqual("main_map", rows[0]["campaign_map"]);
+            Assert.AreEqual("reg_b", rows[1]["region"]);
         }
 
         [TestMethod]

@@ -157,6 +157,39 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
+        /// Reads an RPFM TSV file's data rows, each as its values by column name, skipping the
+        /// metadata line. For a caller that needs a table's raw values rather than its XML.
+        /// </summary>
+        public static IEnumerable<IReadOnlyDictionary<string, string>> ReadTsvRows(string tsvPath)
+        {
+            string[] header = null;
+
+            foreach (var line in File.ReadLines(tsvPath))
+            {
+                if (line.Length == 0 || line[0] == '#')
+                {
+                    continue;
+                }
+
+                var cells = line.Split('\t');
+
+                if (header == null)
+                {
+                    header = cells;
+                    continue;
+                }
+
+                var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; ++i)
+                {
+                    row[header[i]] = i < cells.Length ? cells[i] : string.Empty;
+                }
+
+                yield return row;
+            }
+        }
+
+        /// <summary>
         /// Converts one RPFM TSV file into an Assembly Kit data XML file.
         /// </summary>
         /// <param name="tsvPath">Source .tsv file.</param>
@@ -206,6 +239,9 @@ namespace CAIME.Rpfm
         /// <paramref name="existingRecords"/> since that may be stale relative to the currently open map.
         /// A row whose key <paramref name="regionIsSeaByKey"/> does not recognise falls through to
         /// <paramref name="existingRecords"/>/the schema default same as any other field.
+        ///
+        /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
+        /// row of every fragment is dropped before merging.
         /// </summary>
         public static void MergeTsvToXml(
             IReadOnlyList<(string TsvPath, string FragmentName)> fragments,
@@ -215,7 +251,8 @@ namespace CAIME.Rpfm
             IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, XElement> existingRecords,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
-            string outputXmlPath)
+            string outputXmlPath,
+            TsvRowFilter rowFilter = null)
         {
             var ordered = fragments.OrderBy(f => f.FragmentName, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -225,7 +262,7 @@ namespace CAIME.Rpfm
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
                 var keyedRecords = TsvToKeyedRecords(
-                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, fragmentIndex);
+                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
@@ -245,20 +282,51 @@ namespace CAIME.Rpfm
             var document = new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputXmlPath));
+            SaveAssemblyKitXml(document, outputXmlPath);
+        }
 
-            // Must be written WITHOUT a UTF-8 BOM. The Assembly Kit's own XML reader does not skip
-            // one - it faults on the leading bytes and takes the whole ToolDataBuilder DLL down with
-            // an access violation, which surfaces as MapDataBuilder.exe crashing rather than as a
-            // parse error. Every XML file the Assembly Kit ships is BOM-less, and XDocument.Save(path)
-            // writes one, so the writer's encoding has to be set explicitly (same reason XmlToTsv uses
-            // a BOM-less UTF8Encoding).
+        /// <summary>
+        /// Rewrites one yes/no <paramref name="field"/> in an Assembly Kit data XML file: each record
+        /// whose <paramref name="keyField"/> is in <paramref name="valuesByKey"/> gets that value, and
+        /// every other record is left as it was. The field must already be present on those records -
+        /// the Assembly Kit reads fields in schema order, so one cannot simply be appended.
+        /// </summary>
+        public static void SetYesNoField(
+            string xmlPath, string recordElementName, string keyField, string field, IReadOnlyDictionary<string, bool> valuesByKey)
+        {
+            var document = XDocument.Load(xmlPath);
+
+            foreach (var record in document.Root.Elements(recordElementName))
+            {
+                var key = record.Element(keyField)?.Value;
+                if (key == null || !valuesByKey.TryGetValue(key, out var value))
+                {
+                    continue;
+                }
+
+                var element = record.Element(field)
+                    ?? throw new InvalidDataException($"'{xmlPath}' has a {recordElementName} record for '{key}' with no {field} field.");
+                element.Value = value ? "1" : "0";
+            }
+
+            SaveAssemblyKitXml(document, xmlPath);
+        }
+
+        // Must be written WITHOUT a UTF-8 BOM. The Assembly Kit's own XML reader does not skip one -
+        // it faults on the leading bytes and takes the whole ToolDataBuilder DLL down with an access
+        // violation, which surfaces as MapDataBuilder.exe crashing rather than as a parse error. Every
+        // XML file the Assembly Kit ships is BOM-less, and XDocument.Save(path) writes one, so the
+        // writer's encoding has to be set explicitly (same reason XmlToTsv uses a BOM-less
+        // UTF8Encoding).
+        private static void SaveAssemblyKitXml(XDocument document, string path)
+        {
             var writerSettings = new XmlWriterSettings
             {
                 Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                 Indent   = true,
             };
 
-            using (var writer = XmlWriter.Create(outputXmlPath, writerSettings))
+            using (var writer = XmlWriter.Create(path, writerSettings))
             {
                 document.Save(writer);
             }
@@ -268,11 +336,12 @@ namespace CAIME.Rpfm
             string tsvPath, string recordElementName, ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, XElement> existingRecords,
-            IReadOnlyDictionary<string, bool> regionIsSeaByKey, int fragmentIndex)
+            IReadOnlyDictionary<string, bool> regionIsSeaByKey, TsvRowFilter rowFilter, int fragmentIndex)
         {
             var lines = File.ReadAllLines(tsvPath);
 
             string[] header = null;
+            int filterColumnIndex = -1;
             var results = new List<(string, XElement)>();
             int rowIndex = 0;
 
@@ -294,6 +363,21 @@ namespace CAIME.Rpfm
                 if (header == null)
                 {
                     header = cells;
+
+                    if (rowFilter != null)
+                    {
+                        filterColumnIndex = Array.IndexOf(header, rowFilter.Column);
+                        if (filterColumnIndex < 0)
+                        {
+                            throw new InvalidDataException($"'{tsvPath}' has no {rowFilter.Column} column to select rows by.");
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (rowFilter != null && !rowFilter.Keeps(filterColumnIndex < cells.Length ? cells[filterColumnIndex] : string.Empty))
+                {
                     continue;
                 }
 
@@ -550,5 +634,24 @@ namespace CAIME.Rpfm
 
             return value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ");
         }
+    }
+
+    /// <summary>
+    /// Selects the rows of a table to convert: those whose <see cref="Column"/> holds one of the
+    /// given values, compared ignoring case.
+    /// </summary>
+    public sealed class TsvRowFilter
+    {
+        private readonly HashSet<string> _values;
+
+        public TsvRowFilter(string column, IEnumerable<string> values)
+        {
+            Column = column;
+            _values = new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public string Column { get; }
+
+        public bool Keeps(string value) => _values.Contains(value);
     }
 }

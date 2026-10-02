@@ -550,6 +550,10 @@ namespace CAIME
         /// </summary>
         private bool PrepareRpfmDatabaseIfNeeded(Project project, GameTemplate game)
         {
+            // Every RPFM failure ends with the way out: the Assembly Kit source needs none of it.
+            const string UseAssemblyKitInstead =
+                "To open the project from the Assembly Kit's database instead, set Database source to Assembly Kit in Settings > Preferences.";
+
             var prefs = PreferencesViewModel.Instance;
             if (prefs.DatabaseSource != DatabaseSource.RPFM)
             {
@@ -558,7 +562,7 @@ namespace CAIME
 
             if (!Rpfm.GameMappingProvider.IsSupported(game))
             {
-                LoggerViewModel.Log($"The RPFM database source workflow does not support {game}.", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"The RPFM database source workflow does not support {game}. {UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
                 return false;
             }
 
@@ -572,7 +576,8 @@ namespace CAIME
             var rpfmFolder = prefs.RpfmPath;
             if (string.IsNullOrEmpty(rpfmFolder))
             {
-                LoggerViewModel.Log("The database source is set to RPFM but no RPFM installation path is configured. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log("The database source is set to RPFM but no RPFM installation path is configured. Set it in Settings > Preferences. " +
+                    UseAssemblyKitInstead, LogLevel.ErrorMessageBox);
                 return false;
             }
 
@@ -593,7 +598,7 @@ namespace CAIME
             }
             catch (Exception ex)
             {
-                LoggerViewModel.Log($"RPFM database preparation failed: {ex.Message}", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"RPFM database preparation failed: {ex.Message}\n\n{UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
                 return false;
             }
         }

@@ -78,7 +78,8 @@ namespace CAIME.Windows
                 else
                 {
                     MessageBox.Show(
-                        $"The selected folder is not a valid RPFM installation.\n\n{error}",
+                        $"The selected folder is not a valid RPFM installation.\n\n{error}\n\n" +
+                        "Pick an RPFM 5.0 or later folder, or switch the database source back to Assembly Kit.",
                         "Invalid RPFM path");
                 }
             }
