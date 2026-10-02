@@ -60,7 +60,6 @@ The diagram below maps every control in the Preferences window to its purpose.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Database source:            [ Assembly Kit                         ▼]       │◄─ Where tables are loaded from
 │  RPFM path:                  [C:\...\rpfm                  ] [Browse]        │◄─ Only shown when RPFM is selected
-│  Vanilla pack:                [C:\...\data\db.pack          ] [Browse]        │◄─ Per-game; required when source is RPFM
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                              [  Save  ] [Cancel]             │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -238,28 +237,32 @@ When enabled, every time you run **Process > Map Data**, CAIME will automaticall
 
 By default CAIME loads its database tables directly from your **Assembly Kit**. This is the standard workflow and requires no extra setup beyond the Assembly Kit path.
 
-If your tables live in an **RPFM** `.pack` file instead, you can switch the **Database source** to **RPFM**. CAIME then temporarily extracts the required tables into your Assembly Kit, uses them to open the project, and restores your Assembly Kit to exactly its original state once the project is closed. Your pack, your database, and your Assembly Kit files are never modified — the workflow is read-only.
+If your tables live in `.pack` files instead — the way most people work on their mods — you can switch the **Database source** to **RPFM**. CAIME then temporarily extracts the required tables into your Assembly Kit, uses them to open the project, and restores your Assembly Kit to exactly its original state once the project is closed. Your packs, your database, and your Assembly Kit files are never modified — the workflow is read-only.
 
 Each required table is **merged** from every source that has a piece of it, the same way the game itself combines table fragments — CAIME does not pick one winning source per table:
 
-1. **Your modded `.pack` files, if you've set any for this project.** Every one of them is checked for every required table, and any fragments found are merged in. Entirely optional — see below.
-2. **Your configured vanilla pack.** Fills in whatever your modded packs don't provide — for example, if your packs only override `campaigns`/`campaign_map_regions`, ground types and everything else still come from vanilla, live from the actual game install. This is a per-game setting you point at yourself (see below) — CAIME does not guess which file this is, since it isn't a stable filename: it's `data.pack` for some games, split across several `data1.pack`/`data2.pack`/... files for others, and has even changed within a single game's lifetime (Warhammer 3 moved its DB tables from `data.pack` into `db.pack` after release).
-3. **The Assembly Kit's own bundled copy.** Used for any table found in none of the packs above (unchanged from the non-RPFM workflow).
+1. **Your campaign's mod, if you've set one for this project, and every mod it depends on.** RPFM reads the mod's own dependency list and loads those mods too — and theirs in turn — so naming the mod at the top is enough. Any fragments of a required table found in them are merged in. Entirely optional — see below.
+2. **The game's own packs.** Fill in whatever the mods don't provide — for example, if they only override `campaigns`/`campaign_map_regions`, ground types and everything else still come from the game, live from the actual install. CAIME reads them through RPFM, from the game folder set in RPFM's own settings, so you never have to work out which `.pack` holds a game's tables.
+3. **The Assembly Kit's own bundled copy.** Used for any table found in neither of the above (unchanged from the non-RPFM workflow).
 
-When two sources both define a row for the same primary key (e.g. both a mod and vanilla have an entry for the same region), the conflict is resolved the same way the game resolves it: by the name of the table *fragment* each row came from (e.g. `db/campaign_map_regions_tables/data__` vs. `.../!!!my_mod`) — the earlier-sorting fragment name wins, which is why a `!!!`-prefixed fragment name (a common modding convention) beats the plain `data__` fragment vanilla and most exports use. This has nothing to do with which `.pack` file the fragment came from or the order it's listed in below — only the fragment's own name inside the pack. If a mod and the vanilla pack happen to use the *identical* fragment name, the mod wins regardless of what either file is called.
+When two sources both define a row for the same primary key (e.g. both a mod and the game have an entry for the same region), the conflict is resolved the same way the game resolves it: by the name of the table *fragment* each row came from (e.g. `db/campaign_map_regions_tables/data__` vs. `.../!!!my_mod`) — the earlier-sorting fragment name wins, which is why a `!!!`-prefixed fragment name (a common modding convention) beats the plain `data__` fragment the game and most exports use. This has nothing to do with what the `.pack` file is called or the order mods are listed in — only the fragment's own name inside the pack. If a mod and the game happen to use the *identical* fragment name, the mod wins; if your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
 
 | Option | What it does |
 |--------|-------------|
 | **Assembly Kit** (default) | Loads tables straight from the Assembly Kit, exactly as before. |
-| **RPFM** | Prepares tables from your configured vanilla pack (and your modded `.pack` files, if this project has any), then loads them through the normal Assembly Kit path. |
+| **RPFM** | Prepares tables from the game's own packs (and your campaign's mod with its dependencies, if this project sets one), then loads them through the normal Assembly Kit path. |
 
 **Requirements when using RPFM:**
 
-- **RPFM installation.** Set the **RPFM path** to the folder containing `rpfm_cli.exe`. Required the moment you switch the Database source to RPFM — CAIME won't let you **Save** preferences without it, and validates the folder (by running `rpfm_cli.exe help`) before saving.
-- **A vanilla pack, per game.** Set via the **Vanilla pack** field, which appears next to **RPFM path** once the Database source is set to RPFM — pick the **Base game** you want to configure first, since this is stored per game like the Assembly Kit path. Point it at the `.pack` file that actually contains that game's DB tables (open the game's `data` folder in RPFM if you're not sure which one it is - `pack list` on each candidate is the reliable way to check). **This is required, not optional**, for whichever game is selected when you hit **Save** — CAIME blocks saving preferences without it, the same way it blocks opening a project without it: it's the actual data source RPFM exists to read from, so an RPFM session can't do anything meaningful without it.
-- **The Assembly Kit path is still required** — the RPFM workflow reuses the Assembly Kit's table schemas, and is the final fallback for any table not found in either pack.
+- **RPFM installation, version 5.0 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. Required the moment you switch the Database source to RPFM — CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
+- **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, opening a project tells you so.
+- **The Assembly Kit path is still required** — the RPFM workflow reuses the Assembly Kit's table schemas, and is the final fallback for any table found nowhere else.
 
-**Optional: modded `.pack` files, set per project, not in Preferences.** These are the pack(s) containing *this specific campaign's* own data (its region list, campaign definition, etc.) — different from the vanilla pack above, which is shared across every project for that game. It's entirely optional: a project with none set simply reads everything from the vanilla pack. Manage the list any time via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open) — **Add** or **Remove** `.pack` files as needed; every pack listed contributes to every table equally, so there is nothing to reorder. The list is always shown sorted alphabetically by pack file name, and that order only matters in the rare case where two packs in this list each define a table fragment with the exact same name — the one whose pack file name sorts first then wins that tiebreak. Each project records its own list in its `caime_metadata.json` companion file (next to `map.hex`) — opening a project never prompts for this automatically, since it isn't required.
+**Optional: your campaign's mod, set per project, not in Preferences.** This is the mod containing *this specific campaign's* own data (its region list, campaign definition, etc.). It's entirely optional: a project without one simply reads everything from the game. Set it any time via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open): type the mod's `.pack` file name, or **Browse...** to pick the `.pack` from disk — either way only the file name is kept. Leave the field empty to go back to the game's tables only.
+
+RPFM looks the name up the same way it finds a mod's dependencies: first in the game's `data` folder, then in the Steam Workshop download folder, and uses the first copy it finds. So a local copy you're working on in `data` always wins over the published Workshop version, and a project keeps working wherever the mod is installed — a teammate can open it with the mod subscribed rather than copied to the same place. The name must match the file name exactly, capitalisation included. If your campaign is spread over several packs, name the one that lists the others as dependencies (the pack's dependency list, which you edit in RPFM); the others are then read with it.
+
+The project records the name in its `caime_metadata.json` companion file (next to `map.hex`) — opening a project never prompts for it, since it isn't required. Setting a mod makes opening the project take a few seconds longer, since RPFM loads it the same way it loads a pack's dependencies.
 
 > **Takes effect on next open:** The Database source can be changed at any time, including while a project is open. Changing it has no effect on a project that's already open — only the next project you open reads the new setting.
 
@@ -293,13 +296,19 @@ You do not normally need to open or edit this file manually — CAIME manages it
   You switched **Database source** to **RPFM** without setting a **RPFM path**. Either provide one or switch the source back to **Assembly Kit**.
 
 - **"The provided RPFM installation path is not valid" when saving.**
-  The selected folder does not contain a working `rpfm_cli.exe`. Point the **RPFM path** at the folder where you extracted RPFM (the one containing `rpfm_cli.exe`). Invalid paths are never stored.
+  The selected folder does not contain a working `rpfm_server.exe`. Point the **RPFM path** at the folder where you installed RPFM (the one containing `rpfm_server.exe`). Versions of RPFM before 5.0 only shipped `rpfm_cli.exe`, which CAIME no longer uses — update RPFM if that's all your folder has. Invalid paths are never stored.
 
-- **"The database source is set to RPFM, but no vanilla pack is set for &lt;game&gt;" — Save button does nothing.**
-  With **Database source** set to **RPFM**, a vanilla pack is required for whichever game is currently selected in the **Base game** dropdown — CAIME won't let you save preferences without it (and won't let a project for that game open, for the same reason: it's the actual data RPFM reads from, unlike the modded pack, which is optional). Select that game in **Base game**, **Browse** to the `.pack` file containing its DB tables under **Vanilla pack**, and **Save** again. If you don't use RPFM for that particular game, switch **Database source** back to **Assembly Kit** instead.
+- **"RPFM has no schema for this game" when opening a project.**
+  RPFM needs its schema for a game to read that game's tables, and downloads it the first time you use the game in RPFM. Open RPFM, select the game, then open the project in CAIME again.
 
-- **I want this project to use a modded pack, but nothing ever asks me for one.**
-  That's expected — modded packs are optional and never prompted for automatically. Add one or more yourself via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open).
+- **"RPFM does not know where this game is installed" when opening a project.**
+  Open RPFM, set the game's folder in its settings, then open the project in CAIME again.
+
+- **"RPFM found no mod named &lt;name&gt;" in the log.**
+  RPFM looked for that `.pack` in the game's `data` folder and its Steam Workshop folder and didn't find it, so the project opened without it. Check the name in **Settings > RPFM Workflow** — it must match the file name exactly, capitalisation included — and that the mod is installed or subscribed.
+
+- **I want this project to use a mod, but nothing ever asks me for one.**
+  That's expected — the mod is optional and never prompted for automatically. Set it yourself via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open).
 
 - **I switched games and the Assembly kit path changed unexpectedly.**
   This is by design. CAIME stores a separate assembly kit path for each game. When you change the **Base game** dropdown, the path field updates to show whichever path you previously saved for that game. Simply set the correct path and click **Save** again.

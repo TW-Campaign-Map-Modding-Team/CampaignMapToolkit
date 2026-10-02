@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.WindowsAPICodePack.Dialogs;
-using Microsoft.Win32;
 
 namespace CAIME.Windows
 {
@@ -58,21 +57,6 @@ namespace CAIME.Windows
         private void BaseGame_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             viewModel.AssKitPath = viewModel.GetAssKitPath((GameTemplate)viewModel.SelectedGameIndex);
-            viewModel.VanillaPackPath = viewModel.GetVanillaPackPath((GameTemplate)viewModel.SelectedGameIndex);
-        }
-
-        private void BrowseVanillaPack_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Pack file (*.pack)|*.pack",
-                Title  = "Select the vanilla .pack file containing this game's database tables",
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                viewModel.VanillaPackPath = dialog.FileName;
-            }
         }
 
         private void BrowseRpfm_Click(object sender, RoutedEventArgs e)

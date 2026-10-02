@@ -545,7 +545,7 @@ namespace CAIME
 
         /// <summary>
         /// When the active database source is RPFM, prepares the required database tables from the
-        /// configured vanilla pack, layering the project's modded packs over it when any are recorded.
+        /// game's own packs, layering the project's mod over them when one is recorded.
         /// Returns false to abort opening. For the Assembly Kit source this is a no-op returning true.
         /// </summary>
         private bool PrepareRpfmDatabaseIfNeeded(Project project, GameTemplate game)
@@ -576,26 +576,15 @@ namespace CAIME
                 return false;
             }
 
-            // The only hard requirement: without it, there's no RPFM data to read at all, modded pack
-            // or otherwise.
-            var vanillaPackPath = prefs.GetVanillaPackPath(game);
-            if (string.IsNullOrEmpty(vanillaPackPath) || !File.Exists(vanillaPackPath))
-            {
-                LoggerViewModel.Log(
-                    $"No vanilla pack is configured for {game}. Set it in Settings > Preferences (select {game} as " +
-                    "the Base game first - the field is per game).", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            // The modded packs are optional and per-project: if the metadata simply doesn't record any
-            // (a new project, or one that has never needed a mod override), that's a normal state, not
-            // an error - every table just comes from the vanilla pack. Never prompt for them here;
-            // they're set deliberately via Settings > RPFM Workflow when wanted.
-            var packPaths = Rpfm.MetadataService.GetPackFilePaths(project.ProjectPath);
+            // The mod is optional and per-project: if the metadata simply doesn't record one (a new
+            // project, or one that has never needed a mod override), that's a normal state, not an
+            // error - every table just comes from the game's own packs. Never prompt for it here;
+            // it's set deliberately via Settings > RPFM Workflow when wanted.
+            var modPackName = Rpfm.MetadataService.GetModPackName(project.ProjectPath);
 
             try
             {
-                var session = new Rpfm.RpfmWorkflowSession(game, assemblyKitPath, rpfmFolder, packPaths, vanillaPackPath, project.MapHexFile);
+                var session = new Rpfm.RpfmWorkflowSession(game, assemblyKitPath, rpfmFolder, modPackName, project.MapHexFile);
                 session.Prepare();
                 project.RpfmSession = session;
 

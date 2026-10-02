@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,32 +7,25 @@ namespace CAIME.Rpfm
 {
     /// <summary>
     /// Owns one run of the RPFM database preparation pipeline as a single transaction. For each
-    /// required table it gathers every fragment of that table found anywhere - the vanilla pack and
-    /// every one of the project's modded packs - and merges them the same way the game itself does:
-    /// when two fragments define a row for the same primary key, the fragment whose name sorts
-    /// earlier wins; rows unique to any one fragment are all kept. In the rare case where two packs
-    /// share the exact same fragment name too (so fragment name breaks no tie), order of consultation
-    /// decides it: the modded packs are read first, in pack-file-name order (see the packPaths
-    /// constructor parameter below), and the vanilla pack last - so a mod always beats vanilla on an
-    /// identical fragment name whatever either file is called. It then backs up the original
-    /// Assembly Kit db files, extracts and merges the gathered tables, converts them to Assembly Kit
-    /// XML, and - crucially - guarantees that the Assembly Kit is left exactly as it was found once
-    /// the session is cleaned up (whether the project closes, another opens, the app exits, or any
-    /// step fails).
+    /// required table it gathers every fragment of that table found anywhere - the game's own packs
+    /// and the project's mod with the mods it depends on - and merges them the same way the game itself does: when two
+    /// fragments define a row for the same primary key, the fragment whose name sorts earlier wins;
+    /// rows unique to any one fragment are all kept. When a mod and the game share the exact same
+    /// fragment name too (so fragment name breaks no tie), the mod wins, since its fragments are
+    /// read first. It then backs up the original Assembly Kit db files, converts the merged tables to
+    /// Assembly Kit XML, and - crucially - guarantees that the Assembly Kit is left exactly as it was
+    /// found once the session is cleaned up (whether the project closes, another opens, the app
+    /// exits, or any step fails).
     ///
-    /// Only the vanilla pack is required (see <see cref="ValidatePreconditions"/>) - it's the actual
-    /// data source RPFM exists to read from. The modded packs are optional: a project with none
-    /// configured simply reads every table from vanilla, and a configured-but-unreadable modded pack
-    /// (deleted, moved, corrupted) degrades the same way rather than blocking the session - it's a
-    /// per-project convenience layered on top, not something that should be able to prevent a project
-    /// from opening.
-    ///
-    /// The vanilla pack path is supplied by the caller rather than guessed: which pack actually
-    /// contains a game's DB tables is not a stable filename - it has changed between games (e.g.
-    /// Warhammer 2's data is split across several data*.pack files) and even within one game's
-    /// lifetime (Warhammer 3 moved its DB tables out of data.pack and into db.pack after release).
-    /// There is also no way to distinguish CA's own packs from mods sitting in the same data folder
-    /// via the RPFM CLI, so this cannot be auto-detected reliably.
+    /// Everything is read through rpfm_server (see <see cref="RpfmService"/>), one server session for
+    /// the length of <see cref="Prepare"/>. The game's own packs are found through the install folder
+    /// set in RPFM, so CAIME never needs to know which of them holds the tables - that has changed
+    /// between games and even within one game's lifetime. The mod is optional and named, not
+    /// located: RPFM finds it, and the mods it depends on, in the game's data folder or its Steam
+    /// Workshop folder. A project with none simply reads every table from the game, and a mod RPFM
+    /// cannot find or read is skipped with a warning rather than blocking the session - it's a
+    /// per-project convenience layered on top, not something that should be able to prevent a
+    /// project from opening.
     ///
     /// Usage:
     ///   var session = new RpfmWorkflowSession(...);
@@ -53,20 +46,11 @@ namespace CAIME.Rpfm
             AppDomain.CurrentDomain.UnhandledException += (s, e) => CleanupAll();
         }
 
-        // Every fragment of a resolved table found across all sources (vanilla and every modded
-        // pack), each tagged with the pack it came from so it can be extracted from the right place.
-        private sealed class TableSource
-        {
-            public readonly List<(string PackPath, string Entry)> Fragments = new List<(string, string)>();
-        }
-
         private readonly GameTemplate           _game;
         private readonly string                 _dbRootPath;
-        private readonly IReadOnlyList<string>  _packPaths;
-        private readonly string                 _vanillaPackPath;
-        private readonly string                 _schemaPath;
+        private readonly string                 _modPackName;
+        private readonly string                 _rpfmFolder;
         private readonly IReadOnlyDictionary<string, bool> _regionIsSeaByKey;
-        private readonly RpfmService             _rpfm;
         private readonly BackupService           _backup;
         private readonly string                 _tempExtractDir;
         private readonly List<string>            _generatedFiles = new List<string>();
@@ -74,17 +58,9 @@ namespace CAIME.Rpfm
 
         private bool _cleanedUp;
 
-        /// <param name="packPaths">
-        /// The project's modded packs. Optional - pass null or empty when the project has none
-        /// configured; every table then comes from the vanilla pack instead. Every configured pack is
-        /// consulted for every required table, and any fragments found are merged with the vanilla
-        /// pack's (see <see cref="ResolvePresentTables"/>). Sorted here by pack file name - not a
-        /// user-chosen priority, just the tiebreak used when two of these modded packs contain a
-        /// fragment with the exact same name (see the class summary above).
-        /// </param>
-        /// <param name="vanillaPackPath">
-        /// The user-selected pack containing this game's vanilla DB tables. Required - see
-        /// <see cref="ValidatePreconditions"/>.
+        /// <param name="modPackName">
+        /// The .pack file name of the project's mod. Optional - pass null when the project has none
+        /// configured; every table then comes from the game's own packs instead.
         /// </param>
         /// <param name="mapHex">
         /// The project's already-loaded map, used only as a ground-truth source for "regions.is_sea"
@@ -92,17 +68,13 @@ namespace CAIME.Rpfm
         /// field then falls back to the existing Assembly Kit record or the schema default same as any
         /// other field RPFM cannot supply.
         /// </param>
-        public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, IReadOnlyList<string> packPaths, string vanillaPackPath, MapHexFile mapHex = null)
+        public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, string modPackName, MapHexFile mapHex = null)
         {
             _game            = game;
             _dbRootPath      = Path.Combine(assemblyKitPath, "raw_data", "db");
-            _packPaths       = (packPaths ?? Array.Empty<string>())
-                .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            _vanillaPackPath = vanillaPackPath;
-            _schemaPath      = GameMappingProvider.GetSchemaPath(game);
+            _modPackName     = modPackName;
+            _rpfmFolder      = rpfmFolder;
             _regionIsSeaByKey = BuildRegionSeaStatus(mapHex);
-            _rpfm            = new RpfmService(rpfmFolder);
 
             // Both working directories are private to this session and sit outside the db root.
             // The old one-second-resolution timestamps inside the db root meant two sessions
@@ -126,7 +98,7 @@ namespace CAIME.Rpfm
 
         /// <summary>
         /// Runs the full preparation pipeline. On success the Assembly Kit db folder contains the
-        /// resolved tables - each one merged from every pack (vanilla and modded) that contains a
+        /// resolved tables - each one merged from the game's packs and every mod that contains a
         /// fragment of it - as Assembly Kit XML, ready for the normal loader. On any failure the
         /// Assembly Kit is fully restored and a descriptive exception is thrown.
         /// </summary>
@@ -136,34 +108,36 @@ namespace CAIME.Rpfm
 
             var requiredTables = DatabaseTableProvider.GetRequiredTables(_game);
 
-            // Step 3 (inspect pack contents) is read-only, so run it before touching anything.
-            // Table presence is a soft requirement: only the required tables found in the modded pack
-            // or the vanilla pack take part in the workflow. Tables absent from both are left as-is,
-            // so the normal loader falls back to the Assembly Kit's own copy. Finding nothing in
-            // either pack is valid too - the workflow simply does nothing.
-            var tableEntries = ResolvePresentTables(requiredTables);
-            var presentTables = tableEntries.Keys.ToList();
-
-            // From here on the Assembly Kit is mutated; any failure must roll everything back.
-            try
+            using (var rpfm = RpfmService.Open(_rpfmFolder, _game))
             {
-                // Write the recovery journal before touching any file, so a hard kill at any point
-                // from here on leaves a record the next launch can replay.
-                _journal.Save();
+                // From here on files are written; any failure must roll everything back.
+                try
+                {
+                    // Write the recovery journal before touching any file, so a hard kill at any point
+                    // from here on leaves a record the next launch can replay.
+                    _journal.Save();
 
-                BackupOriginals(presentTables);
-                EnsureNoConflicts(presentTables);
-                ExtractAndConvert(presentTables, tableEntries);
+                    // Table presence is a soft requirement: only the required tables found in a mod or
+                    // the game take part in the workflow. Tables absent from both are left as-is, so the
+                    // normal loader falls back to the Assembly Kit's own copy. Finding nothing at all is
+                    // valid too - the workflow simply does nothing.
+                    var fragmentsByTable = ExtractFragments(rpfm, requiredTables);
+                    var presentTables = requiredTables.Where(fragmentsByTable.ContainsKey).ToList();
 
-                // Step 5: temporary TSVs are no longer needed once converted.
-                DeleteTempExtractDir();
+                    BackupOriginals(presentTables);
+                    EnsureNoConflicts(presentTables);
+                    ConvertToAssemblyKitXml(presentTables, fragmentsByTable);
 
-                Register(this);
-            }
-            catch
-            {
-                RestoreAndCleanup();
-                throw;
+                    // Temporary TSVs are no longer needed once converted.
+                    DeleteTempExtractDir();
+
+                    Register(this);
+                }
+                catch
+                {
+                    RestoreAndCleanup();
+                    throw;
+                }
             }
         }
 
@@ -197,141 +171,104 @@ namespace CAIME.Rpfm
                 throw new DirectoryNotFoundException($"Assembly Kit db folder not found: {_dbRootPath}");
             }
 
-            // The modded pack is intentionally not validated here - it's optional, and a
-            // missing/stale one degrades gracefully in ResolvePresentTables rather than blocking.
-
-            if (string.IsNullOrEmpty(_vanillaPackPath) || !File.Exists(_vanillaPackPath))
-            {
-                throw new FileNotFoundException($"Vanilla pack file not found: {_vanillaPackPath}");
-            }
-
-            if (!File.Exists(_schemaPath))
-            {
-                throw new FileNotFoundException(
-                    $"RPFM schema for {_game} not found at {_schemaPath}. Open the game in RPFM once to generate its schema.");
-            }
+            // Everything about RPFM itself - its schema for the game, where the game is installed - is
+            // checked by RpfmService.Open, since only the server knows it.
         }
 
-        // Step 3: find every fragment of each required table, in every pack - every modded pack plus
-        // the vanilla pack - rather than picking a single winning pack per table. Combining happens
-        // later, per row, when the fragments are merged into XML (see ExtractAndConvert and
-        // DatabaseTableConverter.MergeTsvToXml): a table added purely by a mod, a vanilla table
-        // extended by a mod, and a table left untouched all fall out of the same merge naturally. The
-        // vanilla pack (guaranteed present by ValidatePreconditions) is always consulted, so a failure
-        // reading it propagates and aborts the workflow. A table present nowhere is simply left
-        // unresolved (a soft requirement at the table level) - the normal loader then falls back to
-        // the Assembly Kit's own copy for just that table.
-        private Dictionary<string, TableSource> ResolvePresentTables(IReadOnlyList<string> requiredTables)
+        // Extracts every fragment of each required table into the temporary folder, the mods' first,
+        // then the game's, and groups them by table in that order. The order is what makes a mod win
+        // over the game when both use the exact same fragment name (see the class summary). The mods
+        // and the game land in separate folders because their fragments can share a path - every
+        // pack's default "db/<table>_tables/data__", say. A failure reading the game propagates and
+        // aborts the workflow; a failure reading the mods only drops them.
+        private Dictionary<string, List<ExtractedTableFragment>> ExtractFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
-            var resolved = new Dictionary<string, TableSource>();
+            var fragmentsByTable = new Dictionary<string, List<ExtractedTableFragment>>(StringComparer.OrdinalIgnoreCase);
 
-            // The modded packs are optional and per-project - none configured at all is a normal
-            // state, and a configured-but-broken one (deleted, moved, corrupted) shouldn't be able to
-            // block the session either, so both cases just skip that pack rather than throwing.
-            var fromModPacks = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var packPath in _packPaths)
+            var fromMods = ExtractModFragments(rpfm, requiredTables);
+            var fromGame = rpfm.ExtractGameTables(requiredTables, Path.Combine(_tempExtractDir, "game"));
+
+            foreach (var fragment in fromMods.Concat(fromGame))
             {
-                if (string.IsNullOrEmpty(packPath))
+                if (!fragmentsByTable.TryGetValue(fragment.Table, out var fragments))
                 {
-                    continue;
+                    fragments = new List<ExtractedTableFragment>();
+                    fragmentsByTable[fragment.Table] = fragments;
                 }
 
-                if (!File.Exists(packPath))
-                {
-                    LoggerViewModel.Log(
-                        $"RPFM workflow: a modded pack recorded for this project no longer exists ({packPath}) - " +
-                        "skipping it. Update the list via Settings > RPFM Workflow if needed.", LogLevel.Warning);
-                    continue;
-                }
-
-                try
-                {
-                    var modEntries = _rpfm.ListDbEntries(_game, packPath);
-                    foreach (var table in MatchTables(requiredTables, modEntries, packPath, resolved))
-                    {
-                        fromModPacks.Add(table);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LoggerViewModel.Log(
-                        $"RPFM workflow: could not read a modded pack ({packPath}) - {ex.Message}. " +
-                        "Skipping it.", LogLevel.Warning);
-                }
+                fragments.Add(fragment);
             }
 
-            var vanillaEntries = _rpfm.ListDbEntries(_game, _vanillaPackPath);
-            var fromVanilla = MatchTables(requiredTables, vanillaEntries, _vanillaPackPath, resolved);
+            LogTableSources("the mods", fromMods);
+            LogTableSources("the game's packs", fromGame);
 
-            if (resolved.Count == 0)
+            var stillMissing = requiredTables.Where(t => !fragmentsByTable.ContainsKey(t)).ToList();
+            if (fragmentsByTable.Count == 0)
             {
                 LoggerViewModel.Log(
-                    "RPFM workflow: none of the required database tables were found in the modded packs or the " +
-                    "vanilla pack. The Assembly Kit's own tables will be used unchanged.", LogLevel.Info);
-                return resolved;
+                    "RPFM workflow: none of the required database tables were found in the mods or the game's packs. " +
+                    "The Assembly Kit's own tables will be used unchanged.", LogLevel.Info);
             }
-
-            if (fromModPacks.Count > 0)
-            {
-                LoggerViewModel.Log("RPFM workflow: merging tables found in the modded packs: " + string.Join(", ", fromModPacks), LogLevel.Info);
-            }
-
-            if (fromVanilla.Count > 0)
-            {
-                LoggerViewModel.Log("RPFM workflow: merging tables found in the vanilla pack: " + string.Join(", ", fromVanilla), LogLevel.Info);
-            }
-
-            var stillMissing = requiredTables.Where(t => !resolved.ContainsKey(t)).ToList();
-            if (stillMissing.Count > 0)
+            else if (stillMissing.Count > 0)
             {
                 LoggerViewModel.Log(
-                    "RPFM workflow: these tables were not found in the modded packs or the vanilla pack and " +
-                    "will be loaded from the Assembly Kit: " + string.Join(", ", stillMissing), LogLevel.Info);
+                    "RPFM workflow: these tables were not found in the mods or the game's packs and will be loaded " +
+                    "from the Assembly Kit: " + string.Join(", ", stillMissing), LogLevel.Info);
             }
 
-            return resolved;
+            return fragmentsByTable;
         }
 
-        // Matches whichever of `tables` are present in `packEntries` and appends their fragments to
-        // `resolved`, adding to any fragments already recorded for that table from another pack rather
-        // than replacing them. Returns the tables just matched in this pack.
-        private static List<string> MatchTables(
-            IReadOnlyList<string> tables, IReadOnlyList<string> packEntries, string sourcePackPath,
-            Dictionary<string, TableSource> resolved)
+        // The mod is optional and per-project - none configured at all is a normal state, and one
+        // RPFM cannot find or read shouldn't be able to block the session either, so both just leave
+        // the mods out rather than throwing.
+        private IReadOnlyList<ExtractedTableFragment> ExtractModFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
-            var matched = new List<string>();
-
-            foreach (var table in tables)
+            if (string.IsNullOrEmpty(_modPackName))
             {
-                var folderPrefix = $"db/{table}_tables/";
-                var entries = packEntries
-                    .Where(e => e.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                if (entries.Count == 0)
-                {
-                    continue;
-                }
-
-                if (!resolved.TryGetValue(table, out var source))
-                {
-                    source = new TableSource();
-                    resolved[table] = source;
-                }
-
-                foreach (var entry in entries)
-                {
-                    source.Fragments.Add((sourcePackPath, entry));
-                }
-
-                matched.Add(table);
+                return Array.Empty<ExtractedTableFragment>();
             }
 
-            return matched;
+            try
+            {
+                var loaded = rpfm.LoadMod(_modPackName);
+
+                if (!loaded.Contains(_modPackName))
+                {
+                    LoggerViewModel.Log(
+                        $"RPFM workflow: RPFM found no mod named {_modPackName} in the game's data folder or its Steam " +
+                        "Workshop folder - skipping it. Check the name (including its capitalisation) via Settings > " +
+                        "RPFM Workflow, and that the mod is installed.", LogLevel.Warning);
+                    return Array.Empty<ExtractedTableFragment>();
+                }
+
+                var dependencies = loaded.Where(name => !string.Equals(name, _modPackName, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (dependencies.Count > 0)
+                {
+                    LoggerViewModel.Log(
+                        $"RPFM workflow: also reading the mods {_modPackName} depends on: " + string.Join(", ", dependencies), LogLevel.Info);
+                }
+
+                return rpfm.ExtractModTables(requiredTables, Path.Combine(_tempExtractDir, "mods"));
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log($"RPFM workflow: could not read the mods - {ex.Message}. Skipping them.", LogLevel.Warning);
+                return Array.Empty<ExtractedTableFragment>();
+            }
         }
 
-        // Step 2: move the original data XML for each table being replaced into the backup directory.
-        // Only tables sourced from the pack are backed up; everything else stays untouched.
+        private static void LogTableSources(string source, IReadOnlyList<ExtractedTableFragment> fragments)
+        {
+            var tables = fragments.Select(f => f.Table).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (tables.Count > 0)
+            {
+                LoggerViewModel.Log($"RPFM workflow: merging tables found in {source}: " + string.Join(", ", tables), LogLevel.Info);
+            }
+        }
+
+        // Move the original data XML for each table being replaced into the backup directory. Only
+        // tables found in a mod or the game are backed up; everything else stays untouched.
         private void BackupOriginals(IReadOnlyList<string> tablesToReplace)
         {
             foreach (var table in tablesToReplace)
@@ -340,9 +277,9 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Step 4 (pre-extraction): abort if a conflicting file for any table already exists,
-        // regardless of extension. After the backup moved the originals aside, the only way a match
-        // survives is a stray leftover from an earlier interrupted run.
+        // Abort if a conflicting file for any table already exists, regardless of extension. After the
+        // backup moved the originals aside, the only way a match survives is a stray leftover from an
+        // earlier interrupted run.
         private void EnsureNoConflicts(IReadOnlyList<string> tables)
         {
             foreach (var table in tables)
@@ -356,55 +293,11 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Steps 4 & 5: extract each present table's fragments from every pack that contributed one and
-        // merge them into Assembly Kit XML.
-        private void ExtractAndConvert(IReadOnlyList<string> tables, Dictionary<string, TableSource> tableSources)
+        // Merges each present table's extracted fragments into Assembly Kit XML.
+        private void ConvertToAssemblyKitXml(IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable)
         {
-            if (tables.Count == 0)
-            {
-                return;
-            }
-
-            Directory.CreateDirectory(_tempExtractDir);
-
-            // Fragments from different packs can share the exact same in-pack path (e.g. every pack's
-            // default "db/<table>_tables/data"), so each contributing pack gets its own extraction
-            // subfolder to avoid one pack's fragment overwriting another's on disk.
-            var packSubDirs = new Dictionary<string, string>();
-            int packIndex = 0;
-
-            // Every fragment this run needs, grouped by the pack it comes from, so each pack is
-            // opened once instead of once per table fragment.
-            var entriesByPack = new Dictionary<string, List<string>>();
-
             foreach (var table in tables)
             {
-                foreach (var (packPath, entry) in tableSources[table].Fragments)
-                {
-                    if (!packSubDirs.ContainsKey(packPath))
-                    {
-                        packSubDirs[packPath] = Path.Combine(_tempExtractDir, "pack" + packIndex++);
-                    }
-
-                    if (!entriesByPack.TryGetValue(packPath, out var entries))
-                    {
-                        entries = new List<string>();
-                        entriesByPack[packPath] = entries;
-                    }
-
-                    entries.Add(entry);
-                }
-            }
-
-            foreach (var pack in entriesByPack)
-            {
-                _rpfm.ExtractDbFiles(_game, pack.Key, _schemaPath, pack.Value, packSubDirs[pack.Key]);
-            }
-
-            foreach (var table in tables)
-            {
-                var source = tableSources[table];
-
                 var twadSchemaPath = Path.Combine(_dbRootPath, "TWaD_" + table + ".xml");
                 if (!File.Exists(twadSchemaPath))
                 {
@@ -425,25 +318,16 @@ namespace CAIME.Rpfm
                 var existingRecords = DatabaseTableConverter.LoadExistingRecords(backedUpXmlPath, table, primaryKeyColumns);
 
                 var fragments = new List<(string TsvPath, string FragmentName)>();
-                foreach (var (packPath, entry) in source.Fragments)
+                foreach (var fragment in fragmentsByTable[table])
                 {
-                    if (!packSubDirs.TryGetValue(packPath, out var subDir))
+                    if (!File.Exists(fragment.TsvPath))
                     {
-                        subDir = Path.Combine(_tempExtractDir, "pack" + packIndex++);
-                        packSubDirs[packPath] = subDir;
+                        throw new FileNotFoundException($"RPFM extraction produced no file at '{fragment.TsvPath}'.");
                     }
 
-                    var tsvPath = Path.Combine(subDir, entry.Replace('/', Path.DirectorySeparatorChar)) + ".tsv";
-                    if (!File.Exists(tsvPath))
-                    {
-                        throw new FileNotFoundException($"RPFM extraction produced no file for '{entry}'.");
-                    }
-
-                    // The fragment's own filename (the part after the table folder) decides merge
-                    // order when two sources define the same primary key - the same rule the game uses
-                    // to combine table fragments across packs.
-                    var fragmentName = entry.Substring(entry.LastIndexOf('/') + 1);
-                    fragments.Add((tsvPath, fragmentName));
+                    // The fragment's own filename decides merge order when two sources define the same
+                    // primary key - the same rule the game uses to combine table fragments across packs.
+                    fragments.Add((fragment.TsvPath, fragment.FragmentName));
                 }
 
                 var outputXml = Path.Combine(_dbRootPath, table + ".xml");

@@ -171,8 +171,8 @@ namespace CAIME.Rpfm
         /// <summary>
         /// Like <see cref="TsvToXml"/> but merges the records of several TSV fragments of the same
         /// table into a single Assembly Kit data XML file. A table can be split across multiple
-        /// fragment files both within one pack and across several packs (e.g. the vanilla pack and one
-        /// or more modded packs), exactly the way the game itself combines them.
+        /// fragment files both within one pack and across several packs (e.g. the game's own packs and
+        /// one or more mods), exactly the way the game itself combines them.
         ///
         /// Fragments are processed in ascending fragment-name order, and when two fragments contain a
         /// row for the same primary key, the one from the earlier-sorting fragment name wins - the
@@ -186,8 +186,8 @@ namespace CAIME.Rpfm
         /// The sort here is by fragment name only, never by which pack a fragment came from - two
         /// fragments named identically but from different packs sort as ties, which a stable sort
         /// resolves using <paramref name="fragments"/>'s incoming order. Callers are expected to place
-        /// fragments from earlier-sorting pack file names first for that case (see
-        /// RpfmWorkflowSession), since fragment name is otherwise silent on which pack wins.
+        /// the fragments that should win that case first (RpfmWorkflowSession puts mods before the
+        /// game), since fragment name is otherwise silent on which pack wins.
         ///
         /// A fragment's TSV only has the columns its table version was saved with, which can be older
         /// than <paramref name="schemaFields"/> (RPFM's schema lags newer game patches). A schema field

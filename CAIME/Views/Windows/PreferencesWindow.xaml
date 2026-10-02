@@ -303,8 +303,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Separator Grid.Row="0"
@@ -372,64 +370,13 @@
 
             <TextBlock Grid.Row="4"
                        Grid.Column="0"
-                       Margin="0 0 10 0"
-                       Text="Vanilla pack:"
-                       Foreground="White"
-                       VerticalAlignment="Center"
-                       Visibility="{Binding RpfmSettingsVisibility}">
-                <TextBlock.ToolTip>
-                    <ToolTip>
-                        <TextBlock MaxWidth="300"
-                                   TextWrapping="Wrap"
-                                   Text="The .pack file containing this game's vanilla database tables (for the selected Base game above), e.g. db.pack or data.pack depending on the game and patch. Used to fill in any table your modded pack doesn't provide - your modded pack always takes priority. Required when the database source is RPFM: without it, every table missing from your modded pack would silently fall back to the Assembly Kit's static copy instead of live pack data." />
-                    </ToolTip>
-                </TextBlock.ToolTip>
-            </TextBlock>
-
-            <Grid Grid.Row="4"
-                  Grid.Column="1"
-                  Grid.ColumnSpan="2"
-                  Visibility="{Binding RpfmSettingsVisibility}">
-
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <TextBox x:Name="vanillaPackPathBox"
-                         Grid.Column="0"
-                         Margin="0 5"
-                         Text="{Binding VanillaPackPath}"
-                         Style="{StaticResource DarkTextBox}" />
-
-                <Button Grid.Column="1"
-                        Content="Browse"
-                        Padding="5 0"
-                        Margin="0 5"
-                        Click="BrowseVanillaPack_Click"
-                        Style="{StaticResource DarkButton}" />
-
-            </Grid>
-
-            <TextBlock Grid.Row="5"
-                       Grid.Column="0"
                        Grid.ColumnSpan="3"
                        Margin="0 3 0 0"
                        FontStyle="Italic"
                        Foreground="Gray"
                        TextWrapping="Wrap"
-                       Text="Your modded pack is set per project, not here - use Settings &gt; RPFM Workflow (menu bar, while a project is open)."
+                       Text="Vanilla tables are read from the game's own packs, found through the game folder set in RPFM's own settings. The campaign's mod is set per project, not here - use Settings &gt; RPFM Workflow (menu bar, while a project is open)."
                        Visibility="{Binding RpfmSettingsVisibility}" />
-
-            <TextBlock Grid.Row="6"
-                       Grid.Column="0"
-                       Grid.ColumnSpan="3"
-                       Margin="0 5 0 0"
-                       FontWeight="SemiBold"
-                       Foreground="LightYellow"
-                       TextWrapping="Wrap"
-                       Text="No vanilla pack is set for this game - RPFM projects for it will open with database features (exports, some validators) disabled until one is set here."
-                       Visibility="{Binding VanillaPackWarningVisibility}" />
         </Grid>
 
         <Separator Grid.Row="11"

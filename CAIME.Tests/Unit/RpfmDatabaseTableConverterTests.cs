@@ -8,7 +8,7 @@ namespace CAIME.Tests.Unit
 {
     /// <summary>
     /// Unit tests for <see cref="DatabaseTableConverter"/>. The inline TSV mirrors the exact format
-    /// rpfm_cli.exe produces (column-names line, then a "#&lt;table&gt;;&lt;version&gt;;..." metadata
+    /// RPFM's TSV export produces (column-names line, then a "#&lt;table&gt;;&lt;version&gt;;..." metadata
     /// line, then true/false booleans) and the inline schema mirrors a TWaD_*.xml Assembly Kit schema.
     /// The key behaviour verified is that yes/no columns become "1"/"0" - the form the existing
     /// database loader expects.
