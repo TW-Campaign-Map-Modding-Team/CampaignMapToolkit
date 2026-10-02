@@ -34,6 +34,11 @@ namespace CAIME
             startInfo.RedirectStandardOutput = true;
             startInfo.RedirectStandardError  = true;
 
+            // The Rome II, Attila and Warhammer data builders start a TCPConsole helper from their
+            // binaries folder, MapDataBuilder's current directory, and refuse to load without it;
+            // Windows skips the current directory when this is set.
+            startInfo.EnvironmentVariables.Remove("NoDefaultCurrentDirectoryInExePath");
+
             var standardOutput = new List<string>();
             var standardError  = new List<string>();
 
