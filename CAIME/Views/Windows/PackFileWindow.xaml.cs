@@ -40,10 +40,9 @@ namespace CAIME.Windows
 
         private void Save_Click(object sender, RoutedEventArgs e)
         {
-            var modPackName = MetadataService.NormalizeModPackName(modNameBox.Text);
-
             try
             {
+                var modPackName = MetadataService.NormalizeModPackName(modNameBox.Text);
                 MetadataService.SetModPackName(_projectPath, modPackName);
                 LoggerViewModel.Log(modPackName == null
                     ? "RPFM mod cleared from project metadata."
