@@ -1,51 +1,87 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Text;
-using System.Text.RegularExpressions;
+using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CAIME.Rpfm
 {
-    /// <summary>Outcome of a single rpfm_cli.exe invocation.</summary>
-    public sealed class RpfmProcessResult
-    {
-        public bool     TimedOut    { get; set; }
-        public int      ExitCode    { get; set; }
-        public string   StdOut      { get; set; }
-        public string   StdErr      { get; set; }
-
-        public bool Succeeded => !TimedOut && ExitCode == 0;
-    }
-
     /// <summary>
-    /// Thin wrapper around <c>rpfm_cli.exe</c>. Owns process invocation only - every call captures
-    /// stdout, stderr, the exit code and enforces a timeout. It contains no workflow logic; callers
-    /// interpret the results. The RPFM installation folder is supplied once at construction.
+    /// The RPFM operations the database workflow needs, run in one rpfm_server session for one game:
+    /// extract db tables as TSV, either from the game's own packs or from a mod RPFM locates by name.
+    /// It contains no workflow logic; callers interpret the results. Everything opened stays open
+    /// until the service is disposed, which ends the session and releases it all.
     /// </summary>
-    public sealed class RpfmService
+    public sealed class RpfmService : IDisposable
     {
-        private const int DefaultTimeoutMs = 120_000;
+        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
 
-        /// <summary>Ceiling for a batched extraction, however many files it covers.</summary>
-        private const int MaxBatchTimeoutMs = 15 * 60_000;
+        /// <summary>Ceiling for a batched extraction, however many tables it covers.</summary>
+        private static readonly TimeSpan MaxBatchTimeout = TimeSpan.FromMinutes(15);
 
-        // Strips the ANSI colour escape codes RPFM writes around its log lines so output can be parsed.
-        private static readonly Regex AnsiEscape = new Regex(@"\x1B\[[0-9;]*[A-Za-z]", RegexOptions.Compiled);
+        // Loading mods answers with RPFM's whole vanilla file list as well, hundreds of thousands of
+        // entries for the newer games, which takes far longer to send than any other command.
+        private static readonly TimeSpan LoadModTimeout = TimeSpan.FromMinutes(10);
 
-        private readonly string _rpfmFolder;
+        private readonly RpfmServerClient _server;
+        private readonly GameTemplate _game;
 
-        public RpfmService(string rpfmFolder)
+        private string _gamePacksKey;
+        private string _modHolderPackKey;
+
+        private RpfmService(RpfmServerClient server, GameTemplate game)
         {
-            _rpfmFolder = rpfmFolder;
+            _server = server;
+            _game = game;
         }
 
-        public string CliPath => Path.Combine(_rpfmFolder ?? string.Empty, "rpfm_cli.exe");
+        /// <summary>
+        /// Starts an RPFM session for <paramref name="game"/>, starting the rpfm_server in
+        /// <paramref name="rpfmFolder"/> if none is running. Selecting the game is what loads its schema,
+        /// which RPFM needs to decode the tables. Throws <see cref="RpfmException"/> on failure,
+        /// including when RPFM has no schema for the game or does not know where it is installed.
+        /// </summary>
+        public static RpfmService Open(string rpfmFolder, GameTemplate game)
+        {
+            var server = RpfmServerClient.Connect(rpfmFolder);
+
+            try
+            {
+                var gameKey = GameMappingProvider.GetGameKey(game);
+
+                // No dependency rebuild: LoadMod asks for the one it needs.
+                server.Send($"select {game}", new { SetGameSelected = new object[] { gameKey, false } },
+                    "CompressionFormatDependenciesInfo", DefaultTimeout);
+
+                if (!server.Send<bool>($"load the schema for {game}", "IsSchemaLoaded", "Bool", DefaultTimeout))
+                {
+                    throw new RpfmException($"load the schema for {game}",
+                        "RPFM has no schema for this game. Open the game in RPFM once so it downloads its schemas.");
+                }
+
+                // RPFM keeps each game's install folder as a setting named after the game key. Without
+                // it RPFM can find neither the game's packs nor its mods, and only says a path is missing.
+                var gameFolder = server.Send<string>($"look up where {game} is installed", new { SettingsGetString = gameKey }, "String", DefaultTimeout);
+                if (string.IsNullOrWhiteSpace(gameFolder))
+                {
+                    throw new RpfmException($"find {game}",
+                        "RPFM does not know where this game is installed. Set the game's folder in RPFM's settings.");
+                }
+
+                return new RpfmService(server, game);
+            }
+            catch
+            {
+                server.Dispose();
+                throw;
+            }
+        }
 
         /// <summary>
-        /// Validates that <paramref name="rpfmFolder"/> is a usable RPFM installation by running
-        /// <c>rpfm_cli.exe help</c> in it. Returns true only when the process succeeds and produces
-        /// the expected RPFM output. On failure <paramref name="error"/> explains why.
+        /// Validates that <paramref name="rpfmFolder"/> is a usable RPFM installation by opening a
+        /// session on its rpfm_server. Returns true only when the server answers as RPFM. On failure
+        /// <paramref name="error"/> explains why.
         /// </summary>
         public static bool ValidateInstallation(string rpfmFolder, out string error)
         {
@@ -57,187 +93,180 @@ namespace CAIME.Rpfm
                 return false;
             }
 
-            var cliPath = Path.Combine(rpfmFolder, "rpfm_cli.exe");
-            if (!File.Exists(cliPath))
+            if (!File.Exists(Path.Combine(rpfmFolder, RpfmServerClient.ServerExecutableName)))
             {
-                error = "rpfm_cli.exe was not found in the selected folder.";
+                error = $"{RpfmServerClient.ServerExecutableName} was not found in the selected folder. " +
+                        "CAIME needs RPFM 5.0 or later, whose server replaced rpfm_cli.exe.";
                 return false;
             }
 
-            var service = new RpfmService(rpfmFolder);
-            var result  = service.Run("help", DefaultTimeoutMs);
-
-            if (result.TimedOut)
+            try
             {
-                error = "rpfm_cli.exe did not respond in time.";
-                return false;
-            }
-
-            var combined = (result.StdOut ?? string.Empty) + (result.StdErr ?? string.Empty);
-            if (result.ExitCode != 0 || combined.IndexOf("rpfm_cli", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                error = "The selected folder does not look like a valid RPFM installation " +
-                        $"(rpfm_cli.exe help exited with code {result.ExitCode}).";
-                return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Returns every db table entry contained in the pack, each as a pack-relative path of the
-        /// form <c>db/&lt;table_folder&gt;/&lt;file&gt;</c>. Throws on process failure.
-        /// </summary>
-        public IReadOnlyList<string> ListDbEntries(GameTemplate game, string packPath)
-        {
-            var gameId = GameMappingProvider.GetCliGameId(game);
-            var args   = $"--game {gameId} pack list --pack-path {Quote(packPath)}";
-            var result = Run(args, DefaultTimeoutMs);
-
-            if (!result.Succeeded)
-            {
-                throw new RpfmException("list pack contents", result);
-            }
-
-            var entries = new List<string>();
-            var text    = AnsiEscape.Replace(result.StdOut ?? string.Empty, string.Empty);
-
-            foreach (var rawLine in text.Split('\n'))
-            {
-                var line = rawLine.Trim();
-                // db entries look like: db/<table>_tables/<file>. Ignore log lines and other file types.
-                if (line.StartsWith("db/", StringComparison.OrdinalIgnoreCase) && line.IndexOf('/', 3) > 0)
+                using (RpfmServerClient.Connect(rpfmFolder))
                 {
-                    entries.Add(line);
+                    return true;
                 }
             }
-
-            return entries;
+            // Not only RpfmException: starting the server can fail in the OS, and validation reports every failure.
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
         /// <summary>
-        /// Extracts a single db file from the pack into <paramref name="destinationFolder"/>,
-        /// preserving the pack's internal <c>db/&lt;table&gt;/&lt;file&gt;</c> directory structure.
-        /// Throws on process failure.
+        /// Extracts every fragment of <paramref name="tables"/> found in the game's own packs, read from
+        /// the install folder RPFM has for the game, as TSV into <paramref name="destinationFolder"/>.
+        /// A table the game has no fragment of is simply absent from the result.
         /// </summary>
-        public void ExtractDbFile(GameTemplate game, string packPath, string schemaPath, string inPackPath, string destinationFolder)
+        public IReadOnlyList<ExtractedTableFragment> ExtractGameTables(IReadOnlyList<string> tables, string destinationFolder)
         {
-            ExtractDbFiles(game, packPath, schemaPath, new[] { inPackPath }, destinationFolder);
+            if (_gamePacksKey == null)
+            {
+                // Opened as one pack: which of the game's packs a fragment lives in does not matter here.
+                var opened = _server.Send<JArray>($"open {_game}'s packs", "LoadAllCAPackFiles", "StringContainerInfo", DefaultTimeout);
+                _gamePacksKey = (string)opened[0];
+            }
+
+            return ExtractTables(_gamePacksKey, "PackFile", tables, destinationFolder, $"{_game}'s packs");
         }
 
         /// <summary>
-        /// Extracts several db files from one pack in a single rpfm_cli invocation. -f is repeatable,
-        /// so a pack contributing fragments of twenty tables costs one process rather than twenty.
+        /// Loads the mod <paramref name="modPackName"/> (a <c>.pack</c> file name, matched exactly)
+        /// together with every mod it depends on, and theirs in turn. RPFM looks for each in the
+        /// game's data folder first, then its own secondary folder, then the Steam Workshop folder,
+        /// taking the first it finds, so a local copy in data wins over the Workshop download. Returns
+        /// the file names of every pack RPFM loaded that contains files; the named mod missing from
+        /// the result was not found or is empty.
         /// </summary>
-        public void ExtractDbFiles(GameTemplate game, string packPath, string schemaPath, IReadOnlyList<string> inPackPaths, string destinationFolder)
+        public IReadOnlyCollection<string> LoadMod(string modPackName)
         {
-            if (inPackPaths.Count == 0)
-            {
-                return;
-            }
+            // RPFM loads mods by name only as the "parent" dependencies of an open pack, so an empty,
+            // never-saved pack carries the name.
+            _modHolderPackKey = _server.Send<string>("create a pack to load the mod through", "NewPack", "String", DefaultTimeout);
 
-            var gameId = GameMappingProvider.GetCliGameId(game);
+            var dependencies = new[] { new object[] { true, modPackName } };
+            _server.Send("set the mod to load", new { SetDependencyPackFilesList = new object[] { _modHolderPackKey, dependencies } },
+                "Success", DefaultTimeout);
 
-            // -f takes "<file_in_pack>;<folder_to_extract_to>" and may be repeated.
-            var args = new StringBuilder();
-            args.Append($"-g {gameId} pack extract --pack-path {Quote(packPath)} -t {Quote(schemaPath)}");
+            // false: reload the mods without regenerating RPFM's cache of the game's own files.
+            var loaded = _server.Send<LoadedDependencies>($"load {modPackName}", new { RebuildDependencies = false },
+                "DependenciesInfo", LoadModTimeout);
 
-            foreach (var inPackPath in inPackPaths)
-            {
-                args.Append(" -f ").Append(Quote($"{inPackPath};{destinationFolder}"));
-            }
-
-            // The budget scales with the batch so one call is not held to a single file's allowance.
-            var timeoutMs = Math.Min((long)DefaultTimeoutMs * inPackPaths.Count, MaxBatchTimeoutMs);
-
-            var result = Run(args.ToString(), (int)timeoutMs);
-            if (!result.Succeeded)
-            {
-                throw new RpfmException($"extract {inPackPaths.Count} file(s) from '{Path.GetFileName(packPath)}'", result);
-            }
+            return new HashSet<string>(
+                loaded.ParentPackedFiles.Select(file => file.ContainerName).Where(name => name != null),
+                StringComparer.OrdinalIgnoreCase);
         }
 
-        private RpfmProcessResult Run(string arguments, int timeoutMs)
+        /// <summary>
+        /// Extracts every fragment of <paramref name="tables"/> found in the mods loaded by
+        /// <see cref="LoadMod"/>, as TSV into <paramref name="destinationFolder"/>. RPFM serves the
+        /// mods as one set of files, in which a mod's own file replaces one at the same path in a mod
+        /// it depends on; the result does not say which mod each fragment came from.
+        /// </summary>
+        public IReadOnlyList<ExtractedTableFragment> ExtractModTables(IReadOnlyList<string> tables, string destinationFolder)
         {
-            var startInfo = new ProcessStartInfo
+            if (_modHolderPackKey == null)
             {
-                FileName               = CliPath,
-                Arguments              = arguments,
-                WorkingDirectory       = _rpfmFolder,
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding  = Encoding.UTF8,
-            };
-
-            var stdout = new StringBuilder();
-            var stderr = new StringBuilder();
-
-            using (var process = new Process { StartInfo = startInfo })
-            {
-                // Async reads on both streams avoid the classic full-pipe deadlock.
-                process.OutputDataReceived += (s, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
-                process.ErrorDataReceived  += (s, e) => { if (e.Data != null) stderr.AppendLine(e.Data); };
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                if (!process.WaitForExit(timeoutMs))
-                {
-                    try { process.Kill(); } catch { /* best effort */ }
-                    return new RpfmProcessResult
-                    {
-                        TimedOut = true,
-                        ExitCode = -1,
-                        StdOut   = stdout.ToString(),
-                        StdErr   = stderr.ToString(),
-                    };
-                }
-
-                // Ensure the async buffers are flushed before we read them.
-                process.WaitForExit();
-
-                return new RpfmProcessResult
-                {
-                    TimedOut = false,
-                    ExitCode = process.ExitCode,
-                    StdOut   = stdout.ToString(),
-                    StdErr   = stderr.ToString(),
-                };
+                throw new InvalidOperationException("Load the mod before extracting tables from it.");
             }
+
+            return ExtractTables(_modHolderPackKey, "ParentFiles", tables, destinationFolder, "the mods");
         }
 
-        private static string Quote(string value) => "\"" + value + "\"";
+        public void Dispose()
+        {
+            _server.Dispose();
+        }
+
+        // Asks for each table's whole folder rather than for files listed beforehand: RPFM skips a
+        // folder it does not have, and listing the game's packs first would mean receiving every
+        // file name in them.
+        private IReadOnlyList<ExtractedTableFragment> ExtractTables(
+            string packKey, string dataSource, IReadOnlyList<string> tables, string destinationFolder, string sourceDescription)
+        {
+            if (tables.Count == 0)
+            {
+                return Array.Empty<ExtractedTableFragment>();
+            }
+
+            var folders = new JObject { [dataSource] = new JArray(tables.Select(table => new JObject { ["Folder"] = $"db/{table}_tables" })) };
+            const bool AsTsv = true;
+
+            // The budget scales with the batch so one call is not held to a single table's allowance.
+            var timeout = TimeSpan.FromTicks(Math.Min(DefaultTimeout.Ticks * tables.Count, MaxBatchTimeout.Ticks));
+
+            var operation = $"extract tables from {sourceDescription}";
+            var extracted = _server.Send<JArray>(operation,
+                new { ExtractPackedFiles = new object[] { packKey, folders, destinationFolder, AsTsv } },
+                "StringVecPathBuf", timeout);
+
+            // The payload is [status, written paths].
+            return extracted[1].Values<string>()
+                .Select(path => ExtractedTableFragment.FromExtractedPath(path, operation))
+                .ToList();
+        }
+
+        // Only the member LoadMod reads; the vanilla and Assembly Kit file lists that arrive with it
+        // are skipped unread rather than built in memory.
+        private sealed class LoadedDependencies
+        {
+            [JsonProperty("parent_packed_files")]
+            public List<PackedFileInfo> ParentPackedFiles { get; set; } = new List<PackedFileInfo>();
+        }
+
+        private sealed class PackedFileInfo
+        {
+            [JsonProperty("container_name")]
+            public string ContainerName { get; set; }
+        }
     }
 
-    /// <summary>Raised when an rpfm_cli.exe invocation fails; carries the captured output for logging.</summary>
-    public sealed class RpfmException : Exception
+    /// <summary>One table fragment RPFM extracted to disk as TSV.</summary>
+    public sealed class ExtractedTableFragment
     {
-        public RpfmProcessResult Result { get; }
+        private const string TableFolderSuffix = "_tables";
 
-        public RpfmException(string operation, RpfmProcessResult result)
-            : base(BuildMessage(operation, result))
+        /// <summary>The table's name, e.g. <c>regions</c>.</summary>
+        public string Table { get; }
+
+        /// <summary>
+        /// The fragment's file name inside its pack, e.g. <c>data__</c>. Decides which fragment wins
+        /// when two define the same row, the same way the game decides it.
+        /// </summary>
+        public string FragmentName { get; }
+
+        public string TsvPath { get; }
+
+        private ExtractedTableFragment(string table, string fragmentName, string tsvPath)
         {
-            Result = result;
+            Table = table;
+            FragmentName = fragmentName;
+            TsvPath = tsvPath;
         }
 
-        private static string BuildMessage(string operation, RpfmProcessResult result)
+        /// <summary>
+        /// Reads a path RPFM reports having written, which mirrors the fragment's place in its pack:
+        /// <c>&lt;destination&gt;/db/&lt;table&gt;_tables/&lt;fragment&gt;.tsv</c>, with forward and back
+        /// slashes mixed. Throws <see cref="RpfmException"/>, naming <paramref name="operation"/>, for a
+        /// path of any other shape, such as a fragment RPFM could not write out as TSV.
+        /// </summary>
+        public static ExtractedTableFragment FromExtractedPath(string extractedPath, string operation)
         {
-            if (result.TimedOut)
+            var path = (extractedPath ?? string.Empty).Replace('/', Path.DirectorySeparatorChar);
+            var tableFolder = Path.GetFileName(Path.GetDirectoryName(path)) ?? string.Empty;
+            var dbFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(path)));
+
+            if (!path.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase)
+                || !tableFolder.EndsWith(TableFolderSuffix, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(dbFolder, "db", StringComparison.OrdinalIgnoreCase))
             {
-                return $"RPFM failed to {operation}: the operation timed out.";
+                throw new RpfmException(operation, $"RPFM wrote '{extractedPath}', which is not a db table exported as TSV.");
             }
 
-            var detail = result.StdErr;
-            if (string.IsNullOrWhiteSpace(detail))
-            {
-                detail = result.StdOut;
-            }
-
-            return $"RPFM failed to {operation} (exit code {result.ExitCode}). {detail?.Trim()}";
+            var table = tableFolder.Substring(0, tableFolder.Length - TableFolderSuffix.Length);
+            return new ExtractedTableFragment(table, Path.GetFileNameWithoutExtension(path), path);
         }
     }
 }

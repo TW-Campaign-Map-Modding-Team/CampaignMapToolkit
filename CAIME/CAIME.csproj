@@ -290,6 +290,7 @@
     <Compile Include="Classes\Common\Rpfm\GameMappingProvider.cs" />
     <Compile Include="Classes\Common\Rpfm\MetadataService.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmRecoveryJournal.cs" />
+    <Compile Include="Classes\Common\Rpfm\RpfmServerClient.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmService.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmWorkflowSession.cs" />
     <Compile Include="Classes\Common\LayerOrdersJson.cs" />
