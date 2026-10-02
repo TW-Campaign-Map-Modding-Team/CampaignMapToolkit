@@ -283,7 +283,6 @@
     <Compile Include="Classes\Common\AutoSavesManager.cs" />
     <Compile Include="Classes\Common\HexGridUtility.cs" />
     <Compile Include="Classes\Common\CaimeMetadata.cs" />
-    <Compile Include="Classes\Common\Rpfm\BackupService.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseSource.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableConverter.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableProvider.cs" />
@@ -322,6 +321,7 @@
     <Compile Include="Classes\Editor\LayerCompositor.cs" />
     <Compile Include="Classes\Editor\LayerOpacityPreview.cs" />
     <Compile Include="Classes\Exporters\LookupImageExporter.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />
     <Compile Include="Classes\Exporters\Pathfinding\Generators\BordersGenerator.cs" />

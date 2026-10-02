@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
+using System.Xml.Linq;
 using CAIME.Exporters;
 using CAIME.TradeNetwork;
 using Microsoft.WindowsAPICodePack.Dialogs;
@@ -101,9 +103,9 @@ namespace CAIME
         public DatabaseViewModel    Database        { get; private set; }
         public ColourTable          ColourTable     { get; private set; }
 
-        // Non-null only while an RPFM database source workflow is active for this project. Owns the
-        // temporary Assembly Kit changes and is responsible for restoring them (see CleanupRpfmSession).
-        public Rpfm.RpfmWorkflowSession RpfmSession { get; set; }
+        // The database tables read through RPFM, as Assembly Kit data XML by table name, when that is
+        // the project's database source; null when it is the Assembly Kit.
+        public IReadOnlyDictionary<string, XDocument> RpfmTables { get; set; }
 
         public string MapName
         {
@@ -153,7 +155,8 @@ namespace CAIME
 
         /// <param name="onBeforeDatabaseInit">
         /// Optional hook run once the game is known but before the database is initialised. Returning
-        /// false aborts the open. The RPFM workflow uses this to prepare temporary database tables.
+        /// false aborts the open. The RPFM workflow uses this to read the database tables into
+        /// <see cref="RpfmTables"/>.
         /// </param>
         public bool Open(string filename, Func<GameTemplate, bool> onBeforeDatabaseInit = null)
         {
@@ -188,7 +191,7 @@ namespace CAIME
             {
                 try
                 {
-                    if (Database.Initialise(Game, ProjectPath, MapHexFile) == false)
+                    if (Database.Initialise(Game, ProjectPath, MapHexFile, RpfmTables) == false)
                     {
                         return false;
                     }
@@ -207,19 +210,6 @@ namespace CAIME
             MapHexEditor    = new MapHexEditor(MapHexFile, ColourTable);
 
             return true;
-        }
-
-        /// <summary>
-        /// Restores any temporary Assembly Kit changes made by the RPFM workflow and releases the
-        /// session. Safe to call when no RPFM session is active.
-        /// </summary>
-        public void CleanupRpfmSession()
-        {
-            if (RpfmSession != null)
-            {
-                RpfmSession.Cleanup();
-                RpfmSession = null;
-            }
         }
 
         public bool Save(SaveParameters.SaveFlags flags, string mapHexName, string savePath, bool clearDirtyFlag = true)
@@ -396,7 +386,6 @@ namespace CAIME
                     return project;
                 }
 
-                project.CleanupRpfmSession();
                 return null;
             }
             else
@@ -470,12 +459,8 @@ namespace CAIME
                 project = new Project();
                 if (project.Open(filename, g => PrepareRpfmDatabaseIfNeeded(project, g)) == false)
                 {
-                    project.CleanupRpfmSession();
                     return null;
                 }
-
-                // Release any lingering RPFM session from a previously open project before replacing it.
-                Project?.CleanupRpfmSession();
 
                 Project = project;
 
@@ -514,9 +499,6 @@ namespace CAIME
             }
             catch (Exception ex)
             {
-                // Roll back any partial RPFM preparation so the Assembly Kit is left untouched.
-                project?.CleanupRpfmSession();
-
                 // Open() reports failure by returning null, so nothing here must be left as if it
                 // succeeded - Project is set well before this point (needed so OnOpenProject
                 // subscribers can see the new project), so a throw anywhere after that but before the
@@ -535,18 +517,16 @@ namespace CAIME
 
         public void CloseProject()
         {
-            // Restore any temporary Assembly Kit changes made by the RPFM workflow.
-            Project?.CleanupRpfmSession();
-
             Project = null;
 
             OnCloseProject?.Invoke(this, new RoutedEventArgs());
         }
 
         /// <summary>
-        /// When the active database source is RPFM, prepares the required database tables from the
-        /// game's own packs, layering the project's mod over them when one is recorded.
-        /// Returns false to abort opening. For the Assembly Kit source this is a no-op returning true.
+        /// When the active database source is RPFM, reads the required database tables from the
+        /// game's own packs, layering the project's mod over them when one is recorded, into
+        /// <see cref="Project.RpfmTables"/>. Returns false to abort opening. For the Assembly Kit
+        /// source this is a no-op returning true.
         /// </summary>
         private bool PrepareRpfmDatabaseIfNeeded(Project project, GameTemplate game)
         {
@@ -590,15 +570,14 @@ namespace CAIME
             try
             {
                 var session = new Rpfm.RpfmWorkflowSession(game, assemblyKitPath, rpfmFolder, modPackName, project.MapHexFile);
-                session.Prepare();
-                project.RpfmSession = session;
+                project.RpfmTables = session.Prepare();
 
-                LoggerViewModel.Log("RPFM database tables prepared successfully.", LogLevel.Info);
+                LoggerViewModel.Log("RPFM database tables read successfully.", LogLevel.Info);
                 return true;
             }
             catch (Exception ex)
             {
-                LoggerViewModel.Log($"RPFM database preparation failed: {ex.Message}\n\n{UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"Reading the database through RPFM failed: {ex.Message}\n\n{UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
                 return false;
             }
         }

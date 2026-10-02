@@ -6,15 +6,13 @@ using Newtonsoft.Json;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// A crash-recovery record for one RPFM database session, persisted to disk while the session is
-    /// mutating the Assembly Kit.
-    ///
-    /// The in-process cleanup (project close, app exit, unhandled exception) restores the Assembly Kit
-    /// directly - but none of those run when the process is killed hard: End Task, an external
-    /// <c>kill</c>, or Visual Studio's "Stop Debugging" all call TerminateProcess, which no managed
-    /// handler can intercept. This journal is how CAIME recovers from that: it is written before any
-    /// file is touched and deleted only after a clean restore, so a leftover journal on the next launch
-    /// means a previous run was killed mid-session. <see cref="RecoverAll"/> replays it.
+    /// The crash-recovery record an RPFM database session of an earlier CAIME version kept while it
+    /// had the Assembly Kit's db files swapped for its own: those versions moved each original into a
+    /// backup folder and wrote their merged tables in its place, restoring the originals when the
+    /// project closed. A session killed hard (End Task, an external kill, Visual Studio's "Stop
+    /// Debugging") never got to, and left its journal behind. CAIME no longer writes to the Assembly
+    /// Kit, so it writes no journals, but <see cref="RecoverAll"/> still restores the Assembly Kit from
+    /// any such leftover.
     /// </summary>
     public sealed class RpfmRecoveryJournal
     {
@@ -44,21 +42,6 @@ namespace CAIME.Rpfm
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 return Path.Combine(appData, "CampaignMapToolkit", "Caime", "rpfm_recovery");
             }
-        }
-
-        private string FilePath => Path.Combine(RecoveryDirectory, SessionId + ".json");
-
-        /// <summary>Writes (or rewrites) this journal to disk.</summary>
-        public void Save()
-        {
-            Directory.CreateDirectory(RecoveryDirectory);
-            File.WriteAllText(FilePath, JsonConvert.SerializeObject(this, Formatting.Indented));
-        }
-
-        /// <summary>Deletes this session's journal file. Safe to call when it does not exist.</summary>
-        public void Delete()
-        {
-            TryDelete(FilePath);
         }
 
         /// <summary>
@@ -130,7 +113,7 @@ namespace CAIME.Rpfm
                 }
 
                 // 2. Move the original Assembly Kit files back (the backup directory is authoritative).
-                BackupService.RestoreDirectory(journal.DbRootPath, journal.BackupRootPath);
+                RestoreDirectory(journal.DbRootPath, journal.BackupRootPath);
 
                 // 3. Clean up leftover working directories.
                 TryDeleteDirectory(journal.TempExtractDir);
@@ -146,6 +129,39 @@ namespace CAIME.Rpfm
             }
 
             TryDelete(journalFile);
+        }
+
+        // Moves every file found under backupRootPath back to the matching location under dbRootPath,
+        // preserving directory structure and overwriting whatever is there. The backup folder's
+        // contents are the record of what to restore. No-op when the backup folder does not exist.
+        private static void RestoreDirectory(string dbRootPath, string backupRootPath)
+        {
+            if (!Directory.Exists(backupRootPath))
+            {
+                return;
+            }
+
+            foreach (var backupSource in Directory.GetFiles(backupRootPath, "*", SearchOption.AllDirectories))
+            {
+                var original = Path.Combine(dbRootPath, GetRelativePath(backupRootPath, backupSource));
+
+                Directory.CreateDirectory(Path.GetDirectoryName(original));
+
+                if (File.Exists(original))
+                {
+                    File.Delete(original);
+                }
+
+                File.Move(backupSource, original);
+            }
+        }
+
+        // net48 has no Path.GetRelativePath.
+        private static string GetRelativePath(string root, string fullPath)
+        {
+            var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar.ToString()) ? root : root + Path.DirectorySeparatorChar;
+            var relativeUri = new Uri(rootWithSeparator).MakeRelativeUri(new Uri(fullPath));
+            return Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
         }
 
         private static void TryDelete(string path)

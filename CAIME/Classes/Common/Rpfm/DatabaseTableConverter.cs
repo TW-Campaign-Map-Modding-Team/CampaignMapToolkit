@@ -99,7 +99,7 @@ namespace CAIME.Rpfm
 
         /// <summary>
         /// Derives the full field list from a TWaD_*.xml Assembly Kit schema, in schema order. Used to
-        /// backfill columns a fragment's TSV doesn't have (see <see cref="MergeTsvToXml"/>).
+        /// backfill columns a fragment's TSV doesn't have (see <see cref="MergeTsv"/>).
         /// </summary>
         public static IReadOnlyList<XmlSchemaField> GetFields(string twadSchemaPath)
         {
@@ -107,12 +107,12 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Reads an existing Assembly Kit data XML file (e.g. the file the RPFM workflow is about to
-        /// replace, before it's overwritten) into a lookup by primary key. Used to source fields RPFM
-        /// has no way to supply at all - some Assembly Kit fields (e.g. "regions.is_sea") are computed/
-        /// maintained by the Assembly Kit itself and never appear in any pack's raw table data, at any
-        /// version - so a schema type default (e.g. "false") is often simply wrong for an existing
-        /// record, whereas the Assembly Kit's own last-known value for it is correct by construction.
+        /// Reads an existing Assembly Kit data XML file (the Assembly Kit's own copy of a table) into a
+        /// lookup by primary key. Used to source fields RPFM has no way to supply at all - some
+        /// Assembly Kit fields (e.g. "regions.is_sea") are computed/maintained by the Assembly Kit
+        /// itself and never appear in any pack's raw table data, at any version - so a schema type
+        /// default (e.g. "false") is often simply wrong for an existing record, whereas the Assembly
+        /// Kit's own last-known value for it is correct by construction.
         /// Returns an empty lookup if the file does not exist or fails to parse (e.g. a table that is
         /// new to this Assembly Kit installation) rather than throwing - this is a best-effort source,
         /// not a required one.
@@ -198,14 +198,15 @@ namespace CAIME.Rpfm
         /// <param name="outputXmlPath">Destination .xml file.</param>
         public static void TsvToXml(string tsvPath, string recordElementName, ISet<string> booleanColumns, string outputXmlPath)
         {
-            MergeTsvToXml(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null, outputXmlPath);
+            var document = MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
+            WriteAssemblyKitXml(document, outputXmlPath);
         }
 
         /// <summary>
-        /// Like <see cref="TsvToXml"/> but merges the records of several TSV fragments of the same
-        /// table into a single Assembly Kit data XML file. A table can be split across multiple
-        /// fragment files both within one pack and across several packs (e.g. the game's own packs and
-        /// one or more mods), exactly the way the game itself combines them.
+        /// Merges the records of several TSV fragments of the same table into a single Assembly Kit
+        /// data XML document. A table can be split across multiple fragment files both within one pack
+        /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
+        /// the game itself combines them.
         ///
         /// Fragments are processed in ascending fragment-name order, and when two fragments contain a
         /// row for the same primary key, the one from the earlier-sorting fragment name wins - the
@@ -227,11 +228,11 @@ namespace CAIME.Rpfm
         /// missing from a row is backfilled - preferably from <paramref name="existingRecords"/> (the
         /// Assembly Kit's own last-known value for that primary key, when there is one), falling back to
         /// the field's schema type default only for a key that has no existing record at all - rather
-        /// than left out of the record entirely. The Assembly Kit loader expects every field to be
-        /// present (e.g. "regions.is_sea" is required for map data reprocessing) in the schema's exact
-        /// declared order, and some such fields (again "is_sea") are never present in any pack's raw
-        /// table data at all, at any version, because the Assembly Kit computes/maintains them itself -
-        /// so a blind type default (e.g. "false") is often simply wrong where an existing record exists.
+        /// than left out of the record entirely. CAIME's table loader expects every field to be present
+        /// (e.g. "regions.is_sea", which tells land regions from sea) in the schema's exact declared
+        /// order, and some such fields (again "is_sea") are never present in any pack's raw table data
+        /// at all, at any version, because the Assembly Kit computes/maintains them itself - so a blind
+        /// type default (e.g. "false") is often simply wrong where an existing record exists.
         ///
         /// "is_sea" specifically is instead sourced from <paramref name="regionIsSeaByKey"/> when the
         /// row's key is in it - the open map itself is ground truth for which regions are sea (it is
@@ -243,7 +244,7 @@ namespace CAIME.Rpfm
         /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
         /// row of every fragment is dropped before merging.
         /// </summary>
-        public static void MergeTsvToXml(
+        public static XDocument MergeTsv(
             IReadOnlyList<(string TsvPath, string FragmentName)> fragments,
             string recordElementName,
             ISet<string> booleanColumns,
@@ -251,7 +252,6 @@ namespace CAIME.Rpfm
             IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, XElement> existingRecords,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
-            string outputXmlPath,
             TsvRowFilter rowFilter = null)
         {
             var ordered = fragments.OrderBy(f => f.FragmentName, StringComparer.OrdinalIgnoreCase).ToList();
@@ -279,52 +279,26 @@ namespace CAIME.Rpfm
             var records = keyOrder.Select(k => recordsByKey[k]).ToList();
 
             var root = new XElement("dataroot", records);
-            var document = new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outputXmlPath));
-            SaveAssemblyKitXml(document, outputXmlPath);
+            return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
         }
 
         /// <summary>
-        /// Rewrites one yes/no <paramref name="field"/> in an Assembly Kit data XML file: each record
-        /// whose <paramref name="keyField"/> is in <paramref name="valuesByKey"/> gets that value, and
-        /// every other record is left as it was. The field must already be present on those records -
-        /// the Assembly Kit reads fields in schema order, so one cannot simply be appended.
+        /// Writes an Assembly Kit data XML file the way the Assembly Kit's own tools can read it: UTF-8
+        /// without a byte order mark. Their XML reader does not skip one - it faults on the leading
+        /// bytes and takes the whole ToolDataBuilder DLL down with an access violation, which surfaces
+        /// as MapDataBuilder.exe crashing rather than as a parse error. Every XML file the Assembly Kit
+        /// ships is BOM-less, and XDocument.Save(path) writes one, so the writer's encoding has to be
+        /// set explicitly (same reason XmlToTsv uses a BOM-less UTF8Encoding).
         /// </summary>
-        public static void SetYesNoField(
-            string xmlPath, string recordElementName, string keyField, string field, IReadOnlyDictionary<string, bool> valuesByKey)
-        {
-            var document = XDocument.Load(xmlPath);
-
-            foreach (var record in document.Root.Elements(recordElementName))
-            {
-                var key = record.Element(keyField)?.Value;
-                if (key == null || !valuesByKey.TryGetValue(key, out var value))
-                {
-                    continue;
-                }
-
-                var element = record.Element(field)
-                    ?? throw new InvalidDataException($"'{xmlPath}' has a {recordElementName} record for '{key}' with no {field} field.");
-                element.Value = value ? "1" : "0";
-            }
-
-            SaveAssemblyKitXml(document, xmlPath);
-        }
-
-        // Must be written WITHOUT a UTF-8 BOM. The Assembly Kit's own XML reader does not skip one -
-        // it faults on the leading bytes and takes the whole ToolDataBuilder DLL down with an access
-        // violation, which surfaces as MapDataBuilder.exe crashing rather than as a parse error. Every
-        // XML file the Assembly Kit ships is BOM-less, and XDocument.Save(path) writes one, so the
-        // writer's encoding has to be set explicitly (same reason XmlToTsv uses a BOM-less
-        // UTF8Encoding).
-        private static void SaveAssemblyKitXml(XDocument document, string path)
+        public static void WriteAssemblyKitXml(XDocument document, string path)
         {
             var writerSettings = new XmlWriterSettings
             {
                 Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                 Indent   = true,
             };
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
 
             using (var writer = XmlWriter.Create(path, writerSettings))
             {
@@ -605,7 +579,7 @@ namespace CAIME.Rpfm
         }
 
         // XmlSchemaField.DefaultValue is already typed (bool/int/float/double/string) by XmlSchema's
-        // own parsing - just needs formatting to match how MergeTsvToXml writes each type to XML.
+        // own parsing - just needs formatting to match how MergeTsv writes each type to XML.
         // Formatted invariantly: a float default written on a machine whose culture uses a comma
         // decimal separator would otherwise land in the file as "0,5" and be misread downstream.
         private static string FormatDefaultValue(XmlSchemaField field)
