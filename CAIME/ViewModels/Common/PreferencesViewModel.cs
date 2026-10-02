@@ -18,7 +18,6 @@ namespace CAIME
 
         private readonly string preferencesPath;
         private readonly string[] asskitDirs;
-        private readonly string[] vanillaPackPaths;
         private readonly Dictionary<GameTemplate, List<LayerType>> layerOrders = new Dictionary<GameTemplate, List<LayerType>>();
 
         #region Actual preferences
@@ -129,7 +128,6 @@ namespace CAIME
                 OnPropertyChanged(nameof(DatabaseSource));
                 OnPropertyChanged(nameof(IsRpfmSource));
                 OnPropertyChanged(nameof(RpfmSettingsVisibility));
-                OnPropertyChanged(nameof(VanillaPackWarningVisibility));
             }
         }
 
@@ -144,42 +142,10 @@ namespace CAIME
             }
         }
 
-        // The pack containing this game's vanilla DB tables, for the RPFM workflow's vanilla-fallback
-        // tier. Per-game like AssKitPath, and entirely optional - which pack actually holds a game's
-        // DB tables is not a stable filename to guess (it has changed even within one game's
-        // lifetime), so the user points at it explicitly rather than CAIME assuming one.
-        private string vanillaPackPath;
-        public string VanillaPackPath
-        {
-            get => vanillaPackPath;
-            set
-            {
-                vanillaPackPath = value;
-                SetVanillaPackPathForCurrentGame(value);
-                OnPropertyChanged(nameof(VanillaPackPath));
-                OnPropertyChanged(nameof(VanillaPackWarningVisibility));
-            }
-        }
-
         public bool IsRpfmSource => DatabaseSource == DatabaseSource.RPFM;
 
         public Visibility RpfmSettingsVisibility => IsRpfmSource ? Visibility.Visible : Visibility.Collapsed;
 
-        // Surfaces the gap this state can end up in even though OnApply blocks *saving* it directly:
-        // the database source is global but the vanilla pack is per-game, and the Base game selector
-        // can land on an unconfigured game without going through OnApply at all - e.g. ProjectManager
-        // remembers whichever game you last opened a project for via a direct Save() call (see its
-        // "Remembered as the Preferences window's default Base game" comment), which is legitimate and
-        // not itself a bug, but can leave this window showing RPFM selected with an empty/stale
-        // Vanilla pack for whatever game that was. This is a passive, always-visible hint about that -
-        // not a new restriction; PrepareRpfmDatabaseIfNeeded already degrades safely at runtime
-        // (a project for an unconfigured game just opens with database features disabled, never a
-        // crash), so this exists purely so the gap is self-explanatory here rather than looking like
-        // corruption.
-        public Visibility VanillaPackWarningVisibility =>
-            IsRpfmSource && (string.IsNullOrWhiteSpace(VanillaPackPath) || !File.Exists(VanillaPackPath))
-                ? Visibility.Visible
-                : Visibility.Collapsed;
         #endregion
 
         #region UI Bindings
@@ -212,8 +178,7 @@ namespace CAIME
                 SupportedGamesList[i] = (GameTemplate)i;
             }
 
-            asskitDirs       = new string[(int)GameTemplate.Count];
-            vanillaPackPaths = new string[(int)GameTemplate.Count];
+            asskitDirs = new string[(int)GameTemplate.Count];
 
             SetDefaults();
             PreferencesMigration.MigrateIfNeeded(appdataDir);
@@ -245,24 +210,10 @@ namespace CAIME
                 if (!RpfmService.ValidateInstallation(RpfmPath, out var rpfmError))
                 {
                     RpfmPath = null;
-                    var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}";
+                    var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}\n\n" +
+                              "Point it at an RPFM 5.0 or later folder, or switch the database source back to Assembly Kit.";
                     LoggerViewModel.Log(msg, LogLevel.Warning);
                     MessageBox.Show(msg, "Invalid RPFM path");
-                    return false;
-                }
-
-                // Without a vanilla pack, every table the modded pack doesn't itself contain would
-                // silently fall back to the Assembly Kit's static copy - the very thing choosing RPFM
-                // as the source is meant to avoid - so this is required, not optional, same as the
-                // RPFM path above.
-                if (string.IsNullOrWhiteSpace(VanillaPackPath) || !File.Exists(VanillaPackPath))
-                {
-                    var game = (GameTemplate)SelectedGameIndex;
-                    var msg = $"The database source is set to RPFM, but no vanilla pack is set for {game} " +
-                              "(or the file it points at no longer exists). Please provide one, or switch the " +
-                              "database source back to Assembly Kit.";
-                    LoggerViewModel.Log(msg, LogLevel.Warning);
-                    MessageBox.Show(msg, "Missing vanilla pack");
                     return false;
                 }
             }
@@ -306,13 +257,6 @@ namespace CAIME
                 assKitPaths[$"{(GameTemplate)i}_AssKitPath"] = asskitDirs[i] ?? "";
             }
             json["AssemblyKitPaths"] = assKitPaths;
-
-            var vanillaPacks = new JObject();
-            for (int i = 0; i < vanillaPackPaths.Length; ++i)
-            {
-                vanillaPacks[$"{(GameTemplate)i}_VanillaPackPath"] = vanillaPackPaths[i] ?? "";
-            }
-            json["VanillaPackPaths"] = vanillaPacks;
 
             json[LAYER_ORDERS_KEY] = LayerOrdersJson.ToJson(layerOrders);
 
@@ -411,22 +355,6 @@ namespace CAIME
                     }
                 }
 
-                // Load vanilla pack paths
-                if (json.TryGetValue("VanillaPackPaths", out var vanillaPacksToken) && vanillaPacksToken is JObject vanillaPacks)
-                {
-                    for (int i = 0; i < vanillaPackPaths.Length; i++)
-                    {
-                        var game = (GameTemplate)i;
-                        var key = $"{game}_VanillaPackPath";
-
-                        if (vanillaPacks.TryGetValue(key, out var pathToken))
-                        {
-                            string pathValue = pathToken.ToString();
-                            vanillaPackPaths[i] = string.IsNullOrEmpty(pathValue) ? null : pathValue;
-                        }
-                    }
-                }
-
                 layerOrders.Clear();
                 if (json.TryGetValue(LAYER_ORDERS_KEY, out var layerOrdersToken) && layerOrdersToken is JObject layerOrdersJson)
                 {
@@ -458,21 +386,6 @@ namespace CAIME
         public string GetAssKitPath(GameTemplate game)
         {
             return asskitDirs[(int)game];
-        }
-
-        public void SetVanillaPackPathForCurrentGame(string path)
-        {
-            vanillaPackPaths[SelectedGameIndex] = path;
-        }
-
-        public void SetVanillaPackPath(GameTemplate game, string path)
-        {
-            vanillaPackPaths[(int)game] = path;
-        }
-
-        public string GetVanillaPackPath(GameTemplate game)
-        {
-            return vanillaPackPaths[(int)game];
         }
 
         public IReadOnlyList<LayerType> GetLayerOrder(GameTemplate game)

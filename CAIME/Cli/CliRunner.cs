@@ -95,7 +95,7 @@ namespace CAIME
             ConsoleManager.EnsureConsole();
             LoggerViewModel.ConsoleSink = WriteLog;
 
-            // Recover any Assembly Kit changes left behind by an RPFM session that was killed mid-run.
+            // Restore any Assembly Kit an earlier CAIME version's RPFM session left changed when killed mid-run.
             CAIME.Rpfm.RpfmRecoveryJournal.RecoverAll();
 
             try
@@ -171,7 +171,6 @@ namespace CAIME
             }
             finally
             {
-                // Deterministically restore any temporary RPFM database changes before returning.
                 projectManager.CloseProject();
             }
         }
@@ -197,7 +196,6 @@ namespace CAIME
             }
             finally
             {
-                // Deterministically restore any temporary RPFM database changes before returning.
                 projectManager.CloseProject();
             }
         }
