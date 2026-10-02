@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Xml.Linq;
 
 namespace CAIME.Exporters
 {
@@ -64,15 +65,17 @@ namespace CAIME.Exporters
                 return false;
             }
 
-            // With the RPFM database source the regions table is CAIME's own, and its "is_sea" has to
-            // match the map as it is now, not as it was when the project opened.
-            if (project.RpfmSession != null)
+            // With the RPFM database source the data builder reads tables made for this map from the
+            // project's own database, never the Assembly Kit's.
+            IReadOnlyDictionary<string, XDocument> builderTables = null;
+            if (project.RpfmTables != null)
             {
                 try
                 {
-                    project.RpfmSession.UpdateRegionsForMapData(project.MapHexFile);
+                    builderTables = MapDataBuilderTables.Build(
+                        campaignMapName, project.MapWidth, project.MapHeight, project.RpfmTables[Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS]);
                 }
-                catch (Exception ex)
+                catch (InvalidOperationException ex)
                 {
                     LoggerViewModel.Log($"map_data.esf was not processed: {ex.Message}", LogLevel.ErrorMessageBox);
                     return false;
@@ -90,7 +93,7 @@ namespace CAIME.Exporters
 
             startInfo.Arguments = $"game={gameName} akit_path=\"{asskitPath}\" campaign_map={campaignMapName} process=map_data";
 
-            var run = ChildProcess.Run(startInfo, PROCESS_TIMEOUT_MS);
+            var run = RunMapDataBuilder(startInfo, builderTables);
 
             var processStartTime = run.StartTime;
 
@@ -156,7 +159,9 @@ namespace CAIME.Exporters
 
             if (File.Exists(outputFilePath) == false)
             {
-                LoggerViewModel.Log($"Map data file was not created at {outputFilePath}.", LogLevel.Error);
+                LoggerViewModel.Log(
+                    $"Map data file was not created at {outputFilePath}. The Assembly Kit's data builder writes none, " +
+                    $"yet reports success, when campaign_maps has no row for {campaignMapName}.", LogLevel.Error);
             }
             else
             {
@@ -197,6 +202,36 @@ namespace CAIME.Exporters
             }
 
             return true;
+        }
+
+        // Runs MapDataBuilder, first writing builderTables, when there are any, to a folder of CAIME's
+        // own for it to read in place of the Assembly Kit's db folder.
+        private static ChildProcessResult RunMapDataBuilder(System.Diagnostics.ProcessStartInfo startInfo, IReadOnlyDictionary<string, XDocument> builderTables)
+        {
+            if (builderTables == null)
+            {
+                return ChildProcess.Run(startInfo, PROCESS_TIMEOUT_MS);
+            }
+
+            var dbPath = Path.Combine(Path.GetTempPath(), "CAIME", "map_data_db", Guid.NewGuid().ToString("N"));
+            try
+            {
+                MapDataBuilderTables.Write(builderTables, dbPath);
+                startInfo.Arguments += $" db_path=\"{dbPath.Replace('\\', '/')}\"";
+
+                return ChildProcess.Run(startInfo, PROCESS_TIMEOUT_MS);
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(dbPath, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    LoggerViewModel.Log($"Could not delete the temporary map_data tables at {dbPath}: {ex.Message}", LogLevel.Warning);
+                }
+            }
         }
 
         // Mirrors the ReturnCodes flags enum in MapDataBuilder/main.cpp. MapDataBuilder can run

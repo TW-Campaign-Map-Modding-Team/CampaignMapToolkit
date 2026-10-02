@@ -11,6 +11,7 @@ namespace CAIME
     {
         private string  _asskitPath;
         private string _campaignMapName;
+        private IReadOnlyDictionary<string, XDocument> _preparedTables;
 
         public DataSet DataSet { get; private set; }
 
@@ -45,12 +46,18 @@ namespace CAIME
             CachedRegionsToProvinces    = new List<DBRegionToProvince>();
         }
 
-        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile)
+        /// <param name="preparedTables">
+        /// Table data to load in place of the Assembly Kit's own files, as Assembly Kit data XML keyed
+        /// by table name - the RPFM database source's. The Assembly Kit still supplies every table's
+        /// schema.
+        /// </param>
+        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile, IReadOnlyDictionary<string, XDocument> preparedTables = null)
         {
             ShutDown();
 
             this._asskitPath        = PreferencesViewModel.Instance.GetAssKitPath(game);
             this._campaignMapName   = mapHexFile.CampaignMapName;
+            this._preparedTables    = preparedTables;
 
             LoadTables(game);
 
@@ -97,7 +104,9 @@ namespace CAIME
             var table_path  = $@"{_asskitPath}\raw_data\db\{tableName}.xml";
 
             var schema_doc  = XDocument.Load(schema_path);
-            var table_doc   = XDocument.Load(table_path);
+            var table_doc   = _preparedTables != null && _preparedTables.TryGetValue(tableName, out var prepared)
+                ? prepared
+                : XDocument.Load(table_path);
 
             var schema = new XmlSchema();
             schema.Load(schema_doc);

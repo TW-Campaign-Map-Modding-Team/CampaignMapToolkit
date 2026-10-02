@@ -2,20 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Owns one run of the RPFM database preparation pipeline as a single transaction. For each
-    /// required table it gathers every fragment of that table found anywhere - the game's own packs
-    /// and the project's mod with the mods it depends on - and merges them the same way the game itself does: when two
-    /// fragments define a row for the same primary key, the fragment whose name sorts earlier wins;
-    /// rows unique to any one fragment are all kept. When a mod and the game share the exact same
-    /// fragment name too (so fragment name breaks no tie), the mod wins, since its fragments are
-    /// read first. It then backs up the original Assembly Kit db files, converts the merged tables to
-    /// Assembly Kit XML, and - crucially - guarantees that the Assembly Kit is left exactly as it was
-    /// found once the session is cleaned up (whether the project closes, another opens, the app
-    /// exits, or any step fails).
+    /// Reads the database tables a project needs through rpfm_server, as Assembly Kit data XML held
+    /// in memory. For each required table it gathers every fragment of that table found anywhere - the
+    /// game's own packs and the project's mod with the mods it depends on - and merges them the same
+    /// way the game itself does: when two fragments define a row for the same primary key, the
+    /// fragment whose name sorts earlier wins; rows unique to any one fragment are all kept. When a mod
+    /// and the game share the exact same fragment name too (so fragment name breaks no tie), the mod
+    /// wins, since its fragments are read first.
+    ///
+    /// Nothing is written to the Assembly Kit. Its TWaD schemas give each table's fields, and its own
+    /// copy of each table is read for the fields no pack carries (see
+    /// <see cref="DatabaseTableConverter.MergeTsv"/>). RPFM extracts the fragments as TSV into a
+    /// temporary folder of CAIME's own, deleted before <see cref="Prepare"/> returns.
     ///
     /// Everything is read through rpfm_server (see <see cref="RpfmService"/>), one server session for
     /// the length of <see cref="Prepare"/>. The game's own packs are found through the install folder
@@ -26,39 +29,16 @@ namespace CAIME.Rpfm
     /// cannot find or read is skipped with a warning rather than blocking the session - it's a
     /// per-project convenience layered on top, not something that should be able to prevent a
     /// project from opening.
-    ///
-    /// Usage:
-    ///   var session = new RpfmWorkflowSession(...);
-    ///   session.Prepare();          // throws on failure, having already rolled everything back
-    ///   ... existing DB loading ...
-    ///   session.Cleanup();          // restores originals, removes generated files
     /// </summary>
-    public sealed class RpfmWorkflowSession : IDisposable
+    public sealed class RpfmWorkflowSession
     {
-        // Best-effort crash recovery: any session that has begun mutating the Assembly Kit registers
-        // here so a process exit / unhandled exception can still restore the originals.
-        private static readonly HashSet<RpfmWorkflowSession> ActiveSessions = new HashSet<RpfmWorkflowSession>();
-        private static readonly object ActiveSessionsLock = new object();
-
-        static RpfmWorkflowSession()
-        {
-            AppDomain.CurrentDomain.ProcessExit       += (s, e) => CleanupAll();
-            AppDomain.CurrentDomain.UnhandledException += (s, e) => CleanupAll();
-        }
-
         private readonly GameTemplate           _game;
         private readonly string                 _dbRootPath;
         private readonly string                 _modPackName;
         private readonly string                 _rpfmFolder;
         private readonly string                 _campaignMapName;
         private readonly IReadOnlyDictionary<string, bool> _regionIsSeaByKey;
-        private readonly BackupService           _backup;
         private readonly string                 _tempExtractDir;
-        private readonly List<string>            _generatedFiles = new List<string>();
-        private readonly HashSet<string>         _regionsOnThisMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly RpfmRecoveryJournal     _journal;
-
-        private bool _cleanedUp;
 
         /// <param name="modPackName">
         /// The .pack file name of the project's mod. Optional - pass null when the project has none
@@ -67,8 +47,7 @@ namespace CAIME.Rpfm
         /// <param name="mapHex">
         /// The project's already-loaded map. Its campaign map name decides which regions the region
         /// tables keep, and its land and sea regions are the source of "regions.is_sea" (see
-        /// <see cref="RestrictRegionsToThisMap"/> and <see cref="BuildRegionSeaStatus"/>), refreshed
-        /// from the map as it is then by <see cref="UpdateRegionsForMapData"/>.
+        /// <see cref="RestrictRegionsToThisMap"/> and <see cref="BuildRegionSeaStatus"/>).
         /// </param>
         public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, string modPackName, MapHexFile mapHex)
         {
@@ -83,113 +62,33 @@ namespace CAIME.Rpfm
             _rpfmFolder      = rpfmFolder;
             _campaignMapName = mapHex.CampaignMapName;
             _regionIsSeaByKey = BuildRegionSeaStatus(mapHex);
-
-            // Both working directories are private to this session and sit outside the db root.
-            // The old one-second-resolution timestamps inside the db root meant two sessions
-            // started in the same second shared them: the second session's File.Move into an
-            // occupied path threw, and either session's cleanup destroyed the other's originals.
-            var sessionId    = Guid.NewGuid().ToString("N");
-            var sessionRoot  = Path.Combine(assemblyKitPath, "caime_rpfm", sessionId);
-
-            _backup          = new BackupService(_dbRootPath, Path.Combine(sessionRoot, "backup"));
-            _tempExtractDir  = Path.Combine(sessionRoot, "extract");
-
-            // Persisted record used to recover if the process is killed before cleanup can run.
-            _journal = new RpfmRecoveryJournal
-            {
-                SessionId      = sessionId,
-                DbRootPath     = _dbRootPath,
-                BackupRootPath = _backup.BackupRootPath,
-                TempExtractDir = _tempExtractDir,
-            };
+            _tempExtractDir  = Path.Combine(Path.GetTempPath(), "CAIME", "rpfm", Guid.NewGuid().ToString("N"));
         }
 
         /// <summary>
-        /// Runs the full preparation pipeline. On success the Assembly Kit db folder contains the
-        /// resolved tables - each one merged from the game's packs and every mod that contains a
-        /// fragment of it - as Assembly Kit XML, ready for the normal loader. On any failure the
-        /// Assembly Kit is fully restored and a descriptive exception is thrown.
+        /// Reads every required table, each merged from the game's packs and every mod that contains
+        /// a fragment of it, keyed by table name. Throws a descriptive exception on any failure.
         /// </summary>
-        public void Prepare()
+        public IReadOnlyDictionary<string, XDocument> Prepare()
         {
             ValidatePreconditions();
 
             var requiredTables = DatabaseTableProvider.GetRequiredTables(_game);
 
-            using (var rpfm = RpfmService.Open(_rpfmFolder, _game))
+            try
             {
-                // From here on files are written; any failure must roll everything back.
-                try
+                using (var rpfm = RpfmService.Open(_rpfmFolder, _game))
                 {
-                    // Write the recovery journal before touching any file, so a hard kill at any point
-                    // from here on leaves a record the next launch can replay.
-                    _journal.Save();
-
                     var fragmentsByTable = ExtractFragments(rpfm, requiredTables);
                     var rowFilters = RestrictRegionsToThisMap(fragmentsByTable);
 
-                    BackupOriginals(requiredTables);
-                    EnsureNoConflicts(requiredTables);
-                    ConvertToAssemblyKitXml(requiredTables, fragmentsByTable, rowFilters);
-
-                    // Temporary TSVs are no longer needed once converted.
-                    DeleteTempExtractDir();
-
-                    Register(this);
-                }
-                catch
-                {
-                    RestoreAndCleanup();
-                    throw;
+                    return MergeTables(requiredTables, fragmentsByTable, rowFilters);
                 }
             }
-        }
-
-        /// <summary>
-        /// Readies the prepared regions table for a map_data.esf export from <paramref name="mapHex"/>
-        /// as it is now, which can differ from the map the project opened with: regions are created,
-        /// renamed and deleted while it is open. Every region campaign_map_regions puts on this map
-        /// must be on the map, since the map is the only source of its "is_sea"; when any is not,
-        /// throws <see cref="InvalidOperationException"/> naming them all. Otherwise rewrites every
-        /// region's "is_sea" from the map.
-        /// </summary>
-        public void UpdateRegionsForMapData(MapHexFile mapHex)
-        {
-            if (_cleanedUp)
+            finally
             {
-                throw new InvalidOperationException("The RPFM database tables have already been cleaned up.");
+                DeleteTempExtractDir();
             }
-
-            var isSeaByRegion = BuildRegionSeaStatus(mapHex);
-
-            var notOnMap = _regionsOnThisMap
-                .Where(region => !isSeaByRegion.ContainsKey(region))
-                .OrderBy(region => region, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (notOnMap.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    $"campaign_map_regions puts {notOnMap.Count} region(s) on {_campaignMapName} that are not on its hex map: " +
-                    string.Join(", ", notOnMap) + ".");
-            }
-
-            var regionsXml = Path.Combine(_dbRootPath, Constants.TABLE_REGIONS + ".xml");
-            DatabaseTableConverter.SetYesNoField(regionsXml, Constants.TABLE_REGIONS, "key", "is_sea", isSeaByRegion);
-        }
-
-        /// <summary>
-        /// Restores the original Assembly Kit files, removes generated XML and any temporary files,
-        /// and deletes the backup directory. Idempotent.
-        /// </summary>
-        public void Cleanup()
-        {
-            RestoreAndCleanup();
-        }
-
-        public void Dispose()
-        {
-            RestoreAndCleanup();
         }
 
         // -----------------------------------------------------------------
@@ -300,13 +199,14 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Only this campaign map's regions go into the region tables: neither CAIME nor MapDataBuilder
-        // reads any other. A region campaign_map_regions puts on this map that the hex map does not
-        // have yet is still kept, so the project opens; its "is_sea" has no source until it is on the
-        // map, and UpdateRegionsForMapData refuses to export it. Rows keep their order, and with it
-        // the region ids CAIME numbers by table order.
+        // Only this campaign map's regions go into the region tables: CAIME reads no other. A region
+        // campaign_map_regions puts on this map that the hex map does not have yet is still kept, so
+        // the project opens. Rows keep their order, and with it the region ids CAIME numbers by table
+        // order.
         private IReadOnlyDictionary<string, TsvRowFilter> RestrictRegionsToThisMap(Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable)
         {
+            var regionsOnThisMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var fragment in fragmentsByTable[Constants.TABLE_CAMPAIGN_MAP_REGIONS])
             {
                 foreach (var row in DatabaseTableConverter.ReadTsvRows(fragment.TsvPath))
@@ -318,7 +218,7 @@ namespace CAIME.Rpfm
 
                     if (string.Equals(campaignMap, _campaignMapName, StringComparison.OrdinalIgnoreCase))
                     {
-                        _regionsOnThisMap.Add(region);
+                        regionsOnThisMap.Add(region);
                     }
                 }
             }
@@ -326,42 +226,19 @@ namespace CAIME.Rpfm
             return new Dictionary<string, TsvRowFilter>(StringComparer.OrdinalIgnoreCase)
             {
                 [Constants.TABLE_CAMPAIGN_MAP_REGIONS] = new TsvRowFilter("campaign_map", new[] { _campaignMapName }),
-                [Constants.TABLE_REGIONS]              = new TsvRowFilter("key", _regionsOnThisMap),
-                [Constants.TABLE_REGIONS_TO_PROVINCES] = new TsvRowFilter("region", _regionsOnThisMap),
+                [Constants.TABLE_REGIONS]              = new TsvRowFilter("key", regionsOnThisMap),
+                [Constants.TABLE_REGIONS_TO_PROVINCES] = new TsvRowFilter("region", regionsOnThisMap),
             };
         }
 
-        // Move the original data XML for each table being replaced into the backup directory.
-        private void BackupOriginals(IReadOnlyList<string> tablesToReplace)
-        {
-            foreach (var table in tablesToReplace)
-            {
-                _backup.Backup(Path.Combine(_dbRootPath, table + ".xml"));
-            }
-        }
-
-        // Abort if a conflicting file for any table already exists, regardless of extension. After the
-        // backup moved the originals aside, the only way a match survives is a stray leftover from an
-        // earlier interrupted run.
-        private void EnsureNoConflicts(IReadOnlyList<string> tables)
-        {
-            foreach (var table in tables)
-            {
-                var conflicts = Directory.GetFiles(_dbRootPath, table + ".*", SearchOption.TopDirectoryOnly);
-                if (conflicts.Length > 0)
-                {
-                    throw new InvalidOperationException(
-                        $"A conflicting file already exists in the Assembly Kit db folder: {conflicts[0]}");
-                }
-            }
-        }
-
-        // Merges each table's extracted fragments into Assembly Kit XML, keeping only the rows
-        // rowFilters selects for the tables it covers.
-        private void ConvertToAssemblyKitXml(
+        // Merges each table's extracted fragments into an Assembly Kit data XML document, keeping only
+        // the rows rowFilters selects for the tables it covers.
+        private Dictionary<string, XDocument> MergeTables(
             IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable,
             IReadOnlyDictionary<string, TsvRowFilter> rowFilters)
         {
+            var merged = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var table in tables)
             {
                 var twadSchemaPath = Path.Combine(_dbRootPath, "TWaD_" + table + ".xml");
@@ -375,13 +252,8 @@ namespace CAIME.Rpfm
                 var schema            = DatabaseTableConverter.LoadSchema(twadSchemaPath);
                 var booleanColumns    = DatabaseTableConverter.GetBooleanColumns(schema);
                 var primaryKeyColumns = DatabaseTableConverter.GetPrimaryKeyColumns(schema);
-                var schemaFields      = schema.Fields;
 
-                // BackupOriginals already moved this table's pre-existing Assembly Kit XML here (if it
-                // had one) before this method runs - read it back as a fallback source for fields RPFM
-                // has no way to supply (see MergeTsvToXml).
-                var backedUpXmlPath = Path.Combine(_backup.BackupRootPath, table + ".xml");
-                var existingRecords = DatabaseTableConverter.LoadExistingRecords(backedUpXmlPath, table, primaryKeyColumns);
+                var existingRecords = DatabaseTableConverter.LoadExistingRecords(Path.Combine(_dbRootPath, table + ".xml"), table, primaryKeyColumns);
 
                 var fragments = new List<(string TsvPath, string FragmentName)>();
                 foreach (var fragment in fragmentsByTable[table])
@@ -396,16 +268,12 @@ namespace CAIME.Rpfm
                     fragments.Add((fragment.TsvPath, fragment.FragmentName));
                 }
 
-                var outputXml = Path.Combine(_dbRootPath, table + ".xml");
                 rowFilters.TryGetValue(table, out var rowFilter);
-                DatabaseTableConverter.MergeTsvToXml(fragments, table, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, _regionIsSeaByKey, outputXml, rowFilter);
-                _generatedFiles.Add(outputXml);
-
-                // Record the generated file only now that it exists and its original is safely backed
-                // up, so crash-recovery can delete it without risking an untouched original.
-                _journal.GeneratedFiles.Add(outputXml);
-                _journal.Save();
+                merged[table] = DatabaseTableConverter.MergeTsv(
+                    fragments, table, booleanColumns, primaryKeyColumns, schema.Fields, existingRecords, _regionIsSeaByKey, rowFilter);
             }
+
+            return merged;
         }
 
         // Ground truth for "regions.is_sea": which regions this map treats as sea. That field never
@@ -416,8 +284,6 @@ namespace CAIME.Rpfm
         // loads the map first and only then runs the hook that prepares this workflow.
         private static IReadOnlyDictionary<string, bool> BuildRegionSeaStatus(MapHexFile mapHex)
         {
-            // Absent regions are not on this map at all, rather than land; UpdateRegionsForMapData
-            // refuses to export any of them that campaign_map_regions still puts on it.
             var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var region in mapHex.LandRegions ?? Enumerable.Empty<string>())
@@ -433,44 +299,6 @@ namespace CAIME.Rpfm
             return result;
         }
 
-        // -----------------------------------------------------------------
-        // Teardown / rollback (shared by success cleanup and failure rollback)
-        // -----------------------------------------------------------------
-
-        private void RestoreAndCleanup()
-        {
-            if (_cleanedUp)
-            {
-                return;
-            }
-
-            _cleanedUp = true;
-            Unregister(this);
-
-            // Remove generated XML first, then move the originals back over the top.
-            foreach (var generated in _generatedFiles)
-            {
-                TryDeleteFile(generated);
-            }
-            _generatedFiles.Clear();
-
-            DeleteTempExtractDir();
-
-            try
-            {
-                _backup.Restore();
-                _backup.DeleteBackupDirectory();
-            }
-            catch (Exception ex)
-            {
-                LoggerViewModel.Log($"RPFM cleanup - failed to restore Assembly Kit backup: {ex.Message}", LogLevel.Error);
-            }
-
-            // The Assembly Kit is restored - the recovery journal is no longer needed. Deleted last so
-            // that a crash at any earlier point still leaves it for the next launch to replay.
-            _journal.Delete();
-        }
-
         private void DeleteTempExtractDir()
         {
             try
@@ -482,56 +310,7 @@ namespace CAIME.Rpfm
             }
             catch (Exception ex)
             {
-                LoggerViewModel.Log($"RPFM cleanup - failed to delete temporary extraction folder: {ex.Message}", LogLevel.Warning);
-            }
-        }
-
-        private static void TryDeleteFile(string path)
-        {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-            }
-            catch (Exception ex)
-            {
-                LoggerViewModel.Log($"RPFM cleanup - failed to delete generated file {path}: {ex.Message}", LogLevel.Warning);
-            }
-        }
-
-        // -----------------------------------------------------------------
-        // Active-session registry for crash recovery
-        // -----------------------------------------------------------------
-
-        private static void Register(RpfmWorkflowSession session)
-        {
-            lock (ActiveSessionsLock)
-            {
-                ActiveSessions.Add(session);
-            }
-        }
-
-        private static void Unregister(RpfmWorkflowSession session)
-        {
-            lock (ActiveSessionsLock)
-            {
-                ActiveSessions.Remove(session);
-            }
-        }
-
-        private static void CleanupAll()
-        {
-            RpfmWorkflowSession[] snapshot;
-            lock (ActiveSessionsLock)
-            {
-                snapshot = ActiveSessions.ToArray();
-            }
-
-            foreach (var session in snapshot)
-            {
-                try { session.RestoreAndCleanup(); } catch { /* best effort during shutdown */ }
+                LoggerViewModel.Log($"RPFM workflow - failed to delete temporary extraction folder: {ex.Message}", LogLevel.Warning);
             }
         }
     }

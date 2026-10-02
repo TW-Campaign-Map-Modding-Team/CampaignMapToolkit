@@ -141,11 +141,11 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsvToXml_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
+        public void MergeTsv_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
         {
             // Two fragments that happen to share the exact same in-pack fragment name (e.g. two packs
             // both shipping a "!!!mod" fragment for this table) - fragment-name sorting alone cannot
-            // break this tie, so MergeTsvToXml must fall back to a stable sort and let whichever
+            // break this tie, so MergeTsv must fall back to a stable sort and let whichever
             // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists a
             // mod's fragments before the game's, so a mod wins this tie.
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
@@ -167,35 +167,32 @@ namespace CAIME.Tests.Unit
             var primaryKeyColumns = DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath);
             var schemaFields      = DatabaseTableConverter.GetFields(schemaPath);
 
-            var outputXmlPath = Path.Combine(_dir, "first_pack_wins.xml");
-            DatabaseTableConverter.MergeTsvToXml(
+            var merged = DatabaseTableConverter.MergeTsv(
                 new[] { (tsvFromFirstPack, "!!!mod"), (tsvFromSecondPack, "!!!mod") },
-                "test_table", booleans, primaryKeyColumns, schemaFields, null, null, outputXmlPath);
+                "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
-            var records = XDocument.Load(outputXmlPath).Root.Elements("test_table").ToList();
+            var records = merged.Root.Elements("test_table").ToList();
             Assert.AreEqual(1, records.Count, "Same primary key across both fragments must collapse to one record.");
             Assert.AreEqual("111", records[0].Element("movement_cost").Value,
                 "With tied fragment names, the fragment listed first must win.");
 
             // Reversing the listed order must reverse the winner - proves the tiebreak really tracks
             // input order rather than, say, file path or an unstable sort.
-            var reversedOutputXmlPath = Path.Combine(_dir, "second_pack_wins.xml");
-            DatabaseTableConverter.MergeTsvToXml(
+            var reversed = DatabaseTableConverter.MergeTsv(
                 new[] { (tsvFromSecondPack, "!!!mod"), (tsvFromFirstPack, "!!!mod") },
-                "test_table", booleans, primaryKeyColumns, schemaFields, null, null, reversedOutputXmlPath);
+                "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
-            var reversedRecords = XDocument.Load(reversedOutputXmlPath).Root.Elements("test_table").ToList();
+            var reversedRecords = reversed.Root.Elements("test_table").ToList();
             Assert.AreEqual("222", reversedRecords[0].Element("movement_cost").Value);
         }
 
         [TestMethod]
-        public void MergeTsvToXml_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
+        public void MergeTsv_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
         {
-            // The RPFM workflow writes only one campaign map's regions; dropping the rest must not
+            // The RPFM workflow keeps only one campaign map's regions; dropping the rest must not
             // reorder the ones kept, since CAIME numbers regions by their order in the table.
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
             var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
-            var xmlPath    = Path.Combine(_dir, "filtered.xml");
             File.WriteAllText(schemaPath, TwadSchema);
             File.WriteAllText(tsvPath,
                 "type\tmovement_cost\tcan_ambush\tis_sea\n" +
@@ -204,58 +201,47 @@ namespace CAIME.Tests.Unit
                 "dropped\t2\ttrue\tfalse\n" +
                 "aa_kept\t3\tfalse\ttrue\n");
 
-            DatabaseTableConverter.MergeTsvToXml(
+            var merged = DatabaseTableConverter.MergeTsv(
                 new[] { (tsvPath, "rom_test") }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),
-                null, null, xmlPath,
+                null, null,
                 new TsvRowFilter("type", new[] { "AA_KEPT", "zz_kept" }));
 
-            var kept = XDocument.Load(xmlPath).Root.Elements("test_table").Select(r => r.Element("type").Value).ToArray();
+            var kept = merged.Root.Elements("test_table").Select(r => r.Element("type").Value).ToArray();
             CollectionAssert.AreEqual(new[] { "zz_kept", "aa_kept" }, kept,
-                "Only the selected rows may be written (matched ignoring case), in their original order.");
+                "Only the selected rows may be kept (matched ignoring case), in their original order.");
         }
 
         [TestMethod]
-        public void MergeTsvToXml_RowFilterOnAMissingColumn_Throws()
+        public void MergeTsv_RowFilterOnAMissingColumn_Throws()
         {
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
             var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
             File.WriteAllText(schemaPath, TwadSchema);
             File.WriteAllText(tsvPath, Tsv);
 
-            Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsvToXml(
+            Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsv(
                 new[] { (tsvPath, "rom_test") }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),
-                null, null, Path.Combine(_dir, "never.xml"),
+                null, null,
                 new TsvRowFilter("no_such_column", new[] { "x" })),
-                "A filter that cannot be applied must fail rather than silently write every row or none.");
+                "A filter that cannot be applied must fail rather than silently keep every row or none.");
         }
 
         [TestMethod]
-        public void SetYesNoField_RewritesListedRecordsOnly_AndWritesNoBom()
+        public void WriteAssemblyKitXml_WritesNoBom_AndCreatesTheFolder()
         {
-            var xmlPath = Path.Combine(_dir, "regions.xml");
-            File.WriteAllText(xmlPath,
-@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<dataroot>
-  <regions><key>reg_a</key><is_sea>0</is_sea><r>1</r></regions>
-  <regions><key>reg_b</key><is_sea>1</is_sea><r>2</r></regions>
-  <regions><key>reg_c</key><is_sea>1</is_sea><r>3</r></regions>
-</dataroot>");
+            var xmlPath  = Path.Combine(_dir, "not_yet_created", "regions.xml");
+            var document = new XDocument(new XElement("dataroot", new XElement("regions", new XElement("key", "reg_a"))));
 
-            DatabaseTableConverter.SetYesNoField(xmlPath, "regions", "key", "is_sea",
-                new System.Collections.Generic.Dictionary<string, bool> { ["reg_a"] = true, ["reg_b"] = false });
+            DatabaseTableConverter.WriteAssemblyKitXml(document, xmlPath);
 
-            var records = XDocument.Load(xmlPath).Root.Elements("regions").ToList();
-            CollectionAssert.AreEqual(new[] { "1", "0", "1" }, records.Select(r => r.Element("is_sea").Value).ToArray(),
-                "Listed records take the given value; an unlisted one keeps its own.");
-            CollectionAssert.AreEqual(new[] { "is_sea", "r" }, records[0].Elements().Skip(1).Select(e => e.Name.LocalName).ToArray(),
-                "The field must be rewritten in place, keeping the schema's field order.");
             Assert.AreNotEqual(0xEF, File.ReadAllBytes(xmlPath)[0], "The Assembly Kit's reader crashes on a UTF-8 BOM.");
+            Assert.AreEqual("reg_a", XDocument.Load(xmlPath).Root.Element("regions").Element("key").Value);
         }
 
         [TestMethod]

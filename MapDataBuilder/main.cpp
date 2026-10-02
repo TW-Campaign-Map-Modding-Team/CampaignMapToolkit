@@ -440,7 +440,10 @@ int main(int argc, char* argv[])
     std::string rawDataPath         = std::string(asskitPath) + std::string("/raw_data");
     std::string workDataPath        = std::string(asskitPath) + std::string("/working_data");
     std::string designDataPath      = std::string(rawDataPath) + std::string("/EmpireDesignData");
-    std::string dbPath              = std::string(rawDataPath) + std::string("/db");
+
+    // db_path points the map_data export at tables CAIME wrote to a folder of its own (the RPFM
+    // database source) rather than the Assembly Kit's.
+    std::string dbPath              = argsMap.count("db_path") != 0 ? argsMap["db_path"] : std::string(rawDataPath) + std::string("/db");
 
     // Without these, LoadLibraryA below resolves the DLL from somewhere else entirely.
     if (SetCurrentDirectoryA(binPath.c_str()) == 0 || SetDllDirectoryA(binPath.c_str()) == 0)
