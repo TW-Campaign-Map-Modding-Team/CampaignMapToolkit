@@ -50,10 +50,12 @@ namespace CAIME.Rpfm
         private readonly string                 _dbRootPath;
         private readonly string                 _modPackName;
         private readonly string                 _rpfmFolder;
+        private readonly string                 _campaignMapName;
         private readonly IReadOnlyDictionary<string, bool> _regionIsSeaByKey;
         private readonly BackupService           _backup;
         private readonly string                 _tempExtractDir;
         private readonly List<string>            _generatedFiles = new List<string>();
+        private readonly HashSet<string>         _regionsOnThisMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly RpfmRecoveryJournal     _journal;
 
         private bool _cleanedUp;
@@ -63,17 +65,23 @@ namespace CAIME.Rpfm
         /// configured; every table then comes from the game's own packs instead.
         /// </param>
         /// <param name="mapHex">
-        /// The project's already-loaded map, used only as a ground-truth source for "regions.is_sea"
-        /// (see <see cref="BuildRegionSeaStatus"/>). Optional - pass null when there is no map; that
-        /// field then falls back to the existing Assembly Kit record or the schema default same as any
-        /// other field RPFM cannot supply.
+        /// The project's already-loaded map. Its campaign map name decides which regions the region
+        /// tables keep, and its land and sea regions are the source of "regions.is_sea" (see
+        /// <see cref="RestrictRegionsToThisMap"/> and <see cref="BuildRegionSeaStatus"/>), refreshed
+        /// from the map as it is then by <see cref="UpdateRegionsForMapData"/>.
         /// </param>
-        public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, string modPackName, MapHexFile mapHex = null)
+        public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, string modPackName, MapHexFile mapHex)
         {
+            if (mapHex == null)
+            {
+                throw new ArgumentNullException(nameof(mapHex));
+            }
+
             _game            = game;
             _dbRootPath      = Path.Combine(assemblyKitPath, "raw_data", "db");
             _modPackName     = modPackName;
             _rpfmFolder      = rpfmFolder;
+            _campaignMapName = mapHex.CampaignMapName;
             _regionIsSeaByKey = BuildRegionSeaStatus(mapHex);
 
             // Both working directories are private to this session and sit outside the db root.
@@ -117,16 +125,12 @@ namespace CAIME.Rpfm
                     // from here on leaves a record the next launch can replay.
                     _journal.Save();
 
-                    // Table presence is a soft requirement: only the required tables found in a mod or
-                    // the game take part in the workflow. Tables absent from both are left as-is, so the
-                    // normal loader falls back to the Assembly Kit's own copy. Finding nothing at all is
-                    // valid too - the workflow simply does nothing.
                     var fragmentsByTable = ExtractFragments(rpfm, requiredTables);
-                    var presentTables = requiredTables.Where(fragmentsByTable.ContainsKey).ToList();
+                    var rowFilters = RestrictRegionsToThisMap(fragmentsByTable);
 
-                    BackupOriginals(presentTables);
-                    EnsureNoConflicts(presentTables);
-                    ConvertToAssemblyKitXml(presentTables, fragmentsByTable);
+                    BackupOriginals(requiredTables);
+                    EnsureNoConflicts(requiredTables);
+                    ConvertToAssemblyKitXml(requiredTables, fragmentsByTable, rowFilters);
 
                     // Temporary TSVs are no longer needed once converted.
                     DeleteTempExtractDir();
@@ -139,6 +143,39 @@ namespace CAIME.Rpfm
                     throw;
                 }
             }
+        }
+
+        /// <summary>
+        /// Readies the prepared regions table for a map_data.esf export from <paramref name="mapHex"/>
+        /// as it is now, which can differ from the map the project opened with: regions are created,
+        /// renamed and deleted while it is open. Every region campaign_map_regions puts on this map
+        /// must be on the map, since the map is the only source of its "is_sea"; when any is not,
+        /// throws <see cref="InvalidOperationException"/> naming them all. Otherwise rewrites every
+        /// region's "is_sea" from the map.
+        /// </summary>
+        public void UpdateRegionsForMapData(MapHexFile mapHex)
+        {
+            if (_cleanedUp)
+            {
+                throw new InvalidOperationException("The RPFM database tables have already been cleaned up.");
+            }
+
+            var isSeaByRegion = BuildRegionSeaStatus(mapHex);
+
+            var notOnMap = _regionsOnThisMap
+                .Where(region => !isSeaByRegion.ContainsKey(region))
+                .OrderBy(region => region, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (notOnMap.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"campaign_map_regions puts {notOnMap.Count} region(s) on {_campaignMapName} that are not on its hex map: " +
+                    string.Join(", ", notOnMap) + ".");
+            }
+
+            var regionsXml = Path.Combine(_dbRootPath, Constants.TABLE_REGIONS + ".xml");
+            DatabaseTableConverter.SetYesNoField(regionsXml, Constants.TABLE_REGIONS, "key", "is_sea", isSeaByRegion);
         }
 
         /// <summary>
@@ -180,7 +217,8 @@ namespace CAIME.Rpfm
         // over the game when both use the exact same fragment name (see the class summary). The mods
         // and the game land in separate folders because their fragments can share a path - every
         // pack's default "db/<table>_tables/data__", say. A failure reading the game propagates and
-        // aborts the workflow; a failure reading the mods only drops them.
+        // aborts the workflow; a failure reading the mods only drops them. Every required table must
+        // turn up in one or the other: the Assembly Kit's own copy is never a stand-in for game data.
         private Dictionary<string, List<ExtractedTableFragment>> ExtractFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
             var fragmentsByTable = new Dictionary<string, List<ExtractedTableFragment>>(StringComparer.OrdinalIgnoreCase);
@@ -202,18 +240,13 @@ namespace CAIME.Rpfm
             LogTableSources("the mods", fromMods);
             LogTableSources("the game's packs", fromGame);
 
-            var stillMissing = requiredTables.Where(t => !fragmentsByTable.ContainsKey(t)).ToList();
-            if (fragmentsByTable.Count == 0)
+            var missing = requiredTables.Where(t => !fragmentsByTable.ContainsKey(t)).ToList();
+            if (missing.Count > 0)
             {
-                LoggerViewModel.Log(
-                    "RPFM workflow: none of the required database tables were found in the mods or the game's packs. " +
-                    "The Assembly Kit's own tables will be used unchanged.", LogLevel.Info);
-            }
-            else if (stillMissing.Count > 0)
-            {
-                LoggerViewModel.Log(
-                    "RPFM workflow: these tables were not found in the mods or the game's packs and will be loaded " +
-                    "from the Assembly Kit: " + string.Join(", ", stillMissing), LogLevel.Info);
+                throw new InvalidOperationException(
+                    $"RPFM found no {string.Join(", ", missing)} {(missing.Count == 1 ? "table" : "tables")} " +
+                    $"in {_game}'s packs or the project's mod. " +
+                    "Check that the game folder set in RPFM's settings points at a complete install.");
             }
 
             return fragmentsByTable;
@@ -267,8 +300,38 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Move the original data XML for each table being replaced into the backup directory. Only
-        // tables found in a mod or the game are backed up; everything else stays untouched.
+        // Only this campaign map's regions go into the region tables: neither CAIME nor MapDataBuilder
+        // reads any other. A region campaign_map_regions puts on this map that the hex map does not
+        // have yet is still kept, so the project opens; its "is_sea" has no source until it is on the
+        // map, and UpdateRegionsForMapData refuses to export it. Rows keep their order, and with it
+        // the region ids CAIME numbers by table order.
+        private IReadOnlyDictionary<string, TsvRowFilter> RestrictRegionsToThisMap(Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable)
+        {
+            foreach (var fragment in fragmentsByTable[Constants.TABLE_CAMPAIGN_MAP_REGIONS])
+            {
+                foreach (var row in DatabaseTableConverter.ReadTsvRows(fragment.TsvPath))
+                {
+                    if (!row.TryGetValue("campaign_map", out var campaignMap) || !row.TryGetValue("region", out var region))
+                    {
+                        throw new InvalidDataException($"'{fragment.TsvPath}' has no campaign_map and region columns.");
+                    }
+
+                    if (string.Equals(campaignMap, _campaignMapName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _regionsOnThisMap.Add(region);
+                    }
+                }
+            }
+
+            return new Dictionary<string, TsvRowFilter>(StringComparer.OrdinalIgnoreCase)
+            {
+                [Constants.TABLE_CAMPAIGN_MAP_REGIONS] = new TsvRowFilter("campaign_map", new[] { _campaignMapName }),
+                [Constants.TABLE_REGIONS]              = new TsvRowFilter("key", _regionsOnThisMap),
+                [Constants.TABLE_REGIONS_TO_PROVINCES] = new TsvRowFilter("region", _regionsOnThisMap),
+            };
+        }
+
+        // Move the original data XML for each table being replaced into the backup directory.
         private void BackupOriginals(IReadOnlyList<string> tablesToReplace)
         {
             foreach (var table in tablesToReplace)
@@ -293,8 +356,11 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Merges each present table's extracted fragments into Assembly Kit XML.
-        private void ConvertToAssemblyKitXml(IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable)
+        // Merges each table's extracted fragments into Assembly Kit XML, keeping only the rows
+        // rowFilters selects for the tables it covers.
+        private void ConvertToAssemblyKitXml(
+            IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable,
+            IReadOnlyDictionary<string, TsvRowFilter> rowFilters)
         {
             foreach (var table in tables)
             {
@@ -331,7 +397,8 @@ namespace CAIME.Rpfm
                 }
 
                 var outputXml = Path.Combine(_dbRootPath, table + ".xml");
-                DatabaseTableConverter.MergeTsvToXml(fragments, table, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, _regionIsSeaByKey, outputXml);
+                rowFilters.TryGetValue(table, out var rowFilter);
+                DatabaseTableConverter.MergeTsvToXml(fragments, table, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, _regionIsSeaByKey, outputXml, rowFilter);
                 _generatedFiles.Add(outputXml);
 
                 // Record the generated file only now that it exists and its original is safely backed
@@ -349,16 +416,16 @@ namespace CAIME.Rpfm
         // loads the map first and only then runs the hook that prepares this workflow.
         private static IReadOnlyDictionary<string, bool> BuildRegionSeaStatus(MapHexFile mapHex)
         {
-            // Absent regions are "unknown to this map" rather than "land", so callers fall back to
-            // another source for them instead of being told something wrong.
+            // Absent regions are not on this map at all, rather than land; UpdateRegionsForMapData
+            // refuses to export any of them that campaign_map_regions still puts on it.
             var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var region in mapHex?.LandRegions ?? Enumerable.Empty<string>())
+            foreach (var region in mapHex.LandRegions ?? Enumerable.Empty<string>())
             {
                 result[region] = false;
             }
 
-            foreach (var region in mapHex?.SeaRegions ?? Enumerable.Empty<string>())
+            foreach (var region in mapHex.SeaRegions ?? Enumerable.Empty<string>())
             {
                 result[region] = true;
             }

@@ -37,7 +37,7 @@
                    Margin="0 0 0 10"
                    FontStyle="Italic"
                    Foreground="White"
-                   Text="Every mod it lists as a dependency is read too, and theirs in turn, so name the mod at the top. Its data is merged with the game's vanilla tables; anything neither provides falls back to the Assembly Kit's own copy. Leave empty to read the game's tables only." />
+                   Text="Every mod it lists as a dependency is read too, and theirs in turn, so name the mod at the top. Its data is merged with the game's vanilla tables. Leave empty to read the game's tables only." />
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
