@@ -292,7 +292,7 @@ CAIME.exe create --list-templates
 | `--game`, `-g` | The game the map is for. Required unless you use a template. See [Game Names](#game-names). |
 | `--width` | Map width in hexes. Must be even. Default `1016`. |
 | `--height` | Map height in hexes. Default `720`. |
-| `--template`, `-t` | Start from one of the bundled templates instead of an empty map. The template decides the game, the map size and the campaign map name, so `--game`, `--width` and `--height` can't be used with it. |
+| `--template`, `-t` | Start from one of the bundled templates instead of an empty map. The template decides the game and the map size, so `--game`, `--width` and `--height` can't be used with it. The copied map is renamed to `--name`. |
 | `--output`, `-o` | The folder to create the project folder in. By default it goes in the same **Projects** folder the editor uses. |
 | `--force` | If a project folder of the same name already exists, **delete it** and create the new one in its place. Without `--force`, an existing project is left alone and the command stops with an error. |
 | `--list-templates` | List the available templates and stop. |

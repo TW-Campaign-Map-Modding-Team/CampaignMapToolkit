@@ -221,7 +221,7 @@ The **Template** dropdown lists any pre-built starting points stored in the `Tem
 | Choice | Meaning |
 |---|---|
 | **None** | Start with a completely blank map. You choose the game and size manually. |
-| **A named template** | CAIME copies a pre-configured map from the Templates folder. The game and size are locked to whatever that template was designed for. |
+| **A named template** | CAIME copies a pre-configured map from the Templates folder and renames it to your **Campaign map name**. The game and size are locked to whatever that template was designed for. |
 
 If you select a template, the **Game** and **Map size** fields below it will be grayed out — the template already contains all that information.
 

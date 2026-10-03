@@ -407,7 +407,50 @@ namespace CAIME
                     File.Copy(filePath, filePath.Replace(templatePath, newProjectPath), true);
                 }
 
-                return Open($"{newProjectPath}map.hex");
+                var mapHexPath = $"{newProjectPath}map.hex";
+                if (RenameTemplateMap(mapHexPath, mapName) == false)
+                {
+                    return null;
+                }
+
+                return Open(mapHexPath);
+            }
+        }
+
+        private bool RenameTemplateMap(string mapHexPath, string mapName)
+        {
+            var templateProject = new Project();
+            try
+            {
+                if (templateProject.Open(mapHexPath, g => PrepareRpfmDatabaseIfNeeded(templateProject, g)) == false)
+                {
+                    return false;
+                }
+
+                if (templateProject.MapName == mapName)
+                {
+                    return true;
+                }
+
+                var templateMapName = templateProject.MapName;
+                templateProject.MapHexFile.RenameMap(mapName);
+
+                if (templateProject.Save(SaveParameters.SaveFlags.MapHexFile, templateProject.MapHexFileName, templateProject.ProjectPath) == false)
+                {
+                    return false;
+                }
+
+                LoggerViewModel.Log($"Campaign map has been renamed from {templateMapName} to {mapName}", LogLevel.Info);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log($"{mapHexPath} could not be renamed to {mapName}!\n\nReason: {ex.Message}", LogLevel.ErrorMessageBox);
+                return false;
+            }
+            finally
+            {
+                templateProject.CleanupRpfmSession();
             }
         }
 
