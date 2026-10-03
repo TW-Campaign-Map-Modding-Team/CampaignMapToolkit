@@ -237,11 +237,6 @@ namespace CAIME
 
                 var source = request.UsesTemplate ? $"from template '{request.Template}'" : "from scratch";
                 CliConsole.Info($"Created project '{request.MapName}' {source}: {project.Game}, {project.MapWidth} x {project.MapHeight} hexes.");
-                if (project.MapName != request.MapName)
-                {
-                    CliConsole.Info($"The campaign map inside is named '{project.MapName}', as the template sets.");
-                }
-
                 CliConsole.Info($"Map file: {project.FileName}");
                 return CliConsole.ExitSuccess;
             }
@@ -286,7 +281,7 @@ namespace CAIME
             Option(help, "--game, -g <game>", "Game the map is for. Required unless --template is used.\nOne of: " + string.Join(", ", CliNames.AllGames.Select(CliNames.Game)) + ".");
             Option(help, "--width <n>", $"Map width in hexes; must be even. Default {DefaultWidth}.");
             Option(help, "--height <n>", $"Map height in hexes. Default {DefaultHeight}.");
-            Option(help, "--template, -t <template>", "Start from a bundled template instead. The template\nsets the game, map size and campaign map name.");
+            Option(help, "--template, -t <template>", "Start from a bundled template instead. The template\nsets the game and map size; its map is renamed\nto --name.");
             Option(help, "--output, -o <folder>", "Folder to create the project folder in.\nDefault: the editor's Projects folder.");
             Option(help, "--force", "Delete and replace an existing project folder of the\nsame name. Without it, an existing project is an error.");
             Option(help, "--list-templates", "List the available templates and exit.");
