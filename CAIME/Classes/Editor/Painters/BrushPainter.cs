@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using SharpDX;
 
 namespace CAIME.Painters
 {
@@ -64,36 +63,14 @@ namespace CAIME.Painters
                 return true;
             }
 
-            var tb = data.BrushSize - 1;
-            var hex = data.HitHex;
+            var area = HexShapes.BrushArea(data.HitHex, data.BrushSize, (int)project.MapHexFile.MapWidth, (int)project.MapHexFile.MapHeight);
 
-            // Offset -> cube conversion depends on each hex's own column parity, so it is not
-            // translation invariant and cannot be applied to a coordinate delta. Both the centre
-            // and the candidate are converted, which is what Hex.GetDistance does.
-            var centreCube = Hex.OffsetOddQ_ToCube(hex.Q, hex.R);
-
-            // Set color of area surrounding a center hex, based on what the brush size it
-            for (int col = hex.Q - tb; col <= tb + hex.Q; col++)
+            foreach (var hexIndex in area)
             {
-                for (int row = hex.R - tb; row <= tb + hex.R; row++)
+                if (CanPaintHex(data.Swatch, hexIndex))
                 {
-                    int distance = Hex.CubeDistance(centreCube, Hex.OffsetOddQ_ToCube(col, row));
-            
-                    // only paint hexes that are within the brushSize (radius)
-                    if (distance <= tb)
-                    {
-                        int newIndex = HexGridUtility.IndexFromCoords(row, col, (int)project.MapHexFile.MapWidth);
-
-                        // if outside the bounds of map, do not paint
-                        if (newIndex >= 0 &&
-                            (row >= 0 && row < project.MapHexFile.MapHeight) &&
-                            (col >= 0 && col < project.MapHexFile.MapWidth) &&
-                            CanPaintHex(data.Swatch, newIndex))
-                        {
-                            FillSnapshotStates(data.Layer, data.Swatch, newIndex);
-                            ApplyValue(data.Layer, data.Swatch, newIndex, data.CanDisplay);
-                        }
-                    }
+                    FillSnapshotStates(data.Layer, data.Swatch, hexIndex);
+                    ApplyValue(data.Layer, data.Swatch, hexIndex, data.CanDisplay);
                 }
             }
 

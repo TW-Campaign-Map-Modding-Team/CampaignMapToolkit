@@ -154,61 +154,7 @@ namespace CAIME.Painters
 
         private void FindPath(Hex src, Hex dst)
         {
-            // Convert offset coordinates to cube coordinates
-            int cube_q1 = src.Q;
-            int cube_r1 = src.R - (src.Q - (src.Q & 1)) / 2;
-            int cube_s1 = -cube_q1 - cube_r1;
-
-            int cube_q2 = dst.Q;
-            int cube_r2 = dst.R - (dst.Q - (dst.Q & 1)) / 2;
-            int cube_s2 = -cube_q2 - cube_r2;
-
-            // Calculate the number of steps needed for interpolation
-            int numSteps = Math.Max(Math.Abs(cube_q2 - cube_q1), Math.Max(Math.Abs(cube_r2 - cube_r1), Math.Abs(cube_s2 - cube_s1)));
-
-            // Calculate the step size for interpolation
-            float stepSize = 1.0f / numSteps;
-
-            float Lerp(int a, int b, float t)
-            {
-                return a + (b - a) * t;
-            }
-
-            // Interpolate between the two points and add each interpolated hexagon to the list
-            for (int i = 1; i <= numSteps - 1; i++)
-            {
-                float t = i * stepSize;
-                float q_pos = Lerp(cube_q1, cube_q2, t);
-                float r_pos = Lerp(cube_r1, cube_r2, t);
-                float s_pos = Lerp(cube_s1, cube_s2, t);
-
-                //This part is a special type of rounding
-                int q = (int)Math.Round(q_pos);
-                int r = (int)Math.Round(r_pos);
-                int s = (int)Math.Round(s_pos);
-
-                var q_diff = Math.Abs(q - q_pos);
-                var r_diff = Math.Abs(r - r_pos);
-                var s_diff = Math.Abs(s - s_pos);
-
-                if (q_diff > r_diff && q_diff > s_diff)
-                {
-                    q = -(r + s);
-                }
-                else if (r_diff > s_diff)
-                {
-                    r = -(q + s);
-                }
-                else
-                {
-                    s = -(q + r);
-                }
-                int col = q;
-                int row = r + (q - (q & 1)) / 2;
-
-                //Add hexagon to list
-                path.Add(HexGridUtility.IndexFromCoords(row, col, (int)project.MapHexFile.MapWidth));
-            }
+            path.AddRange(HexShapes.LineBetween(src, dst, (int)project.MapHexFile.MapWidth));
         }
 
         private void AddToPath(Hex hex)
