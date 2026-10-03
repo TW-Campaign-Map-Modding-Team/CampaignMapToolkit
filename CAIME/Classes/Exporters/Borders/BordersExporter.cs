@@ -60,6 +60,8 @@ namespace CAIME
             var profiler = new ExecutionTimeProfiler();
 #endif
 
+            BorderExportOptionsViewModel.SeedGameDefaultsIfUnset(project);
+
             GenerateRegionEdges(project.MapHexFile);
 
             var exporter = new BordersExporter(project.MapHexFile);
