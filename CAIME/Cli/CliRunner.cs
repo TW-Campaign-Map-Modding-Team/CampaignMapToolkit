@@ -1,18 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using CAIME.Validators;
 
 namespace CAIME
 {
     /// <summary>
-    /// Headless command-line entry point. Runs the same map-processing operations exposed
-    /// under the GUI's "Process" and "Validate" menus without ever creating a WPF <see cref="App"/>,
-    /// so no window is shown. Invoked from <see cref="App"/>'s entry point when the executable is
-    /// started with arguments.
+    /// Headless command-line entry point. Runs the same operations the GUI exposes - processing,
+    /// validation, project creation, painting, layer import and export, queries and settings -
+    /// without ever creating a WPF <see cref="App"/>, so no window is shown. Invoked from
+    /// <see cref="App"/>'s entry point when the executable is started with arguments.
     /// </summary>
     internal static class CliRunner
     {
@@ -22,9 +20,9 @@ namespace CAIME
         /// </summary>
         public static bool IsActive { get; private set; }
 
-        private const int ExitSuccess = 0;
-        private const int ExitUsageError = 1;
-        private const int ExitProcessingError = 2;
+        private const int ExitSuccess         = CliConsole.ExitSuccess;
+        private const int ExitUsageError      = CliConsole.ExitUsageError;
+        private const int ExitProcessingError = CliConsole.ExitProcessingError;
 
         private enum ProcessTask
         {
@@ -86,6 +84,32 @@ namespace CAIME
             new TaskInfo<ValidateTask> { Task = ValidateTask.Sprawl,      Flag = "--town-sprawl",  Description = "Validate the Town Sprawl layer" },
         };
 
+        private static readonly CliCommand[] Commands = CreateCommands();
+
+        private static CliCommand[] CreateCommands()
+        {
+            var commands = new List<CliCommand>
+            {
+                new CreateCommand(),
+                new PaintCommand(),
+                new EraseCommand(),
+                new LineCommand(),
+                new FillCommand(),
+                new PickCommand(),
+                new FillSwatchesCommand(),
+                new ImportLayerCommand(),
+                new ExportLayerCommand(),
+                new QueryCommand(),
+                new ConfigCommand(),
+            };
+
+            commands.Add(new BatchCommand(
+                name => commands.OfType<MapCommand>().FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)),
+                () => commands.OfType<MapCommand>().Where(c => (c is BatchCommand) == false).Select(c => c.Name)));
+
+            return commands.ToArray();
+        }
+
         /// <summary>
         /// Parses, validates and executes a CLI invocation. Returns the process exit code.
         /// </summary>
@@ -121,10 +145,15 @@ namespace CAIME
         {
             var command = args[0];
 
-            if (IsHelpFlag(command) || string.Equals(command, "help", StringComparison.OrdinalIgnoreCase))
+            if (CliConsole.IsHelpFlag(command))
             {
                 PrintHelp();
                 return ExitSuccess;
+            }
+
+            if (string.Equals(command, "help", StringComparison.OrdinalIgnoreCase))
+            {
+                return args.Length > 1 ? Dispatch(new[] { args[1], "--help" }) : Dispatch(new[] { "--help" });
             }
 
             if (string.Equals(command, "process", StringComparison.OrdinalIgnoreCase))
@@ -135,6 +164,12 @@ namespace CAIME
             if (string.Equals(command, "validate", StringComparison.OrdinalIgnoreCase))
             {
                 return RunValidate(args.Skip(1).ToArray());
+            }
+
+            var cliCommand = Commands.FirstOrDefault(c => string.Equals(c.Name, command, StringComparison.OrdinalIgnoreCase));
+            if (cliCommand != null)
+            {
+                return cliCommand.Run(args.Skip(1).ToArray());
             }
 
             WriteError($"Unknown command '{command}'.");
@@ -219,7 +254,7 @@ namespace CAIME
             {
                 var arg = args[i];
 
-                if (IsHelpFlag(arg))
+                if (CliConsole.IsHelpFlag(arg))
                 {
                     PrintHelp();
                     return ExitSuccess;
@@ -228,7 +263,7 @@ namespace CAIME
                 if (string.Equals(arg, "--map", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(arg, "-m", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (i + 1 >= args.Length || IsOption(args[i + 1]))
+                    if (i + 1 >= args.Length || CliConsole.IsOption(args[i + 1]))
                     {
                         WriteError($"Option '{arg}' requires a path to a .hex file.");
                         return ExitUsageError;
@@ -280,26 +315,8 @@ namespace CAIME
                 return ExitUsageError;
             }
 
-            string fullPath;
-            try
+            if (CliPaths.TryResolveMapPath(mapPath, out var fullPath) == false)
             {
-                fullPath = Path.GetFullPath(mapPath);
-            }
-            catch (Exception)
-            {
-                WriteError($"Invalid map path '{mapPath}'.");
-                return ExitUsageError;
-            }
-
-            if (!string.Equals(Path.GetExtension(fullPath), ".hex", StringComparison.OrdinalIgnoreCase))
-            {
-                WriteError($"The map file must be a .hex file: '{fullPath}'.");
-                return ExitUsageError;
-            }
-
-            if (!File.Exists(fullPath))
-            {
-                WriteError($"Map file not found: '{fullPath}'.");
                 return ExitUsageError;
             }
 
@@ -417,16 +434,23 @@ namespace CAIME
             sb.AppendLine($"Campaign Map Toolkit (CAIME) {AppInfo.Version} - command line interface");
             sb.AppendLine();
             sb.AppendLine("USAGE:");
-            sb.AppendLine($"  {exe} process --map <path-to-.hex> (--all | <task> [<task> ...])");
-            sb.AppendLine($"  {exe} validate --map <path-to-.hex> (--all | <layer> [<layer> ...])");
-            sb.AppendLine($"  {exe} --help");
+            sb.AppendLine($"  {exe} <command> [options]");
+            sb.AppendLine($"  {exe} <command> --help      Show a command's options and examples.");
             sb.AppendLine();
             sb.AppendLine("COMMANDS:");
-            sb.AppendLine("  process              Process a campaign map (no window is shown).");
-            sb.AppendLine("  validate             Validate one or more campaign map layers.");
-            sb.AppendLine("  help, --help, -h     Show this help and exit.");
+            sb.AppendLine($"  {"process".PadRight(16)} Process a campaign map (no window is shown).");
+            sb.AppendLine($"  {"validate".PadRight(16)} Validate one or more campaign map layers.");
+            foreach (var command in Commands)
+            {
+                sb.AppendLine($"  {command.Name.PadRight(16)} {command.Summary}");
+            }
+
+            sb.AppendLine($"  {"help".PadRight(16)} Show this help, or 'help <command>' for one command.");
             sb.AppendLine();
-            sb.AppendLine("OPTIONS:");
+            sb.AppendLine("PROCESS AND VALIDATE:");
+            sb.AppendLine($"  {exe} process --map <path-to-.hex> (--all | <task> [<task> ...])");
+            sb.AppendLine($"  {exe} validate --map <path-to-.hex> (--all | <layer> [<layer> ...])");
+            sb.AppendLine();
             sb.AppendLine("  --map, -m <path>     Path to the project's map .hex file. Required.");
             sb.AppendLine("  --all                Run every task below, in a sensible order.");
             sb.AppendLine();
@@ -445,18 +469,22 @@ namespace CAIME
 
             sb.AppendLine();
             sb.AppendLine("NOTES:");
-            sb.AppendLine("  - The assembly kit path must already be configured per game in the GUI");
-            sb.AppendLine("    (Settings > Preferences) before running 'process'.");
+            sb.AppendLine("  - The assembly kit path must be configured for the map's game before running");
+            sb.AppendLine("    'process' - in the GUI (Settings > Preferences) or with 'config set'.");
             sb.AppendLine("  - --map-data and --dynamic-resources require the project to be saved as");
             sb.AppendLine("    map.hex under <assembly_kit>\\raw_data\\EmpireDesignData\\campaign_maps\\<map>\\.");
+            sb.AppendLine("  - Commands that edit a map save it in place unless --output is given.");
+            sb.AppendLine("  - Hexes are given as x,y - the X and Y the editor's status bar shows.");
             sb.AppendLine();
             sb.AppendLine("EXIT CODES:");
             sb.AppendLine("  0  success    1  invalid arguments    2  processing failure");
             sb.AppendLine();
             sb.AppendLine("EXAMPLES:");
             sb.AppendLine($"  {exe} process --map \"C:\\maps\\my_map\\map.hex\" --all");
-            sb.AppendLine($"  {exe} process -m map.hex --pathfinding --trade-routes");
             sb.AppendLine($"  {exe} validate -m map.hex --roads --rivers");
+            sb.AppendLine($"  {exe} create --name my_map --game warhammer3 --width 800 --height 600");
+            sb.AppendLine($"  {exe} paint -m map.hex --layer regions --swatch my_region --hex 120,45");
+            sb.AppendLine($"  {exe} query -m map.hex --hex 120,45");
 
             Console.Out.Write(sb.ToString());
         }
@@ -468,51 +496,35 @@ namespace CAIME
 
         private static string ExeName()
         {
-            try
-            {
-                return Path.GetFileName(Assembly.GetEntryAssembly()?.Location) ?? "CAIME.exe";
-            }
-            catch
-            {
-                return "CAIME.exe";
-            }
-        }
-
-        private static bool IsHelpFlag(string s)
-        {
-            return string.Equals(s, "--help", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(s, "-h", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(s, "/?", StringComparison.Ordinal);
-        }
-
-        private static bool IsOption(string s)
-        {
-            return !string.IsNullOrEmpty(s) && s.StartsWith("-", StringComparison.Ordinal);
+            return CliConsole.ExeName();
         }
 
         private static void WriteInfo(string message)
         {
-            Console.Out.WriteLine(message);
+            CliConsole.Info(message);
         }
 
         private static void WriteError(string message)
         {
-            Console.Error.WriteLine($"error: {message}");
+            CliConsole.Error(message);
         }
 
         private static void WriteUsageHint()
         {
-            Console.Out.WriteLine($"Run '{ExeName()} --help' for usage.");
+            CliConsole.UsageHint();
         }
 
         // Bridges LoggerViewModel output (raised by the exporters) to the console.
         private static void WriteLog(string message, LogLevel level)
         {
-            var writer = (level == LogLevel.Error || level == LogLevel.ErrorMessageBox)
-                ? Console.Error
-                : Console.Out;
-
-            writer.WriteLine(message);
+            if (level == LogLevel.Error || level == LogLevel.ErrorMessageBox)
+            {
+                Console.Error.WriteLine(message);
+            }
+            else
+            {
+                CliConsole.Diagnostic(message);
+            }
         }
     }
 }

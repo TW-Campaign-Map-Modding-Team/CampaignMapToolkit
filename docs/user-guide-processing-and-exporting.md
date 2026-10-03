@@ -6,7 +6,7 @@ Processing is the step that turns your painted hex map into the actual binary fi
 
 Supported games: **Rome 2, Attila, Thrones of Britannia, Warhammer, Warhammer 2, Warhammer 3, Three Kingdoms, Troy, Pharaoh, Pharaoh Dynasties**.
 
-> **Prefer the command line?** Every task in the **Process** menu can also be run from a terminal, without opening the editor — handy for scripting and batch processing. See [Using CAIME from the Command Line (CLI)](user-guide-command-line-interface.md).
+> **Prefer the command line?** Every task in the **Process** menu can also be run from a terminal, without opening the editor — handy for scripting and batch processing. So can layer import and export, painting, and creating projects. See [Using CAIME from the Command Line (CLI)](user-guide-command-line-interface.md).
 
 ---
 

@@ -367,23 +367,21 @@ namespace CAIME
 
         public Project CreateProject(string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template)
         {
-            var newProjectPath = $@"{ProjectsDir}{mapName}\";
-            
-            bool canWrite = true;
+            return CreateProject(ProjectsDir, mapName, mapWidth, mapHeight, game, template, ConfirmProjectOverwrite);
+        }
+
+        public Project CreateProject(string projectsDir, string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template, Func<bool> canOverwriteExistingProject)
+        {
+            var newProjectPath = GetProjectPath(projectsDir, mapName);
+
             if (Directory.Exists(newProjectPath))
             {
-                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
-                canWrite = res == MessageBoxResult.Yes;
-
-                if (canWrite)
+                if (canOverwriteExistingProject() == false)
                 {
-                    Directory.Delete(newProjectPath, true);
+                    return null;
                 }
-            }
 
-            if (canWrite == false)
-            {
-                return null;
+                Directory.Delete(newProjectPath, true);
             }
 
             Directory.CreateDirectory(newProjectPath);
@@ -411,6 +409,17 @@ namespace CAIME
 
                 return Open($"{newProjectPath}map.hex");
             }
+        }
+
+        public static string GetProjectPath(string projectsDir, string mapName)
+        {
+            return Path.Combine(projectsDir, mapName) + @"\";
+        }
+
+        private static bool ConfirmProjectOverwrite()
+        {
+            var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
+            return res == MessageBoxResult.Yes;
         }
 
         public void Save(SaveParameters saveParams)

@@ -104,11 +104,11 @@ namespace CAIME
 
     public class EraserToolCommand : ViewportCommand
     {
-        public static Dictionary<LayerType, Swatch> CLEAR_SWATCHES;
+        public static readonly Dictionary<LayerType, Swatch> CLEAR_SWATCHES = CreateClearSwatches();
 
-        public EraserToolCommand() : base()
+        private static Dictionary<LayerType, Swatch> CreateClearSwatches()
         {
-            CLEAR_SWATCHES = new Dictionary<LayerType, Swatch>
+            return new Dictionary<LayerType, Swatch>
             {
                 [LayerType.AreasOfInterest] = new AreaOfInterestSwatch(null, Hex.INVALID_AREA_OF_INT_INDEX, ColourTable.Zero),
                 [LayerType.Restrictions]    = new RestrictionSwatch(0),
