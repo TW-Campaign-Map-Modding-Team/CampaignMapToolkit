@@ -51,16 +51,23 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void CreateNewAreaOfInterest_WarnsPastTheSevenBitField()
+        [DataRow(0x14, 31, DisplayName = "Warhammer 3: 31 areas of interest")]
+        [DataRow(0x13, 63, DisplayName = "Three Kingdoms: 63 areas of interest")]
+        public void CreateNewAreaOfInterest_WarnsPastTheGamesLimit(int minorVersion, int limit)
         {
             var map    = MapHexHarness.BuildGrid(2, 2);
+            MapHexHarness.SetProperty(map, nameof(MapHexFile.MinorFileVersion), minorVersion);
             var editor = new MapHexEditor(map, null);
-            var limit  = (1 << MapHexFile.AREA_OF_INTEREST_INDEX_BITS) - 1;
 
-            while (map.AreasOfInterest.Count <= limit)
+            while (map.AreasOfInterest.Count < limit)
                 editor.CreateNewAreaOfInterest($"aoi_{map.AreasOfInterest.Count:D3}");
 
-            Assert.AreEqual(1, _warnings.Count, "Only the entry that passed the limit must warn.");
+            Assert.AreEqual(0, _warnings.Count, "A list that still fits must not warn.");
+
+            editor.CreateNewAreaOfInterest("zz_one_too_many");
+
+            Assert.AreEqual(1, _warnings.Count, "Passing the limit must warn.");
+            StringAssert.Contains(_warnings.Single(), $"can only store {limit}");
         }
     }
 }

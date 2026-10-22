@@ -97,11 +97,11 @@ namespace CAIME
         public readonly static int          MAX_HEX_COUNT           = 731520;
 
         // Widths of the per-hex fields that index a list. Each stores the index + 1 (0 = none), so a
-        // list can hold at most (1 << bits) - 1 entries that hexes can use.
+        // list can hold at most (1 << bits) - 1 entries that hexes can use. The Area of Interest
+        // field's width depends on the game, see AreaOfInterestIndexBits.
         public const int                    REGION_INDEX_BITS           = 13;
         public const int                    ATTRITION_INDEX_BITS        = 5;
         public const int                    CLIMATE_INDEX_BITS          = 7;
-        public const int                    AREA_OF_INTEREST_INDEX_BITS = 7;
 
         public int                          MajorFileVersion        { get; private set; }
         public int                          MinorFileVersion        { get; private set; }
@@ -1624,6 +1624,7 @@ namespace CAIME
         {
             var hexDataBytes = new byte[capacity * 16];
             var areaOfInterestShift = this.AreaOfInterestShift;
+            var areaOfInterestBits  = this.AreaOfInterestIndexBits;
 
             for (int hexIndex = 0; hexIndex < capacity; ++hexIndex)
             {
@@ -1633,7 +1634,7 @@ namespace CAIME
                 var groundTypeIndex                 = Bits.Pack(hex.GroundTypeIndex + 1, 7, "Ground type index");
                 var attritionIndex                  = Bits.Pack(hex.AttritionIndex + 1, ATTRITION_INDEX_BITS, "Attrition index");
                 var climateIndex                    = Bits.Pack(hex.ClimateIndex + 1, CLIMATE_INDEX_BITS, "Climate index");
-                var areaOfInterestIndex             = Bits.Pack(hex.InterestIndex + 1, AREA_OF_INTEREST_INDEX_BITS, "Area of interest index");
+                var areaOfInterestIndex             = Bits.Pack(hex.InterestIndex + 1, areaOfInterestBits, "Area of interest index");
 
                 var cliffBeachSeaBits               = hex.IsSea ? 0b00000001 : hex.IsBeach ? 0b00000010 : hex.IsCliff ? 0b00000011 : 0;
                 var regionIndexLowerBits            = (byte)(regionIndex << 3);
@@ -1780,10 +1781,13 @@ namespace CAIME
             }
         }
 
-        // Where the Area of Interest index + 1 starts in bytes 8-9, as CA's tools write it: Three
-        // Kingdoms (0x13) from bit 3, Warhammer 3 (0x14) from bit 4, leaving bit 3 unused. The
-        // other versions have no Area of Interest.
+        // The Area of Interest index + 1 ends at bit 8 of bytes 8-9 (bit 0 of byte 9), the last bit
+        // the Assembly Kit's map_data builder copies. Warhammer 3 (0x14) starts it at bit 4, which
+        // leaves 5 bits; bit 3 is not part of it, and what it means is unknown. Three Kingdoms (0x13)
+        // starts it at bit 3, which leaves 6 bits. The other versions have no Area of Interest.
         private int AreaOfInterestShift => MinorFileVersion == 0x13 ? 3 : 4;
+
+        public int AreaOfInterestIndexBits => 9 - AreaOfInterestShift;
 
         private void ReadHexData16(BinaryReader br, uint capacity)
         {
@@ -1803,6 +1807,7 @@ namespace CAIME
             // once per hex (~731k times on the largest maps).
             bool remapPharaohRegions = GameName == "phar";
             var areaOfInterestShift  = this.AreaOfInterestShift;
+            var areaOfInterestMask   = (1 << this.AreaOfInterestIndexBits) - 1;
 
             for (int hexIndex = 0; hexIndex < capacity; ++hexIndex)
             {
@@ -1845,7 +1850,7 @@ namespace CAIME
                 hex.GroundTypeIndex = (sbyte)((((byteValueOffset7 & 0b00000111) << 4) | (byteValueOffset6 >> 4)) - 1);
                 hex.AttritionIndex  = (sbyte)((byteValueOffset7 >> 3) - 1);
                 hex.ClimateIndex    = (sbyte)((byteValueOffset8 >> 1) - 1);
-                hex.InterestIndex   = (sbyte)(((((byteValueOffset10 << 8) | byteValueOffset9) >> areaOfInterestShift) & 0b01111111) - 1);
+                hex.InterestIndex   = (sbyte)(((((byteValueOffset10 << 8) | byteValueOffset9) >> areaOfInterestShift) & areaOfInterestMask) - 1);
                 hex.RestrictionLvl  = (byte)(byteValueOffset9 & 0b00000111);
                 hex.RegionEdgeMask  = (byte)(byteValueOffset16 >> 2);
                 hex.IsBorder        = hex.RegionEdgeMask > 0;
