@@ -22,11 +22,14 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
 
 import websocket
 
 SERVER_URL = "ws://127.0.0.1:45127/ws"
+SESSIONS_URL = "http://127.0.0.1:45127/sessions"
 STARTUP_TIMEOUT_SECONDS = 30
+SERVER_EXIT_TIMEOUT_SECONDS = 10
 
 
 class RpfmError(Exception):
@@ -85,7 +88,31 @@ class Session:
         # The server answers by closing the socket, not with a reply.
         self.last_id += 1
         self.ws.send(json.dumps({"id": self.last_id, "data": "ClientDisconnecting"}))
+        try:
+            while self.ws.recv():
+                pass
+        except (websocket.WebSocketException, OSError):
+            pass
         self.ws.close()
+        wait_for_server_exit_if_idle()
+
+
+def wait_for_server_exit_if_idle():
+    """The server exits once its last session ends, but accepts connections for a moment while
+    it shuts down; a run started then loses its connection mid-command. Wait it out."""
+    try:
+        with urllib.request.urlopen(SESSIONS_URL, timeout=2) as response:
+            if json.load(response):
+                return
+    except OSError:
+        return
+    deadline = time.time() + SERVER_EXIT_TIMEOUT_SECONDS
+    while time.time() < deadline:
+        try:
+            urllib.request.urlopen(SESSIONS_URL, timeout=1).close()
+        except OSError:
+            return
+        time.sleep(0.1)
 
 
 def select_game(session, game):

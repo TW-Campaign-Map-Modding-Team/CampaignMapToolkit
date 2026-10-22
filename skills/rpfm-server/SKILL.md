@@ -57,6 +57,13 @@ python skills/rpfm-server/rpfm_server.py --rpfm "<RPFM folder>" --game warhammer
 - `OpenPackFiles` merges every path it is given into one pack, so open packs one at a time
   to keep track of which fragment came from which pack.
 - Send `"ClientDisconnecting"` before closing. The server closes the socket without
-  replying, and exits once its last session is gone.
+  replying, and exits once its last session is gone. For about a second while it shuts
+  down it still accepts connections, then drops them, so a session opened right after the
+  last one ended fails mid-command. Wait it out: if `GET http://127.0.0.1:45127/sessions`
+  returns `[]` after disconnecting, wait for the server to exit (`GET /version` returns its
+  `pid`) before connecting again.
+- RPFM's `develop` branch replaced this protocol with JSON-RPC 2.0 (`{"jsonrpc": "2.0",
+  "method": "pack.open", ...}`) after 5.2.0 and removed the old one, so the release after
+  5.2 will need a port. The manual online already documents the new protocol, not this one.
 
 Full reference: https://frodo45127.github.io/rpfm/manual/server/overview.html

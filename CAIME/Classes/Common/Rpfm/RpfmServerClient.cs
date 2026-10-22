@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -18,7 +19,8 @@ namespace CAIME.Rpfm
     ///
     /// Every connection is its own server session with its own open packs, so CAIME neither sees nor
     /// disturbs anything the user has open in the RPFM UI, even when both share one server process.
-    /// The protocol is documented at https://frodo45127.github.io/rpfm/manual/server/ws-protocol.html.
+    /// This is the protocol of RPFM 5.0 to 5.2, documented in the v5.2.0 tag's docs/server; the
+    /// online manual already describes the JSON-RPC protocol that replaces it after 5.2.
     /// </summary>
     public sealed class RpfmServerClient : IDisposable
     {
@@ -27,21 +29,30 @@ namespace CAIME.Rpfm
         // The address rpfm_server listens on, and the one the RPFM UI itself connects to.
         private static readonly Uri ServerUri = new Uri("ws://127.0.0.1:45127/ws");
 
+        // Plain HTTP endpoints next to the WebSocket: the server's version and process id, and its sessions.
+        private static readonly Uri VersionUri  = new Uri("http://127.0.0.1:45127/version");
+        private static readonly Uri SessionsUri = new Uri("http://127.0.0.1:45127/sessions");
+
         private static readonly TimeSpan ConnectAttemptTimeout = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan ServerStartupTimeout  = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ConnectRetryDelay     = TimeSpan.FromMilliseconds(250);
         private static readonly TimeSpan DisconnectTimeout     = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan ServerExitTimeout     = TimeSpan.FromSeconds(10);
 
         private const int ReceiveChunkSize = 64 * 1024;
 
         private static readonly JsonSerializer Serializer = new JsonSerializer();
 
+        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+
         private readonly ClientWebSocket _socket;
+        private readonly int? _serverProcessId;
         private long _lastCommandId;
 
         private RpfmServerClient(ClientWebSocket socket)
         {
             _socket = socket;
+            _serverProcessId = TryGetServerProcessId();
         }
 
         /// <summary>
@@ -118,7 +129,9 @@ namespace CAIME.Rpfm
 
         /// <summary>
         /// Ends the session. Telling the server first makes it release the session's packs at once
-        /// rather than holding them through its five-minute reconnect grace period.
+        /// rather than holding them through its five-minute reconnect grace period. When this was the
+        /// server's last session, waits for the server to exit, so the next <see cref="Connect"/>
+        /// starts a new one rather than joining one that is shutting down and losing it mid-command.
         /// </summary>
         public void Dispose()
         {
@@ -128,10 +141,15 @@ namespace CAIME.Rpfm
                 {
                     using (var cancellation = new CancellationTokenSource(DisconnectTimeout))
                     {
-                        // The server closes the socket in answer rather than replying, so nothing is awaited back.
-                        Task.Run(() => SendEnvelopeAsync(++_lastCommandId, "ClientDisconnecting", cancellation.Token))
-                            .GetAwaiter().GetResult();
+                        // The server closes the socket in answer rather than replying; by then the session is gone.
+                        Task.Run(async () =>
+                        {
+                            await SendEnvelopeAsync(++_lastCommandId, "ClientDisconnecting", cancellation.Token).ConfigureAwait(false);
+                            await DrainUntilClosedAsync(cancellation.Token).ConfigureAwait(false);
+                        }).GetAwaiter().GetResult();
                     }
+
+                    WaitForServerExitIfIdle();
                 }
             }
             catch (Exception ex)
@@ -222,12 +240,85 @@ namespace CAIME.Rpfm
                 using (var cancellation = new CancellationTokenSource(ConnectAttemptTimeout))
                 using (var greeting = Task.Run(() => ReceiveMessageAsync(cancellation.Token)).GetAwaiter().GetResult())
                 {
+                    // RPFM releases after 5.2 replace this protocol with JSON-RPC, which greets differently.
+                    using (var reader = OpenReader(greeting))
+                    {
+                        if (MoveToEnvelopeMember(reader, "jsonrpc"))
+                        {
+                            throw new RpfmException(Operation,
+                                "this RPFM is newer than CAIME supports. Its server speaks a protocol CAIME does not know yet; use RPFM 5.0 to 5.2.");
+                        }
+                    }
+
                     ReadPayload<long>(greeting, Operation, "SessionConnected");
                 }
             }
             catch (Exception ex) when (ex is WebSocketException || ex is OperationCanceledException || ex is JsonException)
             {
                 throw new RpfmException(Operation, $"no session greeting was received. {ex.Message}");
+            }
+        }
+
+        private static int? TryGetServerProcessId()
+        {
+            try
+            {
+                var version = JObject.Parse(Task.Run(() => Http.GetStringAsync(VersionUri)).GetAwaiter().GetResult());
+                return (int?)version["pid"];
+            }
+            // Only an optimisation for Dispose, so a server without the endpoint is no failure.
+            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+            {
+                return null;
+            }
+        }
+
+        // The server exits as soon as its last session ends, but keeps accepting connections for a
+        // moment while it shuts down.
+        private void WaitForServerExitIfIdle()
+        {
+            if (_serverProcessId == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (JArray.Parse(Task.Run(() => Http.GetStringAsync(SessionsUri)).GetAwaiter().GetResult()).Count > 0)
+                {
+                    return;
+                }
+            }
+            // Already stopped answering: it is on its way out.
+            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+            {
+            }
+
+            try
+            {
+                using (var server = Process.GetProcessById(_serverProcessId.Value))
+                {
+                    server.WaitForExit((int)ServerExitTimeout.TotalMilliseconds);
+                }
+            }
+            // Already exited.
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        private async Task DrainUntilClosedAsync(CancellationToken cancellation)
+        {
+            try
+            {
+                while (true)
+                {
+                    (await ReceiveMessageAsync(cancellation).ConfigureAwait(false)).Dispose();
+                }
+            }
+            // How the server's close arrives; it is the answer awaited here.
+            catch (WebSocketException)
+            {
             }
         }
 
