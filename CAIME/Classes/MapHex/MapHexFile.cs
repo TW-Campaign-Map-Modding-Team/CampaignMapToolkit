@@ -96,6 +96,13 @@ namespace CAIME
 
         public readonly static int          MAX_HEX_COUNT           = 731520;
 
+        // Widths of the per-hex fields that index a list. Each stores the index + 1 (0 = none), so a
+        // list can hold at most (1 << bits) - 1 entries that hexes can use.
+        public const int                    REGION_INDEX_BITS           = 13;
+        public const int                    ATTRITION_INDEX_BITS        = 5;
+        public const int                    CLIMATE_INDEX_BITS          = 7;
+        public const int                    AREA_OF_INTEREST_INDEX_BITS = 7;
+
         public int                          MajorFileVersion        { get; private set; }
         public int                          MinorFileVersion        { get; private set; }
 
@@ -1579,10 +1586,10 @@ namespace CAIME
             {
                 var hex                         = hexData[hexIndex];
 
-                var regionIndex                 = Bits.Pack(hex.RegionId + 1, 13, "Region index");
+                var regionIndex                 = Bits.Pack(hex.RegionId + 1, REGION_INDEX_BITS, "Region index");
                 var groundTypeIndex             = Bits.Pack(hex.GroundTypeIndex + 1, 7, "Ground type index");
-                var attritionIndex              = Bits.Pack(hex.AttritionIndex + 1, 5, "Attrition index");
-                var climateIndex                = Bits.Pack(hex.ClimateIndex + 1, 7, "Climate index");
+                var attritionIndex              = Bits.Pack(hex.AttritionIndex + 1, ATTRITION_INDEX_BITS, "Attrition index");
+                var climateIndex                = Bits.Pack(hex.ClimateIndex + 1, CLIMATE_INDEX_BITS, "Climate index");
                 
                 var cliffBeachSeaBits           = hex.IsSea ? 0b00000001 : hex.IsBeach ? 0b00000010 : hex.IsCliff ? 0b00000011 : 0;
                 var regionIndexLowerBits        = (byte)(regionIndex << 3);
@@ -1621,11 +1628,11 @@ namespace CAIME
             {
                 var hex                             = hexData[hexIndex];
 
-                var regionIndex                     = Bits.Pack(hex.RegionId + 1, 13, "Region index");
+                var regionIndex                     = Bits.Pack(hex.RegionId + 1, REGION_INDEX_BITS, "Region index");
                 var groundTypeIndex                 = Bits.Pack(hex.GroundTypeIndex + 1, 7, "Ground type index");
-                var attritionIndex                  = Bits.Pack(hex.AttritionIndex + 1, 5, "Attrition index");
-                var climateIndex                    = Bits.Pack(hex.ClimateIndex + 1, 7, "Climate index");
-                var areaOfInterestIndex             = hex.InterestIndex + 1;
+                var attritionIndex                  = Bits.Pack(hex.AttritionIndex + 1, ATTRITION_INDEX_BITS, "Attrition index");
+                var climateIndex                    = Bits.Pack(hex.ClimateIndex + 1, CLIMATE_INDEX_BITS, "Climate index");
+                var areaOfInterestIndex             = Bits.Pack(hex.InterestIndex + 1, AREA_OF_INTEREST_INDEX_BITS, "Area of interest index");
 
                 var cliffBeachSeaBits               = hex.IsSea ? 0b00000001 : hex.IsBeach ? 0b00000010 : hex.IsCliff ? 0b00000011 : 0;
                 var regionIndexLowerBits            = (byte)(regionIndex << 3);
@@ -1642,7 +1649,9 @@ namespace CAIME
                 var groundTypeUpperBits             = (byte)((groundTypeIndex >> 4) & 0b00000111);
                 var attritionBits                   = (byte)(attritionIndex << 3);
                 var climateBits                     = (byte)(climateIndex << 1);
-                var areaOfInterestBits              = (byte)(areaOfInterestIndex << 3);
+                // Bits 4-10 of bytes 8-9, as CA's tools write it. Bit 3 is not part of the field.
+                var areaOfInterestLowerBits         = (byte)(areaOfInterestIndex << 4);
+                var areaOfInterestUpperBits         = (byte)(areaOfInterestIndex >> 4);
                 var restrictionBits                 = (byte)(hex.RestrictionLvl);
                 var regionHexEdgeMask               = (byte)(hex.RegionEdgeMask << 2);
 
@@ -1654,8 +1663,8 @@ namespace CAIME
                 hexDataBytes[hexIndex * 16 + 5]     = (byte)(groundTypeLowerBits | tradeRouteMaskUpper);
                 hexDataBytes[hexIndex * 16 + 6]     = (byte)(groundTypeUpperBits | attritionBits);
                 hexDataBytes[hexIndex * 16 + 7]     = climateBits;
-                hexDataBytes[hexIndex * 16 + 8]     = (byte)(areaOfInterestBits | restrictionBits);
-                hexDataBytes[hexIndex * 16 + 9]     = 0; // Reserved
+                hexDataBytes[hexIndex * 16 + 8]     = (byte)(areaOfInterestLowerBits | restrictionBits);
+                hexDataBytes[hexIndex * 16 + 9]     = areaOfInterestUpperBits;
                 hexDataBytes[hexIndex * 16 + 10]    = 0; // Reserved
                 hexDataBytes[hexIndex * 16 + 11]    = 0; // Reserved
                 hexDataBytes[hexIndex * 16 + 12]    = 0; // Reserved
@@ -1782,6 +1791,7 @@ namespace CAIME
             byte byteValueOffset7;
             byte byteValueOffset8;
             byte byteValueOffset9;
+            byte byteValueOffset10;
             byte byteValueOffset16;
 
             // Hoisted out of the per-hex loop - comparing the string once instead of
@@ -1804,7 +1814,7 @@ namespace CAIME
                 byteValueOffset7    = br.ReadByte();
                 byteValueOffset8    = br.ReadByte();
                 byteValueOffset9    = br.ReadByte();
-                br.ReadByte();      // Reserved
+                byteValueOffset10   = br.ReadByte();
                 br.ReadByte();      // Reserved
                 br.ReadByte();      // Reserved
                 br.ReadByte();      // Reserved
@@ -1829,7 +1839,7 @@ namespace CAIME
                 hex.GroundTypeIndex = (sbyte)((((byteValueOffset7 & 0b00000111) << 4) | (byteValueOffset6 >> 4)) - 1);
                 hex.AttritionIndex  = (sbyte)((byteValueOffset7 >> 3) - 1);
                 hex.ClimateIndex    = (sbyte)((byteValueOffset8 >> 1) - 1);
-                hex.InterestIndex   = (sbyte)((byteValueOffset9 >> 3) - 1);
+                hex.InterestIndex   = (sbyte)((((byteValueOffset10 & 0b00000111) << 4) | (byteValueOffset9 >> 4)) - 1);
                 hex.RestrictionLvl  = (byte)(byteValueOffset9 & 0b00000111);
                 hex.RegionEdgeMask  = (byte)(byteValueOffset16 >> 2);
                 hex.IsBorder        = hex.RegionEdgeMask > 0;

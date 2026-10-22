@@ -67,6 +67,8 @@ namespace CAIME
 
             this.SortAreasOfInterest();
 
+            WarnIfPastFileLimit(MapHexFile.AreasOfInterest.Count, MapHexFile.AREA_OF_INTEREST_INDEX_BITS, "areas of interest");
+
             newAreaOfInterestIndex = (sbyte)MapHexFile.AreasOfInterest.IndexOf(name);
 
             this.UpdateAreaOfInterestIndices(newAreaOfInterestIndex, ChangeOperation.Create);

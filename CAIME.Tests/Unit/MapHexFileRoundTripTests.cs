@@ -153,7 +153,7 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(loaded.IsBorder,     "IsBorder without a region edge mask");
         }
 
-        // Restriction level shares byte 8 with the Area of Interest index (AoI bits 3+, restrictions
+        // Restriction level shares byte 8 with the Area of Interest index (AoI bits 4+, restrictions
         // bits 0-2), so only levels 0-7 survive a round trip.
         [TestMethod]
         public void SaveThenLoad_PreservesRestrictionLevelsZeroToSeven_AlongsideAreaOfInterest()
@@ -177,6 +177,31 @@ namespace CAIME.Tests.Unit
                 Assert.AreEqual(2, reloaded.HexData[level].InterestIndex,
                     $"Restriction level {level} corrupted the Area of Interest index sharing its byte.");
             }
+        }
+
+        // CA's tools store the Area of Interest index + 1 in bits 4-10 of bytes 8-9 (bit 3 is not part
+        // of it), and the Assembly Kit's map_data builder reads it from there. Index 16 is the first
+        // that reaches byte 9.
+        [TestMethod]
+        public void Save_WritesAreaOfInterestFromBitFourIntoByteNine()
+        {
+            var map = CreateAndLoad(0x14, "warhammer3", width: 4, height: 4);
+            for (int i = 0; i < 17; ++i)
+                map.AreasOfInterest.Add($"aoi_{i}");
+
+            map.HexData[0].InterestIndex  = 16;
+            map.HexData[0].RestrictionLvl = 5;
+
+            Assert.IsTrue(map.Save(_dir, "map"), "Save returned false.");
+
+            // The hex records are followed by one 4-byte trailing block (count, size, blob) and the CRC.
+            var bytes = File.ReadAllBytes(Path.Combine(_dir, "map.hex"));
+            var hex0  = bytes.Length - 4 - 12 - 16 * 16;
+
+            Assert.AreEqual(0b0001_0101, bytes[hex0 + 8], "Byte 8: index + 1 = 17 has low bits 0001 at bits 4-7, restriction 5 at bits 0-2.");
+            Assert.AreEqual(0b0000_0001, bytes[hex0 + 9], "Byte 9: bit 4 of index + 1 = 17.");
+
+            Assert.AreEqual(16, Load("map").HexData[0].InterestIndex, "InterestIndex");
         }
 
         // Rome II uses the 8-byte layout, which has no Area of Interest, trade route or region edge field.

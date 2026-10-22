@@ -65,6 +65,8 @@ namespace CAIME
 
             MapHexFile.Climates.Sort(StringComparer.Ordinal);
 
+            WarnIfPastFileLimit(MapHexFile.Climates.Count, MapHexFile.CLIMATE_INDEX_BITS, "climates");
+
             var newClimateIndex = (sbyte)MapHexFile.Climates.IndexOf(name);
             this.UpdateClimateIndices(newClimateIndex, ChangeOperation.Create);
             OnClimateCreated?.Invoke(this, new CreateClimateEvent(name, newClimateIndex));
