@@ -22,9 +22,10 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Warns once a list grows past what its per-hex index field can store. The lists are kept
-        /// sorted, so the entries past the limit are the last ones by name, and saving fails once a hex
-        /// uses one of them.
+        /// Warns once a list grows past what its per-hex index field can store. The entry is still
+        /// added: map.hex keeps any number of names, and only hexes are limited. The lists are kept
+        /// sorted, so the entries past the limit are the last ones by name, and saving fails once a
+        /// hex uses one of them.
         /// </summary>
         private static void WarnIfPastFileLimit(int count, int indexBits, string entries)
         {
@@ -33,7 +34,7 @@ namespace CAIME
             if (count > limit)
             {
                 LoggerViewModel.Log(
-                    $"The map now has {count} {entries}, but map.hex can only store {limit}. " +
+                    $"The map now has {count} {entries}, but hexes can only use the first {limit}. " +
                     $"Painting hexes with the last {count - limit} by name will make the map fail to save.",
                     LogLevel.Warning);
             }

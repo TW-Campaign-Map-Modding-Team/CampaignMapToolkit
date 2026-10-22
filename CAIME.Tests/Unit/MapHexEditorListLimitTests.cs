@@ -47,7 +47,7 @@ namespace CAIME.Tests.Unit
             editor.CreateNewAttrition("zz_one_too_many");
 
             Assert.AreEqual(1, _warnings.Count, "Passing the limit must warn.");
-            StringAssert.Contains(_warnings.Single(), $"can only store {limit}");
+            StringAssert.Contains(_warnings.Single(), $"can only use the first {limit}");
         }
 
         [TestMethod]
@@ -67,7 +67,8 @@ namespace CAIME.Tests.Unit
             editor.CreateNewAreaOfInterest("zz_one_too_many");
 
             Assert.AreEqual(1, _warnings.Count, "Passing the limit must warn.");
-            StringAssert.Contains(_warnings.Single(), $"can only store {limit}");
+            Assert.AreEqual(limit + 1, map.AreasOfInterest.Count, "The entry past the limit must still be added.");
+            StringAssert.Contains(_warnings.Single(), $"can only use the first {limit}");
         }
     }
 }

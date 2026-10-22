@@ -208,6 +208,24 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(index, Load("map").HexData[0].InterestIndex, "InterestIndex");
         }
 
+        // Only hexes are limited: a Warhammer 3 list can hold more than 31 names (Immortal Empires
+        // Expanded has 44), as long as no hex uses the ones past index 30.
+        [TestMethod]
+        public void SaveThenLoad_WarhammerThreeKeepsAreasOfInterestPastTheHexLimit()
+        {
+            var map = CreateAndLoad(0x14, "warhammer3", width: 4, height: 4);
+            for (int i = 0; i < 44; ++i)
+                map.AreasOfInterest.Add($"aoi_{i:D2}");
+
+            map.HexData[0].InterestIndex = 30;
+
+            Assert.IsTrue(map.Save(_dir, "map"), "Save returned false.");
+
+            var reloaded = Load("map");
+            CollectionAssert.AreEqual(map.AreasOfInterest, reloaded.AreasOfInterest, "Areas of interest list");
+            Assert.AreEqual(30, reloaded.HexData[0].InterestIndex, "InterestIndex");
+        }
+
         // The Assembly Kit's map_data builder ignores byte 9 past bit 0, so Warhammer 3 hexes can use
         // only the first 31 areas of interest. Saving past that must fail rather than lose the index.
         [TestMethod]
