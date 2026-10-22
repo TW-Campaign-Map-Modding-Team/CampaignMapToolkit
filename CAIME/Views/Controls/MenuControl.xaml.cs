@@ -44,6 +44,11 @@ namespace CAIME
             _viewModel.Open();
         }
 
+        private void ImportMapData_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.ImportMapData();
+        }
+
         /// <summary>
         /// Reload project click handler
         /// </summary>

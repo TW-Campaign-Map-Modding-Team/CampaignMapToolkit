@@ -677,6 +677,22 @@ To view validator output, open the Logger panel with **Tools → Show Logger** (
 |---|---|
 | `campaign_map_areas_of_interest` | Add a row per new area of interest (`campaign_map` + `key`) |
 
+#### Starting from a map_data.esf
+
+If you have a Warhammer III map's `map_data.esf` but not its `map.hex` — for example a map from another mod's pack — use **Tools → Import → map_data.esf** and pick the file. CAIME rebuilds the `map.hex` and opens it as a new project in `Projects\[MapName]\`. The map is named after the folder the file is in, so extract the file with its `campaign_maps\[MapName]\` folder, or rename the map afterwards with **Edit → Rename map**.
+
+The import recovers regions and their colours, ground types, climates, attritions, areas of interest, roads, rivers, land and sea, beaches, cliffs, bridges, impassable hexes, town slots and town sprawl. Region borders are recalculated. Two things are not in `map_data.esf` and start empty:
+
+| Layer | After import |
+|---|---|
+| **Restrictions** | Empty. Repaint them before you process pathfinding data |
+| **Trade Routes** | Empty (not used by Warhammer III) |
+
+Two things are inferred, because `map_data.esf` does not record them directly:
+
+- **Impassable coast.** Whether an impassable hex on the coast is a beach or a cliff is not stored. CAIME makes it a beach when it touches a passable beach hex, and a cliff otherwise. This matches CA's own maps on about 97–99% of such hexes and does not change the `map_data.esf` you process from the map.
+- **Sea ground types.** `map_data.esf` keeps land and sea ground types in one list. CAIME tells them apart by the ground under passable sea. A map with no passable sea at all imports every ground type as land and says so in the log; **Tools → Validate → Ground types** then reports each ground type the database marks as sea.
+
 ---
 
 ### Three Kingdoms

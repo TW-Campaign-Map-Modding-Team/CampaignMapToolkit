@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Xml.Linq;
+using CAIME.Classes.Importers;
 using CAIME.Exporters;
 using CAIME.TradeNetwork;
 using Microsoft.WindowsAPICodePack.Dialogs;
@@ -352,26 +353,11 @@ namespace CAIME
 
         public Project CreateProject(string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template)
         {
-            var newProjectPath = $@"{ProjectsDir}{mapName}\";
-            
-            bool canWrite = true;
-            if (Directory.Exists(newProjectPath))
-            {
-                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
-                canWrite = res == MessageBoxResult.Yes;
-
-                if (canWrite)
-                {
-                    Directory.Delete(newProjectPath, true);
-                }
-            }
-
-            if (canWrite == false)
+            var newProjectPath = CreateProjectDirectory(mapName);
+            if (newProjectPath == null)
             {
                 return null;
             }
-
-            Directory.CreateDirectory(newProjectPath);
 
             if (template == TEMPLATE_NONE)
             {
@@ -395,6 +381,70 @@ namespace CAIME
 
                 return Open($"{newProjectPath}map.hex");
             }
+        }
+
+        /// <summary>
+        /// Creates a project from a Warhammer III map_data.esf by rebuilding the map.hex it was
+        /// built from. The map is named after the folder the file is in, which for a file taken
+        /// from a pack's campaign_maps folder is the campaign map's name.
+        /// </summary>
+        public Project ImportMapData(string mapDataEsfPath)
+        {
+            const GameTemplate game = GameTemplate.Warhammer3;
+
+            var mapName = StringHelper.NameFixup(Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(mapDataEsfPath))));
+            if (string.IsNullOrEmpty(mapName))
+            {
+                // An empty name would make the Projects folder itself the project folder.
+                LoggerViewModel.Log($"{mapDataEsfPath} is not in a folder to name the map after. Put it in a folder named after the campaign map and import it again.", LogLevel.ErrorMessageBox);
+                return null;
+            }
+
+            try
+            {
+                var contents = Wh3MapDataReader.Read(mapDataEsfPath);
+
+                var newProjectPath = CreateProjectDirectory(mapName);
+                if (newProjectPath == null)
+                {
+                    return null;
+                }
+
+                var mapHexFile = MapHexFile.CreateMapHex(newProjectPath, "map", GetGameNameFromGame(game), mapName, contents.Width, contents.Height, GetMapHexVersion(game));
+                MapDataImporter.Import(contents, mapHexFile);
+                mapHexFile.Save(newProjectPath, "map");
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log($"EXCEPTION: {ex}", LogLevel.Debug);
+                LoggerViewModel.Log($"{mapDataEsfPath} could not be imported.\n\nReason: {ex.Message}", LogLevel.ErrorMessageBox);
+                return null;
+            }
+
+            LoggerViewModel.Log($"Imported {mapDataEsfPath} as campaign map '{mapName}'. Trade routes and restriction levels are not in map_data.esf and have been left empty.", LogLevel.Info);
+
+            return Open($@"{ProjectsDir}{mapName}\map.hex");
+        }
+
+        /// <returns>The new project's folder, or null when the user declines to overwrite an existing one.</returns>
+        private string CreateProjectDirectory(string mapName)
+        {
+            var newProjectPath = $@"{ProjectsDir}{mapName}\";
+
+            if (Directory.Exists(newProjectPath))
+            {
+                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
+                if (res != MessageBoxResult.Yes)
+                {
+                    return null;
+                }
+
+                Directory.Delete(newProjectPath, true);
+            }
+
+            Directory.CreateDirectory(newProjectPath);
+
+            return newProjectPath;
         }
 
         public void Save(SaveParameters saveParams)

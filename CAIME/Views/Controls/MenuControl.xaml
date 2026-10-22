@@ -134,6 +134,10 @@
                           Click="ImportLayerData_Click"
                           IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
                                               Path=IsImportLayerDataEnabled}"/>
+                <MenuItem Header="map__data.esf"
+                          Click="ImportMapData_Click"
+                          IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
+                                              Path=IsLoadItemEnabled}"/>
             </MenuItem>
 
             <MenuItem Header="Export">

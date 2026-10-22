@@ -391,6 +391,25 @@ namespace CAIME
             }
         }
 
+        public void ImportMapData()
+        {
+            var dialog = new OpenFileDialog()
+            {
+                Title  = "Import a Warhammer III map_data.esf",
+                Filter = "map_data.esf|map_data.esf"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (ProjectManager.IsProjectOpen)
+                {
+                    ProjectManager.CloseProject();
+                }
+
+                ProjectManager.ImportMapData(dialog.FileName);
+            }
+        }
+
         public void ReloadProject()
         {
             if (ProjectManager.IsProjectOpen)

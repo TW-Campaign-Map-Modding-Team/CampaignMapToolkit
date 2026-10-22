@@ -163,6 +163,7 @@ The **Process** menu converts your painted layers into the actual binary data fi
 | **Map Data Editor** | Ctrl+M | Opens the Map Data Editor tool |
 | **Shader Resolution Corrector** | — | Patches the UI-overlay resolution baked into one or two compiled shaders (.fxc). Three Kingdoms projects only |
 | **Import > Layer data** | — | Imports a previously exported layer image back into the project |
+| **Import > map_data.esf** | — | Creates a project from a Warhammer III `map_data.esf` by rebuilding the `map.hex` it was made from. See [Starting from a map_data.esf](user-guide-modifying-an-existing-map.md#starting-from-a-map_dataesf) |
 | **Export > SVG Borders** | — | Exports region borders as an SVG vector image |
 | **Export > Baseline Tilemap image** | — | Generates a baseline tilemap reference image |
 | **Export > Layer data** | — | Exports the currently active layer as an image file |
