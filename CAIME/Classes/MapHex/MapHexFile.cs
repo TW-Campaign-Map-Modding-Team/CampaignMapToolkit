@@ -1623,6 +1623,7 @@ namespace CAIME
         private void WriteHexData16(BinaryWriter bw, uint capacity, Hex[] hexData)
         {
             var hexDataBytes = new byte[capacity * 16];
+            var areaOfInterestShift = this.AreaOfInterestShift;
 
             for (int hexIndex = 0; hexIndex < capacity; ++hexIndex)
             {
@@ -1649,9 +1650,8 @@ namespace CAIME
                 var groundTypeUpperBits             = (byte)((groundTypeIndex >> 4) & 0b00000111);
                 var attritionBits                   = (byte)(attritionIndex << 3);
                 var climateBits                     = (byte)(climateIndex << 1);
-                // Bits 4-10 of bytes 8-9, as CA's tools write it. Bit 3 is not part of the field.
-                var areaOfInterestLowerBits         = (byte)(areaOfInterestIndex << 4);
-                var areaOfInterestUpperBits         = (byte)(areaOfInterestIndex >> 4);
+                var areaOfInterestLowerBits         = (byte)(areaOfInterestIndex << areaOfInterestShift);
+                var areaOfInterestUpperBits         = (byte)(areaOfInterestIndex >> (8 - areaOfInterestShift));
                 var restrictionBits                 = (byte)(hex.RestrictionLvl);
                 var regionHexEdgeMask               = (byte)(hex.RegionEdgeMask << 2);
 
@@ -1780,6 +1780,11 @@ namespace CAIME
             }
         }
 
+        // Where the Area of Interest index + 1 starts in bytes 8-9, as CA's tools write it: Three
+        // Kingdoms (0x13) from bit 3, Warhammer 3 (0x14) from bit 4, leaving bit 3 unused. The
+        // other versions have no Area of Interest.
+        private int AreaOfInterestShift => MinorFileVersion == 0x13 ? 3 : 4;
+
         private void ReadHexData16(BinaryReader br, uint capacity)
         {
             byte byteValueOffset1;
@@ -1797,6 +1802,7 @@ namespace CAIME
             // Hoisted out of the per-hex loop - comparing the string once instead of
             // once per hex (~731k times on the largest maps).
             bool remapPharaohRegions = GameName == "phar";
+            var areaOfInterestShift  = this.AreaOfInterestShift;
 
             for (int hexIndex = 0; hexIndex < capacity; ++hexIndex)
             {
@@ -1839,7 +1845,7 @@ namespace CAIME
                 hex.GroundTypeIndex = (sbyte)((((byteValueOffset7 & 0b00000111) << 4) | (byteValueOffset6 >> 4)) - 1);
                 hex.AttritionIndex  = (sbyte)((byteValueOffset7 >> 3) - 1);
                 hex.ClimateIndex    = (sbyte)((byteValueOffset8 >> 1) - 1);
-                hex.InterestIndex   = (sbyte)((((byteValueOffset10 & 0b00000111) << 4) | (byteValueOffset9 >> 4)) - 1);
+                hex.InterestIndex   = (sbyte)(((((byteValueOffset10 << 8) | byteValueOffset9) >> areaOfInterestShift) & 0b01111111) - 1);
                 hex.RestrictionLvl  = (byte)(byteValueOffset9 & 0b00000111);
                 hex.RegionEdgeMask  = (byte)(byteValueOffset16 >> 2);
                 hex.IsBorder        = hex.RegionEdgeMask > 0;

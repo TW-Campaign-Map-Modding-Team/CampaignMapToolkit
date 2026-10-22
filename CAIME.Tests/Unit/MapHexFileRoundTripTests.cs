@@ -179,29 +179,32 @@ namespace CAIME.Tests.Unit
             }
         }
 
-        // CA's tools store the Area of Interest index + 1 in bits 4-10 of bytes 8-9 (bit 3 is not part
-        // of it), and the Assembly Kit's map_data builder reads it from there. Index 16 is the first
-        // that reaches byte 9.
+        // CA's tools store the Area of Interest index + 1 across bytes 8-9: Warhammer 3 from bit 4
+        // (bit 3 unused), Three Kingdoms from bit 3. Index 32 reaches byte 9 in both.
         [TestMethod]
-        public void Save_WritesAreaOfInterestFromBitFourIntoByteNine()
+        [DataRow(0x14, "warhammer3",     0b0001_0101, 0b0000_0010, DisplayName = "Warhammer 3: from bit 4")]
+        [DataRow(0x13, "three_kingdoms", 0b0000_1101, 0b0000_0001, DisplayName = "Three Kingdoms: from bit 3")]
+        public void Save_WritesAreaOfInterestAtTheGamesBitPosition(int minorVersion, string gameName, int expectedByte8, int expectedByte9)
         {
-            var map = CreateAndLoad(0x14, "warhammer3", width: 4, height: 4);
-            for (int i = 0; i < 17; ++i)
-                map.AreasOfInterest.Add($"aoi_{i}");
+            var map = CreateAndLoad(minorVersion, gameName, width: 4, height: 4);
+            for (int i = 0; i < 33; ++i)
+                map.AreasOfInterest.Add($"aoi_{i:D2}");
 
-            map.HexData[0].InterestIndex  = 16;
+            map.HexData[0].InterestIndex  = 32;
             map.HexData[0].RestrictionLvl = 5;
 
             Assert.IsTrue(map.Save(_dir, "map"), "Save returned false.");
 
-            // The hex records are followed by one 4-byte trailing block (count, size, blob) and the CRC.
-            var bytes = File.ReadAllBytes(Path.Combine(_dir, "map.hex"));
-            var hex0  = bytes.Length - 4 - 12 - 16 * 16;
+            // The hex records are followed by the CRC and, in Warhammer 3, one 4-byte trailing block
+            // (count, size, blob) before it.
+            var bytes    = File.ReadAllBytes(Path.Combine(_dir, "map.hex"));
+            var trailing = minorVersion == 0x14 ? 12 : 0;
+            var hex0     = bytes.Length - 4 - trailing - 16 * 16;
 
-            Assert.AreEqual(0b0001_0101, bytes[hex0 + 8], "Byte 8: index + 1 = 17 has low bits 0001 at bits 4-7, restriction 5 at bits 0-2.");
-            Assert.AreEqual(0b0000_0001, bytes[hex0 + 9], "Byte 9: bit 4 of index + 1 = 17.");
+            Assert.AreEqual(expectedByte8, bytes[hex0 + 8], "Byte 8: low bits of index + 1 = 33, and restriction 5 at bits 0-2.");
+            Assert.AreEqual(expectedByte9, bytes[hex0 + 9], "Byte 9: the high bits of index + 1 = 33.");
 
-            Assert.AreEqual(16, Load("map").HexData[0].InterestIndex, "InterestIndex");
+            Assert.AreEqual(32, Load("map").HexData[0].InterestIndex, "InterestIndex");
         }
 
         // Rome II uses the 8-byte layout, which has no Area of Interest, trade route or region edge field.
