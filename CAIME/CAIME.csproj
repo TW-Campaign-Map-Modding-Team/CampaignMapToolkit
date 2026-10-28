@@ -334,6 +334,7 @@
     <Compile Include="Classes\Exporters\MapData\MapDataRegionLinks.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataSettlement.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataSlotSettlement.cs" />
+    <Compile Include="Classes\Exporters\MapData\PharaohMapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />

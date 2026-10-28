@@ -10,7 +10,7 @@ namespace CAIME.Exporters
         /// <summary>Warhammer III: a REGION_AREA_INDEX block of (region, area) entries.</summary>
         Blocks,
 
-        /// <summary>Attila: a u16 array of area &lt;&lt; 9 | region.</summary>
+        /// <summary>Attila and Pharaoh: a u16 array of area &lt;&lt; 9 | region.</summary>
         PackedArray,
     }
 
@@ -97,7 +97,7 @@ namespace CAIME.Exporters
             WriteRegionLinks(esf, "CONNECTIVITY_DIRECT_TRAVERSABLE_OTHER", model.Links.TraversableOther[region]);
             WriteRegionLinks(esf, "CONNECTIVITY_DIRECT_NONTRAVERSABLE_OTHER", model.Links.NonTraversableOther[region]);
 
-            // No Warhammer III or Attila map has an entry here.
+            // No Warhammer III, Attila or Pharaoh map has an entry here.
             WriteRegionLinks(esf, "CONNECTIVITY_LAND_INDIRECT_VIA_FORD", new List<MapDataRegionLink>());
         }
 
@@ -147,6 +147,43 @@ namespace CAIME.Exporters
             }
 
             esf.EndBlock();
+        }
+
+        /// <summary>An area as Attila and Pharaoh reference it: area &lt;&lt; 9 | region.</summary>
+        public static ushort PackedAreaReference(MapDataArea area)
+        {
+            return (ushort)((area.IndexInRegion << PACKED_AREA_SHIFT) | area.Region);
+        }
+
+        /// <summary>
+        /// A settlement with building slots (Attila and Pharaoh): its footprint, its slots and its
+        /// port. With <paramref name="portIncludesMainSlot"/> (Pharaoh), a port also lists the main
+        /// slot's hexes after its own and takes the main slot's positions, as Warhammer III's does.
+        /// </summary>
+        public static void WriteSlotSettlement(EsfWriter esf, MapDataGrid grid, MapDataSlotSettlement settlement, bool portIncludesMainSlot = false)
+        {
+            esf.BeginRecord("SETTLEMENT_INFO", 0);
+            WriteFootprint(esf, settlement.FootprintMinColumn, settlement.FootprintMinRow,
+                           settlement.FootprintMaxColumn, settlement.FootprintMaxRow, settlement.FootprintBits);
+
+            esf.BeginBlock("SLOT_ARRAY_BLOCK", 0);
+            foreach (var slot in settlement.Slots)
+            {
+                esf.BeginBlockEntry();
+                WriteHexList(esf, grid, "SLOT_POSITIONS_BLOCK", slot.Positions);
+                WriteHexList(esf, grid, "SLOT_AREA_BLOCK", slot.Hexes);
+                esf.EndBlockEntry();
+            }
+
+            esf.EndBlock();
+
+            var port        = settlement.Port;
+            bool addMain    = portIncludesMainSlot && port.Hexes.Count > 0;
+            var mainSlot    = settlement.Slots[0];
+
+            WriteHexList(esf, grid, "PORT_POSITIONS_BLOCK", addMain ? port.Positions.Concat(mainSlot.Positions) : port.Positions);
+            WriteHexList(esf, grid, "PORT_AREA_BLOCK", addMain ? port.Hexes.Concat(mainSlot.Hexes) : port.Hexes);
+            esf.EndRecord();
         }
 
         /// <summary>A footprint: its hex rectangle, its width, and one bit per hex, row by row, lowest bit first.</summary>
@@ -213,7 +250,7 @@ namespace CAIME.Exporters
         {
             if (references == MapDataAreaReferences.PackedArray)
             {
-                esf.WriteUInt16Array(areaIds.Select(areaId => (ushort)((areas.Areas[areaId].IndexInRegion << PACKED_AREA_SHIFT) | areas.Areas[areaId].Region)).ToList());
+                esf.WriteUInt16Array(areaIds.Select(areaId => PackedAreaReference(areas.Areas[areaId])).ToList());
                 return;
             }
 

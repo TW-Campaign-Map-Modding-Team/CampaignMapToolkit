@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CAIME.Classes.Importers;
 
 namespace CAIME.Exporters
 {
-    /// <summary>One building slot of an Attila settlement.</summary>
+    /// <summary>One building slot of an Attila or Pharaoh settlement.</summary>
     public sealed class MapDataSlot
     {
         /// <summary>The slot's hexes, column by column.</summary>
@@ -16,15 +17,19 @@ namespace CAIME.Exporters
         /// TODO: where these come from is not known. In main_attila_map they are not marked by any
         /// map.hex bit, and are not the hexes nearest the slot's centroid or bounding-box centre,
         /// nor its innermost hexes. Their shapes (one hex, two, a triangle of three, up to a hex
-        /// and its six neighbours) suggest building footprints from another source. Left empty.
+        /// and its six neighbours) suggest building footprints from another source. In phar_main
+        /// every main slot of seven hexes (a hexagon) lists its centre and then its first hex, but
+        /// a port town's main slot of four lists one hex that is sometimes the one furthest from
+        /// the port and sometimes one beside it, so they are not worked out from the slot either.
+        /// Neither template map.hex has them. Left empty.
         /// </summary>
         public List<int> Positions  { get; } = new List<int>();
     }
 
     /// <summary>
-    /// An Attila settlement: a slot for each map.hex town slot index the region uses (the main
-    /// slot, 0, then 2 upwards), the port (slot 1), and a footprint of its town sprawl. Worked out
-    /// from main_attila_map.
+    /// An Attila or Pharaoh settlement: a slot for each map.hex town slot index the region uses
+    /// (the main slot, 0, then 2 upwards), the port (slot 1), and a footprint of its town sprawl.
+    /// Worked out from main_attila_map and phar_main.
     ///
     /// <para>
     /// A slot holds the region's hexes of that slot index and every hex of the same index joined
@@ -43,7 +48,7 @@ namespace CAIME.Exporters
         public int                  FootprintMaxRow     { get; private set; }
         public byte[]               FootprintBits       { get; private set; }
 
-        /// <summary>The first port hex at sea, column by column, or -1.</summary>
+        /// <summary>The first port hex in a sea area, column by column, or -1.</summary>
         public int DockHex { get; private set; } = -1;
 
         /// <summary>
@@ -113,14 +118,43 @@ namespace CAIME.Exporters
                 settlement.Slots.Add(Slot(model, ownBySlot, slotIndex));
             }
 
-            settlement.Port.Hexes.AddRange(Slot(model, ownBySlot, Hex.PORT_SLOT_INDEX).Hexes);
-            settlement.DockHex = settlement.Port.Hexes.Where(hexIndex => model.Map.HexData[hexIndex].IsSea).DefaultIfEmpty(-1).First();
+            settlement.Port.Hexes.AddRange(PortHexes(model, ownBySlot, settlement.Slots[0].Hexes));
+
+            // A port hex at sea in a bridge area, such as a river crossing, is no dock.
+            settlement.DockHex = settlement.Port.Hexes
+                .Where(hexIndex => model.Areas.Areas[model.Areas.HexAreas[hexIndex]].Type == MapDataAreaType.Sea)
+                .DefaultIfEmpty(-1)
+                .First();
 
             // CAIME marks slot hexes as sprawl, so a region without sprawl is not expected; its main
             // slot stands in.
             var sprawl = ownSprawl.Count > 0 ? Joined(model, ownSprawl, hex => hex.IsTownSprawl) : settlement.Slots[0].Hexes;
             settlement.SetFootprint(model, sprawl);
             return settlement;
+        }
+
+        /// <summary>
+        /// The port starts from the region's own port hexes and the port hexes beside its main
+        /// slot: a port can lie wholly in the sea next to the settlement (Pharaoh's
+        /// phar_main_pi_ramesses_per_amun).
+        /// </summary>
+        private static List<int> PortHexes(MapDataModel model, SortedDictionary<int, List<int>> ownBySlot, List<int> mainSlotHexes)
+        {
+            var start = ownBySlot.TryGetValue(Hex.PORT_SLOT_INDEX, out var own) ? new List<int>(own) : new List<int>();
+
+            foreach (int hexIndex in mainSlotHexes)
+            {
+                for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                {
+                    int neighbour = model.Grid.Neighbour(hexIndex, n);
+                    if (neighbour >= 0 && model.Map.HexData[neighbour].TownSlotIndex == Hex.PORT_SLOT_INDEX)
+                    {
+                        start.Add(neighbour);
+                    }
+                }
+            }
+
+            return start.Count > 0 ? Joined(model, start, hex => hex.TownSlotIndex == Hex.PORT_SLOT_INDEX) : start;
         }
 
         private static MapDataSlot Slot(MapDataModel model, SortedDictionary<int, List<int>> ownBySlot, int slotIndex)

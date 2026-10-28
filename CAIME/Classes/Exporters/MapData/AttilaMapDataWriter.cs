@@ -125,32 +125,10 @@ namespace CAIME.Exporters
             esf.WriteBool(settlement != null);
             if (settlement != null)
             {
-                WriteSettlement(esf, model.Grid, settlement);
+                MapDataEsfParts.WriteSlotSettlement(esf, model.Grid, settlement);
             }
 
             MapDataEsfParts.WriteDock(esf, model, settlement != null ? settlement.DockHex : -1);
-            esf.EndRecord();
-        }
-
-        private static void WriteSettlement(EsfWriter esf, MapDataGrid grid, MapDataSlotSettlement settlement)
-        {
-            esf.BeginRecord("SETTLEMENT_INFO", 0);
-            MapDataEsfParts.WriteFootprint(esf, settlement.FootprintMinColumn, settlement.FootprintMinRow,
-                                           settlement.FootprintMaxColumn, settlement.FootprintMaxRow, settlement.FootprintBits);
-
-            esf.BeginBlock("SLOT_ARRAY_BLOCK", 0);
-            foreach (var slot in settlement.Slots)
-            {
-                esf.BeginBlockEntry();
-                MapDataEsfParts.WriteHexList(esf, grid, "SLOT_POSITIONS_BLOCK", slot.Positions);
-                MapDataEsfParts.WriteHexList(esf, grid, "SLOT_AREA_BLOCK", slot.Hexes);
-                esf.EndBlockEntry();
-            }
-
-            esf.EndBlock();
-
-            MapDataEsfParts.WriteHexList(esf, grid, "PORT_POSITIONS_BLOCK", settlement.Port.Positions);
-            MapDataEsfParts.WriteHexList(esf, grid, "PORT_AREA_BLOCK", settlement.Port.Hexes);
             esf.EndRecord();
         }
     }

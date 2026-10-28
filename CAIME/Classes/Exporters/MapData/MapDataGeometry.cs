@@ -5,7 +5,7 @@ namespace CAIME.Exporters
     /// <summary>How a game's map_data builder works out the hex radius, in floats.</summary>
     public enum MapDataRadiusRounding
     {
-        /// <summary>Warhammer III: maxx * ((2 / 3) / (columns - 1)).</summary>
+        /// <summary>Warhammer III and Pharaoh: maxx * ((2 / 3) / (columns - 1)).</summary>
         TwoThirdsPerColumn,
 
         /// <summary>Attila: maxx / ((columns - 1) * 1.5).</summary>
