@@ -36,7 +36,7 @@ namespace CAIME.Exporters
         public float MaxX           { get; }
         public float MaxY           { get; }
 
-        public MapDataGeometry(float maxX, uint columns, uint rows, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn)
+        public MapDataGeometry(float maxX, uint columns, uint rows, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn, float? maxY = null)
         {
             if (columns < 2)
             {
@@ -50,7 +50,7 @@ namespace CAIME.Exporters
             RowSpacing          = (float)((float)Math.Sqrt(3f) * Radius);
             HalfRow             = (float)(RowSpacing / 2f);
             MaxX                = maxX;
-            MaxY                = (float)((float)(rows + 0.5f) * RowSpacing);
+            MaxY                = maxY ?? (float)((float)(rows + 0.5f) * RowSpacing);
         }
 
         public float CentreX(int column)

@@ -20,6 +20,13 @@ namespace CAIME.Tests.Helpers
         public string                       MaskedArrayParent   { get; set; }
         public Func<int, bool>              CompareByte         { get; set; } = index => true;
 
+        /// <summary>
+        /// A record whose version is not compared, and which of its nodes in the game's file are
+        /// left out, for a game file written by an older builder than the Assembly Kit's.
+        /// </summary>
+        public string                       OlderRecord         { get; set; }
+        public Func<EsfNode, bool>          OlderRecordExtra    { get; set; } = node => false;
+
         public List<string>                 Differences         { get; } = new List<string>();
 
         /// <summary>Finds a file by its path from the repository root, or marks the test inconclusive.</summary>
@@ -57,13 +64,14 @@ namespace CAIME.Tests.Helpers
             if (expected is ParentNode expectedParent && actual is ParentNode actualParent)
             {
                 path += "/" + expectedParent.Name;
-                if (expectedParent.Name != actualParent.Name || expectedParent.Version != actualParent.Version)
+                bool older = expectedParent.Name == OlderRecord;
+                if (expectedParent.Name != actualParent.Name || (expectedParent.Version != actualParent.Version && older == false))
                 {
                     Differences.Add($"{path}: {actualParent.Name} v{actualParent.Version}");
                     return;
                 }
 
-                var expectedNodes   = expectedParent.Value;
+                var expectedNodes   = older ? expectedParent.Value.Where(node => OlderRecordExtra(node) == false).ToList() : expectedParent.Value;
                 var actualNodes     = actualParent.Value;
                 if (expectedNodes.Count != actualNodes.Count)
                 {

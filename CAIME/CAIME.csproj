@@ -337,6 +337,7 @@
     <Compile Include="Classes\Exporters\MapData\MapDataSprawlFill.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataSlotPositions.cs" />
     <Compile Include="Classes\Exporters\MapData\PharaohMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\RomeIIMapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\ThreeKingdomsMapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />

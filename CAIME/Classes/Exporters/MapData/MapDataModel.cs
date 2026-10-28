@@ -13,6 +13,13 @@ namespace CAIME.Exporters
 
         /// <summary>The playable area's maxx: the x of the last column of hexes.</summary>
         public float    MaxX    { get; set; }
+
+        /// <summary>
+        /// The playable area's maxy, for the games that store it as given (Rome II, see
+        /// <see cref="RomeIIMapDataWriter"/>). Left null, the top edge of the hex grid is used, as
+        /// every other game's builder does.
+        /// </summary>
+        public float?   MaxY    { get; set; }
     }
 
     /// <summary>A region's hex rectangle and hex count.</summary>
@@ -52,7 +59,7 @@ namespace CAIME.Exporters
             CheckEveryHexHasARegion();
 
             Grid            = new MapDataGrid((int)map.MapWidth, (int)map.MapHeight);
-            Geometry        = new MapDataGeometry(theatre.MaxX, map.MapWidth, map.MapHeight, rounding);
+            Geometry        = new MapDataGeometry(theatre.MaxX, map.MapWidth, map.MapHeight, rounding, theatre.MaxY);
             Areas           = new MapDataAreas(map, Grid, Geometry, RegionCount);
             PassableSea     = FindPassableSea();
             Links           = new MapDataRegionLinks(map, Grid, Areas, PassableSea);
