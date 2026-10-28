@@ -32,10 +32,6 @@ namespace CAIME.Exporters
 
             /// <summary>Whether the per-hex area runs are a u16 array rather than a block.</summary>
             public bool                     RunsAsArray         { get; set; }
-
-            public MapDataSeaFlag           SeaFlag             { get; set; } = MapDataSeaFlag.FirstArea;
-
-            public Func<MapDataModel, MapDataSettlement[]> FindSettlements { get; set; } = MapDataSettlement.FindAll;
         }
 
         private static readonly Layout WARHAMMER_3 = new Layout();
@@ -56,8 +52,8 @@ namespace CAIME.Exporters
 
         internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, Layout layout)
         {
-            var model       = new MapDataModel(map, theatre, seaFlag: layout.SeaFlag);
-            var settlements = layout.FindSettlements(model);
+            var model       = new MapDataModel(map, theatre);
+            var settlements = MapDataSettlement.FindAll(model);
 
             var esf = new EsfWriter(layout.Format);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);

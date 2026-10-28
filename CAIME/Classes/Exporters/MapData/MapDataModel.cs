@@ -22,22 +22,6 @@ namespace CAIME.Exporters
         public float?   MaxY    { get; set; }
     }
 
-    /// <summary>How a builder decides a region's sea flag (<see cref="MapDataModel.PassableSea"/>).</summary>
-    public enum MapDataSeaFlag
-    {
-        /// <summary>
-        /// The region has a sea or bridge area. Worked out from the games' files; it agrees with
-        /// <see cref="FirstArea"/> on every vanilla map.
-        /// </summary>
-        AnySeaArea,
-
-        /// <summary>
-        /// The region's first area that is not impassable, row by row, is sea or bridge. Read from
-        /// Warhammer III's Assembly Kit DLL.
-        /// </summary>
-        FirstArea,
-    }
-
     /// <summary>A region's hex rectangle and hex count.</summary>
     public sealed class MapDataHexBounds
     {
@@ -66,8 +50,7 @@ namespace CAIME.Exporters
 
         public int RegionCount => RegionNames.Count;
 
-        public MapDataModel(MapHexFile map, MapDataTheatre theatre, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn,
-                            MapDataSeaFlag seaFlag = MapDataSeaFlag.AnySeaArea)
+        public MapDataModel(MapHexFile map, MapDataTheatre theatre, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn)
         {
             Map         = map;
             Theatre     = theatre;
@@ -78,7 +61,7 @@ namespace CAIME.Exporters
             Grid            = new MapDataGrid((int)map.MapWidth, (int)map.MapHeight);
             Geometry        = new MapDataGeometry(theatre.MaxX, map.MapWidth, map.MapHeight, rounding, theatre.MaxY);
             Areas           = new MapDataAreas(map, Grid, Geometry, RegionCount);
-            PassableSea     = FindPassableSea(seaFlag);
+            PassableSea     = FindPassableSea();
             Links           = new MapDataRegionLinks(map, Grid, Areas, PassableSea);
             RegionBounds    = FindRegionBounds();
         }
@@ -131,23 +114,21 @@ namespace CAIME.Exporters
             }
         }
 
-        /// <summary>The regions' sea flags, from their areas in row-major order of their first hexes.</summary>
-        private bool[] FindPassableSea(MapDataSeaFlag seaFlag)
+        /// <summary>
+        /// The regions' sea flags: set when a region's first area that is not impassable, in
+        /// row-major order of the areas' first hexes, is sea or bridge. Every game's Assembly Kit
+        /// builder does this, so a land region whose sea comes after its land keeps the flag clear.
+        /// </summary>
+        private bool[] FindPassableSea()
         {
             var passableSea = new bool[RegionCount];
             var decided     = new bool[RegionCount];
 
             foreach (var area in Areas.Areas)
             {
-                bool isSea = area.Type == MapDataAreaType.Sea || area.Type == MapDataAreaType.Bridge;
-
-                if (seaFlag == MapDataSeaFlag.AnySeaArea)
+                if (decided[area.Region] == false && area.Type != MapDataAreaType.Impassable)
                 {
-                    passableSea[area.Region] |= isSea;
-                }
-                else if (decided[area.Region] == false && area.Type != MapDataAreaType.Impassable)
-                {
-                    passableSea[area.Region]    = isSea;
+                    passableSea[area.Region]    = area.Type == MapDataAreaType.Sea || area.Type == MapDataAreaType.Bridge;
                     decided[area.Region]        = true;
                 }
             }

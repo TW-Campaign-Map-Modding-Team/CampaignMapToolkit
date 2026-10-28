@@ -62,25 +62,15 @@ namespace CAIME.Exporters
         public byte[]       FootprintBits   { get; private set; }
 
         /// <summary>
-        /// Warhammer III: every region whose sea flag (<see cref="MapDataModel.PassableSea"/>) is
-        /// clear, land or sea, gets a settlement when it has a seed.
+        /// Warhammer III and Three Kingdoms: every region whose sea flag
+        /// (<see cref="MapDataModel.PassableSea"/>) is clear, land or sea, gets a settlement when it
+        /// has a seed.
         /// </summary>
         public static MapDataSettlement[] FindAll(MapDataModel model)
         {
-            return FindAll(model, Enumerable.Range(0, model.RegionCount).Where(region => model.PassableSea[region] == false));
-        }
-
-        /// <summary>Three Kingdoms: the land regions get a settlement when they have a seed.</summary>
-        public static MapDataSettlement[] FindAllThreeKingdoms(MapDataModel model)
-        {
-            return FindAll(model, Enumerable.Range(0, model.Map.LandRegions.Count));
-        }
-
-        private static MapDataSettlement[] FindAll(MapDataModel model, IEnumerable<int> regions)
-        {
             var settlements = new MapDataSettlement[model.RegionCount];
 
-            foreach (int region in regions)
+            foreach (int region in Enumerable.Range(0, model.RegionCount).Where(region => model.PassableSea[region] == false))
             {
                 int seed = MapDataSprawlFill.Seed(model, region);
                 if (seed >= 0)

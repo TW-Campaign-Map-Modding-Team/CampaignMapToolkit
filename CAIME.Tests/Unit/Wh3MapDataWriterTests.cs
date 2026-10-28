@@ -131,9 +131,9 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(MapDataAreaType.BridgeCliff, areas.HexTypes[1 * 6 + 3]);
         }
 
-        private static MapDataModel Model(MapHexFile map, MapDataSeaFlag seaFlag = MapDataSeaFlag.FirstArea)
+        private static MapDataModel Model(MapHexFile map)
         {
-            return new MapDataModel(map, new MapDataTheatre { Index = "42", MaxX = 100f }, seaFlag: seaFlag);
+            return new MapDataModel(map, new MapDataTheatre { Index = "42", MaxX = 100f });
         }
 
         /// <summary>Main slot hexes with town sprawl within <paramref name="radius"/> of (column, row).</summary>
@@ -219,7 +219,6 @@ namespace CAIME.Tests.Unit
             });
 
             Assert.IsFalse(Model(map).PassableSea[LAND_A]);
-            Assert.IsTrue(Model(map, MapDataSeaFlag.AnySeaArea).PassableSea[LAND_A]);
             Assert.IsNotNull(MapDataSettlement.FindAll(Model(map))[LAND_A]);
         }
 
