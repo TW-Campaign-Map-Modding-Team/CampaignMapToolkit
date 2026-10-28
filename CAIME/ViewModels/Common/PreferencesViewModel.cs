@@ -211,7 +211,7 @@ namespace CAIME
                 {
                     RpfmPath = null;
                     var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}\n\n" +
-                              "Point it at an RPFM 5.0 or later folder, or switch the database source back to Assembly Kit.";
+                              "Point it at an RPFM 5.3 or later folder, or switch the database source back to Assembly Kit.";
                     LoggerViewModel.Log(msg, LogLevel.Warning);
                     MessageBox.Show(msg, "Invalid RPFM path");
                     return false;

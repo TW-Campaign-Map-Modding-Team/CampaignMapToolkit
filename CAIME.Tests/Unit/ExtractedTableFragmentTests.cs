@@ -8,7 +8,7 @@ namespace CAIME.Tests.Unit
     /// reports having written. Which table a fragment belongs to and what it is called come only
     /// from that path, and the fragment name decides which row wins a merge, so misreading either
     /// silently exports a map built against the wrong tables. The sample paths are shaped exactly as
-    /// RPFM 5.0.6 returns them: the destination as given, a backslash, then the in-pack path with
+    /// RPFM 5.3 returns them: the destination as given, a backslash, then the in-pack path with
     /// forward slashes and ".tsv" appended.
     /// </summary>
     [TestClass]

@@ -13,7 +13,7 @@ namespace CAIME.Rpfm
     /// </summary>
     public static class GameMappingProvider
     {
-        // GameTemplate -> the game key rpfm_server's SetGameSelected takes. Games not present are
+        // GameTemplate -> the game key rpfm_server's session.set_game takes. Games not present are
         // unsupported by the RPFM workflow.
         private static readonly Dictionary<GameTemplate, string> GameKeys = new Dictionary<GameTemplate, string>
         {

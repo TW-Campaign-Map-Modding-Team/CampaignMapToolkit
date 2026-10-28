@@ -1,12 +1,12 @@
 ---
 name: rpfm-server
-description: Extract db tables as TSV from a Total War game's own packs, from mods looked up by .pack name, or from one .pack, through RPFM's rpfm_server (RPFM 5+), using the same WebSocket commands CAIME's RPFM database workflow sends. Use it to check what RPFM returns, reproduce an RPFM workflow failure outside CAIME, or look at the TSV CAIME converts to Assembly Kit XML.
+description: Extract db tables as TSV from a Total War game's own packs, from mods looked up by .pack name, or from one .pack, through RPFM's rpfm_server (RPFM 5.3+), using the same JSON-RPC methods CAIME's RPFM database workflow sends. Use it to check what RPFM returns, reproduce an RPFM workflow failure outside CAIME, or look at the TSV CAIME converts to Assembly Kit XML.
 ---
 
 # RPFM server
 
 CAIME's RPFM database source (`CAIME/Classes/Common/Rpfm/`) reads db tables through
-`rpfm_server.exe`, which RPFM 5 ships in place of the old `rpfm_cli.exe`: vanilla tables from
+`rpfm_server.exe`, RPFM's headless backend: vanilla tables from
 the game's own packs, and a project's mod (with its dependencies) by `.pack` file name. `rpfm_server.py` makes the
 same calls from the command line, so you can see exactly what the server returns without
 opening a project.
@@ -28,22 +28,28 @@ python skills/rpfm-server/rpfm_server.py --rpfm "<RPFM folder>" --game warhammer
 
 ## Protocol notes
 
+The protocol is JSON-RPC 2.0 over a WebSocket, documented in RPFM's `docs/server`
+(`ws-protocol.md`, and `methods/*.md` for every method's params and result). It needs RPFM 5.3
+or later.
+
 - The server listens on `ws://127.0.0.1:45127/ws`. If RPFM is open, its server is already
   running; every connection gets its own session, so open packs are never shared.
-- Each message is `{"id": n, "data": <command or response>}`; commands and responses follow
-  serde's enum encoding (`"Unit"`, `{"Newtype": v}`, `{"Tuple": [a, b]}`).
-- The server greets each connection with `{"id": 0, "data": {"SessionConnected": n}}` and
-  uses id 0 for other unsolicited broadcasts.
-- RPFM keeps each game's install folder as the setting named after the game key
-  (`SettingsGetString`). Without it, `LoadAllCAPackFiles` fails with only "cannot find the
-  path specified", and mods are not found at all.
-- Extract whole table folders (`{"Folder": "db/<table>_tables"}`) rather than listing first:
-  missing folders are skipped silently, and listing the game's packs returns ~750k entries
-  for Warhammer 3.
-- Mods are loaded by name only as the dependencies of an open pack: `NewPack`, then
-  `SetDependencyPackFilesList`, then `RebuildDependencies(false)`, then extract from the
-  `ParentFiles` source. Per `load_parent_pack` in RPFM's
-  `rpfm_extensions/src/dependencies/mod.rs`:
+- The server greets each connection with a `session.connected` notification. Notifications
+  (such as `job.updated`) have no `id`; responses carry the request's `id` and a `result` or an
+  `error` with a `message`.
+- `session.set_game` and `dependencies.rebuild` run as jobs: they answer `{"job": n}` at once,
+  and `job.wait` returns the job's state, with its `result` once it is `finished`.
+- `session.set_game`'s result says whether the game's schema is loaded (`schema_loaded`).
+  There is no method to read RPFM's settings; without the game's folder in them,
+  `pack.open_vanilla` fails with only "cannot find the path specified", and mods are not found
+  at all.
+- Extract whole table folders (`files.extract` with `paths: ["db/<table>_tables"]` and
+  `as_tsv: true`) rather than listing first: missing folders are skipped silently, and the
+  game's packs hold ~750k files for Warhammer 3. TSV floats are printed with four decimals.
+- Mods are loaded by name only as the dependencies of an open pack: `pack.new`, then
+  `pack.update` with `dependencies`, then `dependencies.rebuild` with
+  `only_parent_packs: true`, then extract from the `"parent_files"` source. Per
+  `load_parent_pack` in RPFM's `rpfm_extensions/src/dependencies/mod.rs`:
   - each name is looked up in `data`, then RPFM's secondary folder, then the Workshop
     folders, and the first hit wins, so a local copy in `data` beats the Workshop one;
   - names are compared to file names exactly, case included;
@@ -52,18 +58,15 @@ python skills/rpfm-server/rpfm_server.py --rpfm "<RPFM folder>" --game warhammer
   - a pack's dependencies are loaded before its own files are added over them, so on identical
     paths the dependent mod's file wins.
 - A name RPFM can't find is ignored without an error; compare against
-  `parent_packed_files[].container_name` in the reply. That reply also carries the entire
-  vanilla file list (~100 MB for Warhammer 3), so read it as a stream.
-- `OpenPackFiles` merges every path it is given into one pack, so open packs one at a time
+  `parent_packed_files[].container_name` in `dependencies.info`. That result also carries the
+  entire vanilla file list, so read it as a stream.
+- `pack.open` merges every path it is given into one pack, so open packs one at a time
   to keep track of which fragment came from which pack.
-- Send `"ClientDisconnecting"` before closing. The server closes the socket without
-  replying, and exits once its last session is gone. For about a second while it shuts
-  down it still accepts connections, then drops them, so a session opened right after the
-  last one ended fails mid-command. Wait it out: if `GET http://127.0.0.1:45127/sessions`
-  returns `[]` after disconnecting, wait for the server to exit (`GET /version` returns its
-  `pid`) before connecting again.
-- RPFM's `develop` branch replaced this protocol with JSON-RPC 2.0 (`{"jsonrpc": "2.0",
-  "method": "pack.open", ...}`) after 5.2.0 and removed the old one, so the release after
-  5.2 will need a port. The manual online already documents the new protocol, not this one.
+- Call `session.disconnect` before closing; the server removes the session at once and exits
+  once its last session is gone. For about a second while it shuts down it still accepts
+  connections, then drops them, so a session opened right after the last one ended fails
+  mid-request. Wait it out: if `GET http://127.0.0.1:45127/sessions` returns `[]` after
+  disconnecting, wait for the server to exit (`GET /version` returns its `pid`) before
+  connecting again.
 
-Full reference: https://frodo45127.github.io/rpfm/manual/server/overview.html
+Full reference: https://github.com/Frodo45127/rpfm/tree/master/docs/server

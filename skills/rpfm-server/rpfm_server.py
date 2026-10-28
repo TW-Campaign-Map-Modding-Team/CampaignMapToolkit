@@ -1,10 +1,10 @@
 """Talk to RPFM's rpfm_server the way CAIME's RPFM database workflow does.
 
-Extracts db tables as TSV through the same WebSocket commands CAIME sends, from one of:
-  --game-packs     the game's own packs (LoadAllCAPackFiles), as CAIME reads vanilla tables
+Extracts db tables as TSV through the same JSON-RPC methods CAIME calls, from one of:
+  --game-packs     the game's own packs (pack.open_vanilla), as CAIME reads vanilla tables
   --mod NAME       mods by .pack file name, found by RPFM in the data or Workshop folder
-                   (RebuildDependencies on a throwaway pack), as CAIME reads a project's mods
-  --pack PATH      one .pack file on disk (OpenPackFiles)
+                   (dependencies.rebuild on a throwaway pack), as CAIME reads a project's mods
+  --pack PATH      one .pack file on disk (pack.open)
 Also lists the db tables in one .pack. Starts rpfm_server from --rpfm when none is already
 listening; the server exits by itself once the last session disconnects.
 
@@ -30,6 +30,7 @@ SERVER_URL = "ws://127.0.0.1:45127/ws"
 SESSIONS_URL = "http://127.0.0.1:45127/sessions"
 STARTUP_TIMEOUT_SECONDS = 30
 SERVER_EXIT_TIMEOUT_SECONDS = 10
+JOB_WAIT_SECONDS = 30
 
 
 class RpfmError(Exception):
@@ -44,7 +45,7 @@ def connect(rpfm_folder):
 
     server = os.path.join(rpfm_folder, "rpfm_server.exe")
     if not os.path.isfile(server):
-        raise RpfmError(f"rpfm_server.exe not found in {rpfm_folder} (RPFM 5.0 or later is needed)")
+        raise RpfmError(f"rpfm_server.exe not found in {rpfm_folder} (RPFM 5.3 or later is needed)")
 
     # stderr is the server's log; discard it so a full pipe can never stall the server.
     subprocess.Popen([server], cwd=rpfm_folder, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -63,31 +64,40 @@ class Session:
         self.ws = connect(rpfm_folder)
         self.last_id = 0
         greeting = json.loads(self.ws.recv())
-        if "SessionConnected" not in (greeting.get("data") or {}):
+        if greeting.get("method") != "session.connected":
             raise RpfmError(f"unexpected greeting: {greeting}")
 
-    def send(self, command, expected):
+    def call(self, method, params=None):
         self.last_id += 1
-        self.ws.send(json.dumps({"id": self.last_id, "data": command}))
+        request = {"jsonrpc": "2.0", "id": self.last_id, "method": method}
+        if params is not None:
+            request["params"] = params
+        self.ws.send(json.dumps(request))
         while True:
             message = json.loads(self.ws.recv())
-            # id 0 carries unsolicited broadcasts such as SettingsChanged.
-            if message["id"] != self.last_id:
+            # Notifications, such as job.updated, have no id.
+            if message.get("id") != self.last_id:
                 continue
-            data = message["data"]
-            if isinstance(data, dict) and "Error" in data:
-                raise RpfmError(data["Error"])
-            # Commands without a payload answer with a bare string such as "Success".
-            if data == expected:
-                return None
-            if not isinstance(data, dict) or expected not in data:
-                raise RpfmError(f"unexpected response: {json.dumps(data)[:300]}")
-            return data[expected]
+            if "error" in message:
+                raise RpfmError(f"{method}: {message['error'].get('message')}")
+            return message.get("result")
+
+    def call_job(self, method, params=None):
+        """Calls a method RPFM runs as a job, and returns the job's result once it ends."""
+        job = self.call(method, params)["job"]
+        while True:
+            status = self.call("job.wait", {"job": job, "timeout_secs": JOB_WAIT_SECONDS})
+            if status["state"] == "finished":
+                return status.get("result")
+            if status["state"] == "failed":
+                raise RpfmError(f"{method}: {status['error'].get('message')}")
+            if status["state"] == "cancelled":
+                raise RpfmError(f"{method}: cancelled")
 
     def close(self):
-        # The server answers by closing the socket, not with a reply.
+        # The server may close the socket rather than answer.
         self.last_id += 1
-        self.ws.send(json.dumps({"id": self.last_id, "data": "ClientDisconnecting"}))
+        self.ws.send(json.dumps({"jsonrpc": "2.0", "id": self.last_id, "method": "session.disconnect"}))
         try:
             while self.ws.recv():
                 pass
@@ -99,7 +109,7 @@ class Session:
 
 def wait_for_server_exit_if_idle():
     """The server exits once its last session ends, but accepts connections for a moment while
-    it shuts down; a run started then loses its connection mid-command. Wait it out."""
+    it shuts down; a run started then loses its connection mid-request. Wait it out."""
     try:
         with urllib.request.urlopen(SESSIONS_URL, timeout=2) as response:
             if json.load(response):
@@ -116,30 +126,30 @@ def wait_for_server_exit_if_idle():
 
 
 def select_game(session, game):
-    session.send({"SetGameSelected": [game, False]}, "CompressionFormatDependenciesInfo")
-    if not session.send("IsSchemaLoaded", "Bool"):
+    status = session.call_job("session.set_game", {"game": game, "rebuild_dependencies": False})
+    if not status["schema_loaded"]:
         raise RpfmError(f"RPFM has no schema for {game}; open the game in RPFM once")
-    if not session.send({"SettingsGetString": game}, "String"):
-        raise RpfmError(f"RPFM does not know where {game} is installed; set it in RPFM's settings")
 
 
 def open_source(session, args):
-    """Returns (pack key, data source) to extract from."""
+    """Returns the source to extract from."""
     if args.game_packs:
-        key, _ = session.send("LoadAllCAPackFiles", "StringContainerInfo")
-        return key, "PackFile"
+        try:
+            return {"pack": session.call("pack.open_vanilla")["key"]}
+        except RpfmError as error:
+            raise RpfmError(f"{error} (is the game's folder set in RPFM's settings?)")
 
     if args.mod:
-        key = session.send("NewPack", "String")
-        session.send({"SetDependencyPackFilesList": [key, [[True, name] for name in args.mod]]}, "Success")
+        key = session.call("pack.new")["key"]
+        session.call("pack.update", {"pack": key, "dependencies": [{"enabled": True, "name": name} for name in args.mod]})
+        session.call_job("dependencies.rebuild", {"only_parent_packs": True})
         # The reply also carries RPFM's whole vanilla file list, so it can take a while.
-        loaded = session.send({"RebuildDependencies": False}, "DependenciesInfo")
+        loaded = session.call("dependencies.info")
         found = sorted({f["container_name"] for f in loaded["parent_packed_files"] if f["container_name"]})
         print("mods RPFM loaded: " + (", ".join(found) or "none"), file=sys.stderr)
-        return key, "ParentFiles"
+        return "parent_files"
 
-    key, _ = session.send({"OpenPackFiles": [os.path.abspath(args.pack)]}, "StringContainerInfo")
-    return key, "PackFile"
+    return {"pack": session.call("pack.open", {"paths": [os.path.abspath(args.pack)]})["key"]}
 
 
 def main():
@@ -168,17 +178,25 @@ def main():
         select_game(session, args.game)
 
         if args.action == "list":
-            key, _ = session.send({"OpenPackFiles": [os.path.abspath(args.pack)]}, "StringContainerInfo")
-            _, files = session.send({"GetPackFileDataForTreeView": key}, "ContainerInfoVecRFileInfo")
+            key = session.call("pack.open", {"paths": [os.path.abspath(args.pack)]})["key"]
             prefix = f"db/{args.table}_tables/" if args.table else "db/"
-            print("\n".join(sorted(f["path"] for f in files if f["path"].lower().startswith(prefix.lower()))))
+            paths, offset = [], 0
+            while True:
+                page = session.call("files.list", {"source": {"pack": key}, "path_prefix": prefix, "offset": offset})
+                paths += [f["path"] for f in page["files"]]
+                offset += len(page["files"])
+                if not page["files"] or offset >= page["total"]:
+                    break
+            print("\n".join(paths))
             return
 
-        key, data_source = open_source(session, args)
         # Whole table folders: RPFM skips any it does not have, so nothing needs listing first.
-        folders = {data_source: [{"Folder": f"db/{table}_tables"} for table in args.table]}
-        _, written = session.send(
-            {"ExtractPackedFiles": [key, folders, os.path.abspath(args.destination), True]}, "StringVecPathBuf")
+        written = session.call("files.extract", {
+            "source": open_source(session, args),
+            "paths": [f"db/{table}_tables" for table in args.table],
+            "destination": os.path.abspath(args.destination),
+            "as_tsv": True,
+        })["extracted"]
         print("\n".join(written) or "no fragments of those tables found")
     finally:
         session.close()

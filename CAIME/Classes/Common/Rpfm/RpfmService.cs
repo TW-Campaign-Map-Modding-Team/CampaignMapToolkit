@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace CAIME.Rpfm
 {
@@ -20,8 +19,8 @@ namespace CAIME.Rpfm
         /// <summary>Ceiling for a batched extraction, however many tables it covers.</summary>
         private static readonly TimeSpan MaxBatchTimeout = TimeSpan.FromMinutes(15);
 
-        // Loading mods answers with RPFM's whole vanilla file list as well, hundreds of thousands of
-        // entries for the newer games, which takes far longer to send than any other command.
+        // dependencies.info sends RPFM's whole vanilla file list along with the mods' files, hundreds
+        // of thousands of entries for the newer games, which takes far longer than any other request.
         private static readonly TimeSpan LoadModTimeout = TimeSpan.FromMinutes(10);
 
         private readonly RpfmServerClient _server;
@@ -51,22 +50,13 @@ namespace CAIME.Rpfm
                 var gameKey = GameMappingProvider.GetGameKey(game);
 
                 // No dependency rebuild: LoadMod asks for the one it needs.
-                server.Send($"select {game}", new { SetGameSelected = new object[] { gameKey, false } },
-                    "CompressionFormatDependenciesInfo", DefaultTimeout);
+                var status = server.CallJob<SessionStatus>($"select {game}", "session.set_game",
+                    new { game = gameKey, rebuild_dependencies = false }, DefaultTimeout);
 
-                if (!server.Send<bool>($"load the schema for {game}", "IsSchemaLoaded", "Bool", DefaultTimeout))
+                if (!status.SchemaLoaded)
                 {
                     throw new RpfmException($"load the schema for {game}",
                         "RPFM has no schema for this game. Open the game in RPFM once so it downloads its schemas.");
-                }
-
-                // RPFM keeps each game's install folder as a setting named after the game key. Without
-                // it RPFM can find neither the game's packs nor its mods, and only says a path is missing.
-                var gameFolder = server.Send<string>($"look up where {game} is installed", new { SettingsGetString = gameKey }, "String", DefaultTimeout);
-                if (string.IsNullOrWhiteSpace(gameFolder))
-                {
-                    throw new RpfmException($"find {game}",
-                        "RPFM does not know where this game is installed. Set the game's folder in RPFM's settings.");
                 }
 
                 return new RpfmService(server, game);
@@ -96,7 +86,7 @@ namespace CAIME.Rpfm
             if (!File.Exists(Path.Combine(rpfmFolder, RpfmServerClient.ServerExecutableName)))
             {
                 error = $"{RpfmServerClient.ServerExecutableName} was not found in the selected folder. " +
-                        "CAIME needs RPFM 5.0 or later, whose server replaced rpfm_cli.exe.";
+                        "CAIME needs RPFM 5.3 or later.";
                 return false;
             }
 
@@ -125,11 +115,20 @@ namespace CAIME.Rpfm
             if (_gamePacksKey == null)
             {
                 // Opened as one pack: which of the game's packs a fragment lives in does not matter here.
-                var opened = _server.Send<JArray>($"open {_game}'s packs", "LoadAllCAPackFiles", "StringContainerInfo", DefaultTimeout);
-                _gamePacksKey = (string)opened[0];
+                // RPFM reads them from the game folder in its own settings, and without one only reports
+                // that a path is missing.
+                try
+                {
+                    _gamePacksKey = _server.Call<PackSummary>($"open {_game}'s packs", "pack.open_vanilla", null, DefaultTimeout).Key;
+                }
+                catch (RpfmException ex)
+                {
+                    throw new RpfmException($"open {_game}'s packs",
+                        $"{ex.Message} Check that the game's folder is set in RPFM's settings.");
+                }
             }
 
-            return ExtractTables(_gamePacksKey, "PackFile", tables, destinationFolder, $"{_game}'s packs");
+            return ExtractTables(new { pack = _gamePacksKey }, tables, destinationFolder, $"{_game}'s packs");
         }
 
         /// <summary>
@@ -144,15 +143,15 @@ namespace CAIME.Rpfm
         {
             // RPFM loads mods by name only as the "parent" dependencies of an open pack, so an empty,
             // never-saved pack carries the name.
-            _modHolderPackKey = _server.Send<string>("create a pack to load the mod through", "NewPack", "String", DefaultTimeout);
+            _modHolderPackKey = _server.Call<PackSummary>("create a pack to load the mod through", "pack.new", null, DefaultTimeout).Key;
 
-            var dependencies = new[] { new object[] { true, modPackName } };
-            _server.Send("set the mod to load", new { SetDependencyPackFilesList = new object[] { _modHolderPackKey, dependencies } },
-                "Success", DefaultTimeout);
+            _server.Call("set the mod to load", "pack.update",
+                new { pack = _modHolderPackKey, dependencies = new[] { new { enabled = true, name = modPackName } } }, DefaultTimeout);
 
-            // false: reload the mods without regenerating RPFM's cache of the game's own files.
-            var loaded = _server.Send<LoadedDependencies>($"load {modPackName}", new { RebuildDependencies = false },
-                "DependenciesInfo", LoadModTimeout);
+            // Only the parent packs: RPFM's cache of the game's own files is not needed.
+            _server.CallJob<SessionStatus>($"load {modPackName}", "dependencies.rebuild", new { only_parent_packs = true }, LoadModTimeout);
+
+            var loaded = _server.Call<LoadedDependencies>($"list the files of {modPackName}", "dependencies.info", null, LoadModTimeout);
 
             return new HashSet<string>(
                 loaded.ParentPackedFiles.Select(file => file.ContainerName).Where(name => name != null),
@@ -172,7 +171,7 @@ namespace CAIME.Rpfm
                 throw new InvalidOperationException("Load the mod before extracting tables from it.");
             }
 
-            return ExtractTables(_modHolderPackKey, "ParentFiles", tables, destinationFolder, "the mods");
+            return ExtractTables("parent_files", tables, destinationFolder, "the mods");
         }
 
         public void Dispose()
@@ -184,32 +183,50 @@ namespace CAIME.Rpfm
         // folder it does not have, and listing the game's packs first would mean receiving every
         // file name in them.
         private IReadOnlyList<ExtractedTableFragment> ExtractTables(
-            string packKey, string dataSource, IReadOnlyList<string> tables, string destinationFolder, string sourceDescription)
+            object source, IReadOnlyList<string> tables, string destinationFolder, string sourceDescription)
         {
             if (tables.Count == 0)
             {
                 return Array.Empty<ExtractedTableFragment>();
             }
 
-            var folders = new JObject { [dataSource] = new JArray(tables.Select(table => new JObject { ["Folder"] = $"db/{table}_tables" })) };
-            const bool AsTsv = true;
-
             // The budget scales with the batch so one call is not held to a single table's allowance.
             var timeout = TimeSpan.FromTicks(Math.Min(DefaultTimeout.Ticks * tables.Count, MaxBatchTimeout.Ticks));
 
             var operation = $"extract tables from {sourceDescription}";
-            var extracted = _server.Send<JArray>(operation,
-                new { ExtractPackedFiles = new object[] { packKey, folders, destinationFolder, AsTsv } },
-                "StringVecPathBuf", timeout);
+            var extracted = _server.Call<FilesExtracted>(operation, "files.extract", new
+            {
+                source,
+                paths       = tables.Select(table => $"db/{table}_tables").ToArray(),
+                destination = destinationFolder,
+                as_tsv      = true,
+            }, timeout);
 
-            // The payload is [status, written paths].
-            return extracted[1].Values<string>()
+            return extracted.Extracted
                 .Select(path => ExtractedTableFragment.FromExtractedPath(path, operation))
                 .ToList();
         }
 
-        // Only the member LoadMod reads; the vanilla and Assembly Kit file lists that arrive with it
-        // are skipped unread rather than built in memory.
+        private sealed class SessionStatus
+        {
+            [JsonProperty("schema_loaded")]
+            public bool SchemaLoaded { get; set; }
+        }
+
+        private sealed class PackSummary
+        {
+            [JsonProperty("key")]
+            public string Key { get; set; }
+        }
+
+        private sealed class FilesExtracted
+        {
+            [JsonProperty("extracted")]
+            public List<string> Extracted { get; set; } = new List<string>();
+        }
+
+        // Only the member LoadMod reads from dependencies.info; the vanilla and Assembly Kit file lists
+        // that arrive with it are skipped unread rather than built in memory.
         private sealed class LoadedDependencies
         {
             [JsonProperty("parent_packed_files")]

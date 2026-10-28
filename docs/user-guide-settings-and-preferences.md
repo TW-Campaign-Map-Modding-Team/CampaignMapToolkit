@@ -255,7 +255,7 @@ When two sources both define a row for the same primary key (e.g. both a mod and
 
 **Requirements when using RPFM:**
 
-- **RPFM installation, version 5.0 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. Required the moment you switch the Database source to RPFM — CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
+- **RPFM installation, version 5.3 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. Required the moment you switch the Database source to RPFM — CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
 - **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, opening a project tells you so.
 - **The Assembly Kit path is still required** — the RPFM workflow reuses the Assembly Kit's table schemas, takes the few fields no pack carries from the Assembly Kit's own tables, and processing still runs the Assembly Kit's tools. It only ever reads from the Assembly Kit.
 
@@ -299,13 +299,13 @@ You do not normally need to open or edit this file manually — CAIME manages it
   You switched **Database source** to **RPFM** without setting a **RPFM path**. Either provide one or switch the source back to **Assembly Kit**.
 
 - **"The provided RPFM installation path is not valid" when saving.**
-  The selected folder does not contain a working `rpfm_server.exe`. Point the **RPFM path** at the folder where you installed RPFM (the one containing `rpfm_server.exe`). Versions of RPFM before 5.0 only shipped `rpfm_cli.exe`, which CAIME no longer uses — update RPFM if that's all your folder has. Invalid paths are never stored.
+  The selected folder does not contain a working `rpfm_server.exe`. Point the **RPFM path** at the folder where you installed RPFM 5.3 or later (the one containing `rpfm_server.exe`); older versions of RPFM speak a different protocol, which CAIME does not use. Invalid paths are never stored.
 
 - **"RPFM has no schema for this game" when opening a project.**
   RPFM needs its schema for a game to read that game's tables, and downloads it the first time you use the game in RPFM. Open RPFM, select the game, then open the project in CAIME again.
 
-- **"RPFM does not know where this game is installed" when opening a project.**
-  Open RPFM, set the game's folder in its settings, then open the project in CAIME again.
+- **"RPFM failed to open &lt;game&gt;'s packs ... Check that the game's folder is set in RPFM's settings" when opening a project.**
+  RPFM could not find the game's packs, usually because its settings have no folder for the game. Open RPFM, set the game's folder in its settings, then open the project in CAIME again.
 
 - **"RPFM found no &lt;table&gt; table in &lt;game&gt;'s packs or the project's mod" when opening a project.**
   RPFM read the game's packs from the game folder set in its settings and one of the tables CAIME needs wasn't in them. Check that the folder points at the game's actual, complete install.

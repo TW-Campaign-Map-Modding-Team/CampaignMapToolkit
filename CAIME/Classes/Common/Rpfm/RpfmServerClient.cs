@@ -12,15 +12,14 @@ using Newtonsoft.Json.Linq;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// One session with <c>rpfm_server.exe</c>, the headless backend RPFM 5 runs its UI on. Owns the
-    /// transport only: starting the server when none is listening, the <c>{ "id", "data" }</c>
-    /// message envelope, and matching each response to its command. It knows nothing about which
-    /// commands exist; <see cref="RpfmService"/> does.
+    /// One session with <c>rpfm_server.exe</c>, the headless backend RPFM runs its UI on. Owns the
+    /// transport only: starting the server when none is listening, JSON-RPC 2.0 requests and their
+    /// responses, and waiting for the methods that run as jobs. It knows nothing about which methods
+    /// exist; <see cref="RpfmService"/> does. The protocol and methods are documented in RPFM's
+    /// docs/server.
     ///
     /// Every connection is its own server session with its own open packs, so CAIME neither sees nor
     /// disturbs anything the user has open in the RPFM UI, even when both share one server process.
-    /// This is the protocol of RPFM 5.0 to 5.2, documented in the v5.2.0 tag's docs/server; the
-    /// online manual already describes the JSON-RPC protocol that replaces it after 5.2.
     /// </summary>
     public sealed class RpfmServerClient : IDisposable
     {
@@ -39,6 +38,9 @@ namespace CAIME.Rpfm
         private static readonly TimeSpan DisconnectTimeout     = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan ServerExitTimeout     = TimeSpan.FromSeconds(10);
 
+        // How long one job.wait may block; a longer job is waited for again until its own timeout.
+        private const int JobWaitSeconds = 30;
+
         private const int ReceiveChunkSize = 64 * 1024;
 
         private static readonly JsonSerializer Serializer = new JsonSerializer();
@@ -47,7 +49,7 @@ namespace CAIME.Rpfm
 
         private readonly ClientWebSocket _socket;
         private readonly int? _serverProcessId;
-        private long _lastCommandId;
+        private long _lastRequestId;
 
         private RpfmServerClient(ClientWebSocket socket)
         {
@@ -78,60 +80,60 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Sends <paramref name="command"/> and returns the payload of the
-        /// <paramref name="expectedResponse"/> variant the server answers with, deserialized as
-        /// <typeparamref name="T"/>. The payload is read as a stream, so a <typeparamref name="T"/>
-        /// that declares only the members it needs never materializes the rest of a large response.
-        /// Throws <see cref="RpfmException"/>, naming <paramref name="operation"/>, when the server
-        /// reports an error, answers with anything else, times out, or drops the connection.
+        /// Calls <paramref name="method"/> with <paramref name="parameters"/> (null for none) and returns
+        /// its result deserialized as <typeparamref name="T"/>. The result is read as a stream, so a
+        /// <typeparamref name="T"/> that declares only the members it needs never materializes the rest
+        /// of a large one. Throws <see cref="RpfmException"/>, naming <paramref name="operation"/>, when
+        /// the server answers with an error, times out, or drops the connection.
         /// </summary>
-        /// <param name="command">
-        /// Serialized the way the server's serde enums expect: a bare string for a command without
-        /// parameters, otherwise an object whose only property is the command name.
-        /// </param>
-        public T Send<T>(string operation, object command, string expectedResponse, TimeSpan timeout)
+        public T Call<T>(string operation, string method, object parameters, TimeSpan timeout)
         {
-            var id = ++_lastCommandId;
-
             using (var cancellation = new CancellationTokenSource(timeout))
             {
-                try
-                {
-                    // Off the calling thread so no await inside can need a UI thread that is blocked here.
-                    using (var response = Task.Run(() => ExchangeAsync(id, command, cancellation.Token)).GetAwaiter().GetResult())
-                    {
-                        return ReadPayload<T>(response, operation, expectedResponse);
-                    }
-                }
-                // A cancelled socket operation can surface as either exception, so the token decides which it was.
-                catch (Exception ex) when (ex is OperationCanceledException || ex is WebSocketException)
-                {
-                    var reason = cancellation.IsCancellationRequested
-                        ? "the RPFM server did not respond in time."
-                        : $"the connection to the RPFM server was lost. {ex.Message}";
-                    throw new RpfmException(operation, reason);
-                }
-                catch (JsonException ex)
-                {
-                    throw new RpfmException(operation, $"the RPFM server sent a response CAIME could not read. {ex.Message}");
-                }
+                return Call<T>(operation, method, parameters, cancellation);
             }
         }
 
-        /// <summary>
-        /// <see cref="Send{T}"/> for a command whose answer carries nothing CAIME needs, such as the
-        /// bare <c>"Success"</c> many commands reply with.
-        /// </summary>
-        public void Send(string operation, object command, string expectedResponse, TimeSpan timeout)
+        /// <summary><see cref="Call{T}"/> for a method whose result CAIME has no use for.</summary>
+        public void Call(string operation, string method, object parameters, TimeSpan timeout)
         {
-            Send<JToken>(operation, command, expectedResponse, timeout);
+            Call<JToken>(operation, method, parameters, timeout);
+        }
+
+        /// <summary>
+        /// Calls <paramref name="method"/>, one of the methods RPFM runs as a job, and waits for the job
+        /// to end. Returns the job's result; throws <see cref="RpfmException"/> when it fails, is
+        /// cancelled, or has not ended within <paramref name="timeout"/>.
+        /// </summary>
+        public T CallJob<T>(string operation, string method, object parameters, TimeSpan timeout)
+        {
+            using (var cancellation = new CancellationTokenSource(timeout))
+            {
+                var job = Call<JobStarted>(operation, method, parameters, cancellation).Job;
+
+                while (true)
+                {
+                    var status = Call<JObject>(operation, "job.wait", new { job, timeout_secs = JobWaitSeconds }, cancellation);
+
+                    switch ((string)status["state"])
+                    {
+                        case "finished":
+                            var result = status["result"];
+                            return result == null || result.Type == JTokenType.Null ? default(T) : result.ToObject<T>(Serializer);
+                        case "failed":
+                            throw new RpfmException(operation, (string)status["error"]?["message"] ?? "the RPFM server reported a failure.");
+                        case "cancelled":
+                            throw new RpfmException(operation, "the RPFM server cancelled it.");
+                    }
+                }
+            }
         }
 
         /// <summary>
         /// Ends the session. Telling the server first makes it release the session's packs at once
         /// rather than holding them through its five-minute reconnect grace period. When this was the
         /// server's last session, waits for the server to exit, so the next <see cref="Connect"/>
-        /// starts a new one rather than joining one that is shutting down and losing it mid-command.
+        /// starts a new one rather than joining one that is shutting down and losing it mid-request.
         /// </summary>
         public void Dispose()
         {
@@ -141,10 +143,10 @@ namespace CAIME.Rpfm
                 {
                     using (var cancellation = new CancellationTokenSource(DisconnectTimeout))
                     {
-                        // The server closes the socket in answer rather than replying; by then the session is gone.
+                        // The server may close the socket rather than answer; either way the session is gone.
                         Task.Run(async () =>
                         {
-                            await SendEnvelopeAsync(++_lastCommandId, "ClientDisconnecting", cancellation.Token).ConfigureAwait(false);
+                            await SendRequestAsync(++_lastRequestId, "session.disconnect", null, cancellation.Token).ConfigureAwait(false);
                             await DrainUntilClosedAsync(cancellation.Token).ConfigureAwait(false);
                         }).GetAwaiter().GetResult();
                     }
@@ -159,6 +161,32 @@ namespace CAIME.Rpfm
             finally
             {
                 _socket.Dispose();
+            }
+        }
+
+        private T Call<T>(string operation, string method, object parameters, CancellationTokenSource cancellation)
+        {
+            var id = ++_lastRequestId;
+
+            try
+            {
+                // Off the calling thread so no await inside can need a UI thread that is blocked here.
+                using (var response = Task.Run(() => ExchangeAsync(id, method, parameters, cancellation.Token)).GetAwaiter().GetResult())
+                {
+                    return ReadResult<T>(response, operation);
+                }
+            }
+            // A cancelled socket operation can surface as either exception, so the token decides which it was.
+            catch (Exception ex) when (ex is OperationCanceledException || ex is WebSocketException)
+            {
+                var reason = cancellation.IsCancellationRequested
+                    ? "the RPFM server did not respond in time."
+                    : $"the connection to the RPFM server was lost. {ex.Message}";
+                throw new RpfmException(operation, reason);
+            }
+            catch (JsonException ex)
+            {
+                throw new RpfmException(operation, $"the RPFM server sent a response CAIME could not read. {ex.Message}");
             }
         }
 
@@ -229,8 +257,8 @@ namespace CAIME.Rpfm
             }
         }
 
-        // The server greets every new connection with an unsolicited SessionConnected message. Waiting
-        // for it confirms that whatever answered on the port really is an RPFM server.
+        // The server greets every new connection with a session.connected notification. Waiting for
+        // it confirms that whatever answered on the port really is an RPFM server.
         private void ExpectSessionConnected()
         {
             const string Operation = "connect to the RPFM server";
@@ -239,18 +267,13 @@ namespace CAIME.Rpfm
             {
                 using (var cancellation = new CancellationTokenSource(ConnectAttemptTimeout))
                 using (var greeting = Task.Run(() => ReceiveMessageAsync(cancellation.Token)).GetAwaiter().GetResult())
+                using (var reader = OpenReader(greeting))
                 {
-                    // RPFM releases after 5.2 replace this protocol with JSON-RPC, which greets differently.
-                    using (var reader = OpenReader(greeting))
+                    if (!MoveToMember(reader, "method") || (string)reader.Value != "session.connected")
                     {
-                        if (MoveToEnvelopeMember(reader, "jsonrpc"))
-                        {
-                            throw new RpfmException(Operation,
-                                "this RPFM is newer than CAIME supports. Its server speaks a protocol CAIME does not know yet; use RPFM 5.0 to 5.2.");
-                        }
+                        throw new RpfmException(Operation,
+                            "whatever answered did not greet as an RPFM server. CAIME needs RPFM 5.3 or later.");
                     }
-
-                    ReadPayload<long>(greeting, Operation, "SessionConnected");
                 }
             }
             catch (Exception ex) when (ex is WebSocketException || ex is OperationCanceledException || ex is JsonException)
@@ -322,15 +345,15 @@ namespace CAIME.Rpfm
             }
         }
 
-        private async Task<MemoryStream> ExchangeAsync(long id, object command, CancellationToken cancellation)
+        private async Task<MemoryStream> ExchangeAsync(long id, string method, object parameters, CancellationToken cancellation)
         {
-            await SendEnvelopeAsync(id, command, cancellation).ConfigureAwait(false);
+            await SendRequestAsync(id, method, parameters, cancellation).ConfigureAwait(false);
 
             while (true)
             {
                 var message = await ReceiveMessageAsync(cancellation).ConfigureAwait(false);
 
-                // Anything else is an unsolicited broadcast (id 0, e.g. SettingsChanged) CAIME has no use for.
+                // Anything else is a notification (no id, e.g. job.updated) or another request's response.
                 if (ReadId(message) == id)
                 {
                     return message;
@@ -340,15 +363,21 @@ namespace CAIME.Rpfm
             }
         }
 
-        private Task SendEnvelopeAsync(long id, object command, CancellationToken cancellation)
+        private Task SendRequestAsync(long id, string method, object parameters, CancellationToken cancellation)
         {
-            var envelope = new JObject
+            var request = new JObject
             {
-                ["id"]   = id,
-                ["data"] = JToken.FromObject(command),
+                ["jsonrpc"] = "2.0",
+                ["id"]      = id,
+                ["method"]  = method,
             };
 
-            var bytes = Encoding.UTF8.GetBytes(envelope.ToString(Formatting.None));
+            if (parameters != null)
+            {
+                request["params"] = JToken.FromObject(parameters);
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(request.ToString(Formatting.None));
             return _socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cancellation);
         }
 
@@ -381,55 +410,46 @@ namespace CAIME.Rpfm
             }
         }
 
-        private static long ReadId(MemoryStream message)
+        // A notification has no id, which no request of this session uses.
+        private static long? ReadId(MemoryStream message)
         {
             using (var reader = OpenReader(message))
             {
-                if (!MoveToEnvelopeMember(reader, "id"))
-                {
-                    throw new JsonSerializationException("A message from the RPFM server has no id.");
-                }
-
-                return Convert.ToInt64(reader.Value);
+                return MoveToMember(reader, "id") && reader.TokenType == JsonToken.Integer ? Convert.ToInt64(reader.Value) : (long?)null;
             }
         }
 
-        // The payload sits at data.<variant> for a variant with content, or is data itself, a bare
-        // string, for one without (such as "Success").
-        private static T ReadPayload<T>(MemoryStream message, string operation, string expectedResponse)
+        // A response holds either a result or an error with a message.
+        private static T ReadResult<T>(MemoryStream message, string operation)
         {
             using (var reader = OpenReader(message))
             {
-                if (!MoveToEnvelopeMember(reader, "data"))
+                while (reader.Read())
                 {
-                    throw new RpfmException(operation, "the RPFM server sent a message with no data.");
+                    if (reader.Depth != 1 || reader.TokenType != JsonToken.PropertyName)
+                    {
+                        continue;
+                    }
+
+                    var member = (string)reader.Value;
+                    reader.Read();
+
+                    if (member == "result")
+                    {
+                        return Serializer.Deserialize<T>(reader);
+                    }
+
+                    if (member == "error")
+                    {
+                        var error = JObject.Load(reader);
+                        throw new RpfmException(operation, (string)error["message"] ?? error.ToString(Formatting.None));
+                    }
+
+                    reader.Skip();
                 }
-
-                if (reader.TokenType == JsonToken.String && (string)reader.Value == expectedResponse)
-                {
-                    return default(T);
-                }
-
-                if (reader.TokenType != JsonToken.StartObject || !reader.Read() || reader.TokenType != JsonToken.PropertyName)
-                {
-                    throw new RpfmException(operation, $"the RPFM server sent an unexpected response: {reader.TokenType} {reader.Value}");
-                }
-
-                var variant = (string)reader.Value;
-                reader.Read();
-
-                if (variant == "Error")
-                {
-                    throw new RpfmException(operation, reader.Value as string ?? Abbreviate(reader));
-                }
-
-                if (variant != expectedResponse)
-                {
-                    throw new RpfmException(operation, $"the RPFM server sent an unexpected response: {variant}");
-                }
-
-                return Serializer.Deserialize<T>(reader);
             }
+
+            throw new RpfmException(operation, "the RPFM server sent a response with neither a result nor an error.");
         }
 
         private static JsonTextReader OpenReader(MemoryStream message)
@@ -442,13 +462,13 @@ namespace CAIME.Rpfm
             };
         }
 
-        // Leaves the reader on the value of the envelope's top-level member called name, skipping
+        // Leaves the reader on the value of the message's top-level member called name, skipping
         // every other member's value unread.
-        private static bool MoveToEnvelopeMember(JsonReader reader, string name)
+        private static bool MoveToMember(JsonReader reader, string name)
         {
             while (reader.Read())
             {
-                if (reader.TokenType != JsonToken.PropertyName)
+                if (reader.Depth != 1 || reader.TokenType != JsonToken.PropertyName)
                 {
                     continue;
                 }
@@ -458,21 +478,21 @@ namespace CAIME.Rpfm
                     return reader.Read();
                 }
 
+                reader.Read();
                 reader.Skip();
             }
 
             return false;
         }
 
-        private static string Abbreviate(JsonReader reader)
+        private sealed class JobStarted
         {
-            const int MaxLength = 300;
-            var text = JToken.ReadFrom(reader).ToString(Formatting.None);
-            return text.Length <= MaxLength ? text : text.Substring(0, MaxLength) + "...";
+            [JsonProperty("job")]
+            public long Job { get; set; }
         }
     }
 
-    /// <summary>Raised when an RPFM server command fails; the message names the operation and why.</summary>
+    /// <summary>Raised when an RPFM server request fails; the message names the operation and why.</summary>
     public sealed class RpfmException : Exception
     {
         public RpfmException(string operation, string reason)
