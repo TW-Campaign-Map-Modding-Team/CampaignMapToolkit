@@ -342,6 +342,7 @@
     <Compile Include="Classes\Exporters\MapData\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />
+    <Compile Include="Classes\Exporters\MapData\TroyMapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\Wh1MapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\Wh2MapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\Wh3MapDataWriter.cs" />
