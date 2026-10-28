@@ -57,7 +57,7 @@ namespace CAIME.Tests.Unit
             var map = new MapHexFile();
             Assert.IsTrue(map.Load(MapDataEsfComparison.FindRepoFile("Templates", "main_rome_map", "map.hex")));
 
-            var estimate = (float)System.Math.Round(MapDataBuilderTables.EstimatePlayableAreaMaxY(MAX_X, map.MapWidth, map.MapHeight), 2);
+            var estimate = (float)System.Math.Round(RomeIIMapDataWriter.EstimateMaxY(MAX_X, map.MapWidth, map.MapHeight), 2);
             var expected = RomeIIMapDataWriter.Write(map, new MapDataTheatre { Index = THEATRE_INDEX, MaxX = MAX_X, MaxY = estimate }, 0);
             var actual   = RomeIIMapDataWriter.Write(map, new MapDataTheatre { Index = THEATRE_INDEX, MaxX = MAX_X }, 0);
 

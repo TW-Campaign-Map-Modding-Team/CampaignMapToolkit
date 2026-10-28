@@ -108,4 +108,7 @@ Warhammer II and Thrones as Attila.
 ## To investigate
 
 ### Our map_data writer
+- [ ] RPFM's TSV export prints floats with four decimals, so a `maxx` stored with more
+      precision is read a unit in the last place off (the shipped Pharaoh file implies
+      756.83997, which prints as 756.8400). `table.rows` returns floats as JSON numbers.
 - [ ] Apply map.hex mask bitmaps per mask entry. CAIME's map.hex reader (`MapHexFile`) discards them, so the writer never sees them.

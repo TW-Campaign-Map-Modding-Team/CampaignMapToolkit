@@ -259,7 +259,7 @@ When two sources both define a row for the same primary key (e.g. both a mod and
 - **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, opening a project tells you so.
 - **The Assembly Kit path is still required** — the RPFM workflow reuses the Assembly Kit's table schemas, takes the few fields no pack carries from the Assembly Kit's own tables, and processing still runs the Assembly Kit's tools. It only ever reads from the Assembly Kit.
 
-**Processing `map_data.esf` with RPFM.** The Assembly Kit's map data builder reads a handful of tables, and CAIME makes them for the open map from the project's own database rather than handing it the Assembly Kit's. What matters in them is your map's row in `campaign_map_playable_areas` — from your mod or the game — so it must have one. No game's packs carry that row's `maxy`: CAIME uses the Assembly Kit's value when its own table has a row for the map, and otherwise works it out from `maxx` and the map's size in hexes.
+**Processing `map_data.esf` needs RPFM.** CAIME builds `map_data.esf` from your map's first row in `campaign_map_playable_areas` — from your mod or the game — so it must have one, and with the Assembly Kit as the Database source **Process > Map Data** stops and asks you to switch. No game's packs carry that row's `maxy`: CAIME uses the Assembly Kit's value when its own table has a row for the map, and otherwise works it out from `maxx` and the map's size in hexes.
 
 **Optional: your campaign's mod, set per project, not in Preferences.** This is the mod containing *this specific campaign's* own data (its region list, campaign definition, etc.). It's entirely optional: a project without one simply reads everything from the game. Set it any time via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open): type the mod's `.pack` file name, or **Browse...** to pick the `.pack` from disk — either way only the file name is kept. Leave the field empty to go back to the game's tables only.
 
@@ -311,7 +311,7 @@ You do not normally need to open or edit this file manually — CAIME manages it
   RPFM read the game's packs from the game folder set in its settings and one of the tables CAIME needs wasn't in them. Check that the folder points at the game's actual, complete install.
 
 - **"campaign_map_playable_areas has no row for &lt;map&gt;" when processing `map_data.esf`.**
-  With RPFM as the Database source, `map_data.esf` is built from your map's row in `campaign_map_playable_areas`, and neither your mod nor the game has one. Add one for the map to your mod. Its `index` and `maxx` go into the map data; the game also reads the row itself, so fill in its other columns as the game expects.
+  With RPFM as the Database source, `map_data.esf` is built from your map's row in `campaign_map_playable_areas`, and neither your mod nor the game has one. Add one for the map to your mod. Its `index` and `maxx` go into the map data (and, for Rome 2, its `maxy`); the game also reads the row itself, so fill in its other columns as the game expects.
 
 - **"RPFM found no mod named &lt;name&gt;" in the log.**
   RPFM looked for that `.pack` in the game's `data` folder and its Steam Workshop folder and didn't find it, so the project opened without it. Check the name in **Settings > RPFM Workflow** — it must match the file name exactly, capitalisation included — and that the mod is installed or subscribed.
