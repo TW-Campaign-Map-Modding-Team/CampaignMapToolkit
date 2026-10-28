@@ -42,6 +42,7 @@
   <ItemGroup>
     <Compile Include="Esf\AbcaCodec.cs" />
     <Compile Include="Esf\AbcbCodec.cs" />
+    <Compile Include="Esf\AbcbWriter.cs" />
     <Compile Include="Esf\AbceCodec.cs" />
     <Compile Include="Esf\AbcfCodec.cs" />
     <Compile Include="Esf\SimpleNodes.cs" />

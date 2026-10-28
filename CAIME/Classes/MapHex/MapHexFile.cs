@@ -1785,7 +1785,7 @@ namespace CAIME
         // the Assembly Kit's map_data builder copies. Warhammer 3 (0x14) starts it at bit 4, which
         // leaves 5 bits; bit 3 is not part of it, and what it means is unknown. Three Kingdoms (0x13)
         // starts it at bit 3, which leaves 6 bits. The other versions have no Area of Interest.
-        private int AreaOfInterestShift => MinorFileVersion == 0x13 ? 3 : 4;
+        public int AreaOfInterestShift => MinorFileVersion == 0x13 ? 3 : 4;
 
         public int AreaOfInterestIndexBits => 9 - AreaOfInterestShift;
 
