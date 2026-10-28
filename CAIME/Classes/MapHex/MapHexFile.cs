@@ -106,6 +106,12 @@ namespace CAIME
         public int                          MajorFileVersion        { get; private set; }
         public int                          MinorFileVersion        { get; private set; }
 
+        /// <summary>
+        /// When the file was last saved, in Unix seconds (0x12 and later; 0 before). Three
+        /// Kingdoms' map_data.esf records it as MAP_FILE_VALIDATION.
+        /// </summary>
+        public ulong                        Timestamp               { get; private set; }
+
         public string                       GameName                { get; private set; }
         public string                       CampaignMapName         { get; private set; }
 
@@ -144,6 +150,7 @@ namespace CAIME
             isDirty                         = false;
             MajorFileVersion                = 0;
             MinorFileVersion                = 0;
+            Timestamp                       = 0;
         }
 
         private void AppendChecksum(string mapBinPath, string mapHexPath)
@@ -1495,8 +1502,8 @@ namespace CAIME
 
             if (minorVersion >= 0x12)
             {
-                var timestamp = (ulong)DateTime.Now.Subtract(UNIX_BASE).TotalSeconds;
-                bw.Write(timestamp);
+                Timestamp = (ulong)DateTime.Now.Subtract(UNIX_BASE).TotalSeconds;
+                bw.Write(Timestamp);
             }
 
             this.WriteAsciiString(bw, gameName);
@@ -1714,7 +1721,7 @@ namespace CAIME
 
             if (MinorFileVersion >= 0x12)
             {
-                br.ReadUInt64();    // Skip timestamp
+                Timestamp           = br.ReadUInt64();
             }
 
             GameName                = this.ReadAsciiString(br);

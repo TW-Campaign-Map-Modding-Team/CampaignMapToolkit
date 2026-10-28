@@ -19,6 +19,26 @@ namespace CAIME.Exporters
     /// </summary>
     public static class Wh3MapDataWriter
     {
+        /// <summary>What Warhammer III and Three Kingdoms lay out differently.</summary>
+        internal sealed class Layout
+        {
+            public EsfFormat                Format              { get; set; } = EsfFormat.Abcb;
+            public ushort                   DataVersion         { get; set; }
+
+            /// <summary>Whether MAP_FILE_VALIDATION holds the map.hex's save time, or 0.</summary>
+            public bool                     ValidatesMapHex     { get; set; }
+
+            public MapDataAreaReferences    AreaReferences      { get; set; } = MapDataAreaReferences.Blocks;
+
+            /// <summary>Whether the per-hex area runs are a u16 array rather than a block.</summary>
+            public bool                     RunsAsArray         { get; set; }
+
+            public Func<MapDataModel, MapDataSettlement[]> FindSettlements { get; set; }
+                = model => MapDataSettlement.FindAll(model.Map, model.Grid, model.RegionCount);
+        }
+
+        private static readonly Layout WARHAMMER_3 = new Layout();
+
         private const byte   MAP_DATA_VERSION         = 2;
         private const byte   HEX_MAP_DATA_VERSION     = 5;
         private const byte   REGION_DATA_VERSION      = 1;
@@ -30,25 +50,30 @@ namespace CAIME.Exporters
 
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            var model       = new MapDataModel(map, theatre);
-            var settlements = MapDataSettlement.FindAll(map, model.Grid, model.RegionCount);
+            return Write(map, theatre, timestamp, WARHAMMER_3);
+        }
 
-            var esf = new EsfWriter(EsfFormat.Abcb);
+        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, Layout layout)
+        {
+            var model       = new MapDataModel(map, theatre);
+            var settlements = layout.FindSettlements(model);
+
+            var esf = new EsfWriter(layout.Format);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
 
             esf.BeginRecord("MAP_FILE_DATA_VERSION", 0);
-            esf.WriteUInt16(0);
+            esf.WriteUInt16(layout.DataVersion);
             esf.EndRecord();
 
             esf.BeginRecord("MAP_FILE_VALIDATION", 0);
-            esf.WriteUInt64(0);
+            esf.WriteUInt64(layout.ValidatesMapHex ? map.Timestamp : 0);
             esf.EndRecord();
 
             MapDataEsfParts.WriteTheatreForUi(esf, model, SettlementPositions(model, settlements));
             MapDataEsfParts.WriteTheatres(esf, model, HEX_MAP_DATA_VERSION, HexBytes(map));
 
             esf.BeginRecord("REGIONS_DATA", 0);
-            WriteMaskedRegions(esf, model, settlements);
+            WriteMaskedRegions(esf, model, settlements, layout);
             MapDataEsfParts.WriteNameLists(esf, map);
             esf.WriteUInt32Array(model.RegionColours());
             esf.WriteAsciiArray(map.AreasOfInterest);
@@ -65,7 +90,7 @@ namespace CAIME.Exporters
                 var settlement = settlements[region];
                 if (settlement != null)
                 {
-                    yield return (region, model.Geometry.CentreX(settlement.CentreColumn), model.Geometry.CentreY(settlement.CentreColumn, settlement.CentreRow));
+                    yield return (region, model.Geometry.CentreX(settlement.LogicalColumn), model.Geometry.CentreY(settlement.LogicalColumn, settlement.LogicalRow));
                 }
             }
         }
@@ -96,7 +121,7 @@ namespace CAIME.Exporters
             return bytes;
         }
 
-        private static void WriteMaskedRegions(EsfWriter esf, MapDataModel model, MapDataSettlement[] settlements)
+        private static void WriteMaskedRegions(EsfWriter esf, MapDataModel model, MapDataSettlement[] settlements, Layout layout)
         {
             esf.BeginBlock("MASKED_REGIONS_DATA", 0);
             esf.BeginBlockEntry();
@@ -109,18 +134,26 @@ namespace CAIME.Exporters
             for (int region = 0; region < model.RegionCount; ++region)
             {
                 esf.BeginBlockEntry();
-                WriteRegion(esf, model, settlements[region], region);
+                WriteRegion(esf, model, settlements[region], region, layout);
                 esf.EndBlockEntry();
             }
 
             esf.EndBlock();
 
-            WriteHexAreaRuns(esf, model.Areas);
+            if (layout.RunsAsArray)
+            {
+                esf.WriteUInt16Array(HexAreaRunsArray(model.Areas));
+            }
+            else
+            {
+                WriteHexAreaRuns(esf, model.Areas);
+            }
+
             esf.EndBlockEntry();
             esf.EndBlock();
         }
 
-        private static void WriteRegion(EsfWriter esf, MapDataModel model, MapDataSettlement settlement, int region)
+        private static void WriteRegion(EsfWriter esf, MapDataModel model, MapDataSettlement settlement, int region, Layout layout)
         {
             esf.BeginRecord("REGION_DATA", REGION_DATA_VERSION);
 
@@ -132,7 +165,7 @@ namespace CAIME.Exporters
             esf.WriteByte(model.PassableSea[region] ? (byte)1 : (byte)0);
             MapDataEsfParts.WriteRegionBounds(esf, model, region);
             MapDataEsfParts.WriteRegionLinks(esf, model, region);
-            MapDataEsfParts.WriteRegionAreas(esf, model, region, MapDataAreaReferences.Blocks);
+            MapDataEsfParts.WriteRegionAreas(esf, model, region, layout.AreaReferences);
 
             esf.WriteBool(settlement != null);
             if (settlement != null)
@@ -146,39 +179,33 @@ namespace CAIME.Exporters
 
         private static void WriteSettlement(EsfWriter esf, MapDataGrid grid, MapDataSettlement settlement)
         {
-            int column  = settlement.CentreColumn;
-            int row     = settlement.CentreRow;
-
             esf.BeginRecord("SETTLEMENT_INFO", SETTLEMENT_INFO_VERSION);
 
-            MapDataEsfParts.WriteFootprint(esf, column - MapDataSettlement.RADIUS, row - MapDataSettlement.RADIUS,
-                                           column + MapDataSettlement.RADIUS, row + MapDataSettlement.RADIUS, settlement.FootprintBits);
+            MapDataEsfParts.WriteFootprint(esf, settlement.FootprintMinColumn, settlement.FootprintMinRow,
+                                           settlement.FootprintMaxColumn, settlement.FootprintMaxRow, settlement.FootprintBits);
 
-            // The logical and the visual position: always the same hex.
-            esf.WriteUInt16((ushort)column);
-            esf.WriteUInt16((ushort)row);
-            esf.WriteUInt16((ushort)column);
-            esf.WriteUInt16((ushort)row);
+            esf.WriteUInt16((ushort)settlement.LogicalColumn);
+            esf.WriteUInt16((ushort)settlement.LogicalRow);
+            esf.WriteUInt16((ushort)settlement.CentreColumn);
+            esf.WriteUInt16((ushort)settlement.CentreRow);
 
             MapDataEsfParts.WriteHexList(esf, grid, "PRIMARY_SLOT_AREA_BLOCK", settlement.MainSlotHexes);
 
-            // The port sits at the settlement's centre, and its slot block lists the port hexes
-            // and then the main slot's.
-            esf.WriteUInt16(settlement.HasPort ? (ushort)column : NONE);
-            esf.WriteUInt16(settlement.HasPort ? (ushort)row : NONE);
+            // The port stands at the settlement's logical position, and its slot block lists the
+            // port hexes and then the main slot's.
+            esf.WriteUInt16(settlement.HasPort ? (ushort)settlement.LogicalColumn : NONE);
+            esf.WriteUInt16(settlement.HasPort ? (ushort)settlement.LogicalRow : NONE);
             MapDataEsfParts.WriteHexList(esf, grid, "PORT_SLOT_AREA_BLOCK", settlement.HasPort ? settlement.PortSlotHexes.Concat(settlement.MainSlotHexes) : Enumerable.Empty<int>());
 
             esf.EndRecord();
         }
 
         /// <summary>
-        /// The region and area of every hex, as runs over the grid in row-major order. A run's
-        /// length is a ushort, so longer runs are split.
+        /// The area of every hex, as runs over the grid in row-major order. A run's length is a
+        /// ushort, so longer runs are split.
         /// </summary>
-        private static void WriteHexAreaRuns(EsfWriter esf, MapDataAreas areas)
+        private static IEnumerable<(MapDataArea Area, int Length)> HexAreaRuns(MapDataAreas areas)
         {
-            esf.BeginBlock("REGION_AREA_INDEX_OVERRIDE", 0);
-
             int hexCount = areas.HexAreas.Length;
             for (int start = 0; start < hexCount;)
             {
@@ -189,18 +216,41 @@ namespace CAIME.Exporters
                     ++end;
                 }
 
+                yield return (areas.Areas[areaId], end - start);
+                start = end;
+            }
+        }
+
+        /// <summary>Warhammer III: a block of runs, each a REGION_AREA_INDEX record and a length.</summary>
+        private static void WriteHexAreaRuns(EsfWriter esf, MapDataAreas areas)
+        {
+            esf.BeginBlock("REGION_AREA_INDEX_OVERRIDE", 0);
+
+            foreach (var run in HexAreaRuns(areas))
+            {
                 esf.BeginBlockEntry();
                 esf.BeginRecord("REGION_AREA_INDEX", 0);
-                esf.WriteUInt16((ushort)areas.Areas[areaId].Region);
-                esf.WriteUInt16((ushort)areas.Areas[areaId].IndexInRegion);
+                esf.WriteUInt16((ushort)run.Area.Region);
+                esf.WriteUInt16((ushort)run.Area.IndexInRegion);
                 esf.EndRecord();
-                esf.WriteUInt16((ushort)(end - start));
+                esf.WriteUInt16((ushort)run.Length);
                 esf.EndBlockEntry();
-
-                start = end;
             }
 
             esf.EndBlock();
+        }
+
+        /// <summary>Three Kingdoms: pairs of a packed area reference and a length.</summary>
+        private static List<ushort> HexAreaRunsArray(MapDataAreas areas)
+        {
+            var runs = new List<ushort>();
+            foreach (var run in HexAreaRuns(areas))
+            {
+                runs.Add(MapDataEsfParts.PackedAreaReference(run.Area));
+                runs.Add((ushort)run.Length);
+            }
+
+            return runs;
         }
     }
 }

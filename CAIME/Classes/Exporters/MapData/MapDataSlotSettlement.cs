@@ -121,10 +121,7 @@ namespace CAIME.Exporters
 
         /// <summary>
         /// The dock, as both Attila's and Pharaoh's builders find it (every dock of main_attila_map
-        /// and phar_main): a fill over town sprawl from the main slot takes in the region's own
-        /// hexes and any other region's water - sea, bridges and impassable hexes - and spreads
-        /// out of water only into water. The dock is its first open sea hex, column by column: not
-        /// a bridge, such as a river crossing, and not impassable.
+        /// and phar_main): the first open sea hex of the sprawl fill from the main slot.
         /// </summary>
         private static int FindDock(MapDataModel model, List<int> mainSlotHexes)
         {
@@ -133,54 +130,8 @@ namespace CAIME.Exporters
                 return -1;
             }
 
-            var hexes   = model.Map.HexData;
-            int region  = hexes[mainSlotHexes[0]].RegionId;
-            var seen    = new HashSet<int>(mainSlotHexes);
-            var pending = new Stack<int>(mainSlotHexes);
-            int dock    = -1;
-
-            while (pending.Count > 0)
-            {
-                int hexIndex    = pending.Pop();
-                var hex         = hexes[hexIndex];
-                bool isWater    = IsWater(hex);
-
-                if (hex.IsTownSprawl == false || (hex.RegionId != region && isWater == false))
-                {
-                    continue;
-                }
-
-                if (hex.IsSea && hex.IsBridge == false && hex.IsPassable && IsBefore(model.Grid, hexIndex, dock))
-                {
-                    dock = hexIndex;
-                }
-
-                for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
-                {
-                    int neighbour = model.Grid.Neighbour(hexIndex, n);
-                    if (neighbour >= 0 && seen.Contains(neighbour) == false && hexes[neighbour].IsTownSprawl
-                        && (isWater == false || IsWater(hexes[neighbour])))
-                    {
-                        seen.Add(neighbour);
-                        pending.Push(neighbour);
-                    }
-                }
-            }
-
-            return dock;
-        }
-
-        private static bool IsWater(Hex hex)
-        {
-            return hex.IsSea || hex.IsPassable == false;
-        }
-
-        /// <summary>Whether a hex comes before another, column by column; any hex comes before -1.</summary>
-        private static bool IsBefore(MapDataGrid grid, int hexIndex, int other)
-        {
-            return other < 0
-                || grid.Column(hexIndex) < grid.Column(other)
-                || (grid.Column(hexIndex) == grid.Column(other) && grid.Row(hexIndex) < grid.Row(other));
+            int region = model.Map.HexData[mainSlotHexes[0]].RegionId;
+            return MapDataSprawlFill.Dock(model, MapDataSprawlFill.Fill(model, mainSlotHexes, region));
         }
 
         /// <summary>
