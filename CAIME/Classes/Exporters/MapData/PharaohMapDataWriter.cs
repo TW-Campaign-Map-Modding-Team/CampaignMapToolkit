@@ -20,14 +20,8 @@ namespace CAIME.Exporters
     /// </para>
     ///
     /// <para>
-    /// Given the game's attrition (painted after the template was made) and slot positions, the
-    /// output is byte for byte the game's apart from the timestamp and the order of the string
-    /// table.
-    /// </para>
-    ///
-    /// <para>
-    /// TODO: slot positions (see <see cref="MapDataSlot.Positions"/>), and with them the campaign
-    /// UI's settlement positions.
+    /// Given the game's attrition (painted after the template was made), the output is byte for
+    /// byte the game's apart from the timestamp and the order of the string table.
     /// </para>
     /// </summary>
     public static class PharaohMapDataWriter
@@ -41,6 +35,7 @@ namespace CAIME.Exporters
         {
             var model       = new MapDataModel(map, theatre);
             var settlements = MapDataSlotSettlement.FindAll(model);
+            MapDataSlotPositions.PlacePharaoh(model, settlements);
 
             var esf = new EsfWriter(EsfFormat.Abca);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);

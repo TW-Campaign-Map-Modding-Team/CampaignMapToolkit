@@ -10,11 +10,10 @@ namespace CAIME.Tests.Unit
     /// node by node, with the game's own file in TestData.
     ///
     /// <para>
-    /// The template's map.hex lacks two things the game's file was built from: the slot positions,
-    /// and with them the campaign UI's settlement positions; and attrition CA painted on about
-    /// 45,000 hexes after the template was made. Those are left out of the comparison; everything
-    /// else must match. With the game's attrition and positions put back in, the writer's output
-    /// is byte for byte the game's apart from the order of the string table.
+    /// The template's map.hex is older than the one the game's file was built from: CA has since
+    /// painted attrition on about 45,000 hexes. Each hex's attrition byte is left out of the
+    /// comparison; everything else must match. With the game's attrition put back in, the
+    /// writer's output is byte for byte the game's apart from the order of the string table.
     /// </para>
     /// </summary>
     [TestClass]
@@ -53,7 +52,7 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void Write_PharMain_MatchesTheGamesFileApartFromPositionsAndAttrition()
+        public void Write_PharMain_MatchesTheGamesFileApartFromAttrition()
         {
             var map = new MapHexFile();
             Assert.IsTrue(map.Load(MapDataEsfComparison.FindRepoFile("Templates", "phar_main", "map.hex")));
@@ -63,7 +62,6 @@ namespace CAIME.Tests.Unit
 
             var comparison = new MapDataEsfComparison
             {
-                SkipNode            = name => name.EndsWith("POSITIONS_BLOCK") || name == "REGION_KEYS",
                 MaskedArrayParent   = "HEX_MAP_DATA",
                 CompareByte         = index => index % BYTES_PER_HEX != ATTRITION_BYTE,
             };
