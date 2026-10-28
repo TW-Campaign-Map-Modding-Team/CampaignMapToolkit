@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using CAIME.Classes.Importers;
 
 namespace CAIME.Exporters
 {
@@ -12,16 +11,7 @@ namespace CAIME.Exporters
         public List<int> Hexes      { get; } = new List<int>();
 
         /// <summary>
-        /// One to seven of the slot's hexes, where its building stands.
-        ///
-        /// TODO: where these come from is not known. In main_attila_map they are not marked by any
-        /// map.hex bit, and are not the hexes nearest the slot's centroid or bounding-box centre,
-        /// nor its innermost hexes. Their shapes (one hex, two, a triangle of three, up to a hex
-        /// and its six neighbours) suggest building footprints from another source. In phar_main
-        /// every main slot of seven hexes (a hexagon) lists its centre and then its first hex, but
-        /// a port town's main slot of four lists one hex that is sometimes the one furthest from
-        /// the port and sometimes one beside it, so they are not worked out from the slot either.
-        /// Neither template map.hex has them. Left empty.
+        /// The slot's hexes where its building can stand, placed by <see cref="MapDataSlotPositions"/>.
         /// </summary>
         public List<int> Positions  { get; } = new List<int>();
     }
@@ -48,12 +38,12 @@ namespace CAIME.Exporters
         public int                  FootprintMaxRow     { get; private set; }
         public byte[]               FootprintBits       { get; private set; }
 
-        /// <summary>The first port hex in a sea area, column by column, or -1.</summary>
+        /// <summary>Where ships dock, or -1: see <see cref="FindDock"/>.</summary>
         public int DockHex { get; private set; } = -1;
 
         /// <summary>
-        /// TODO: the campaign UI's position for the settlement is its main slot's first position;
-        /// until positions are known, its first hex.
+        /// The campaign UI's position for the settlement: its main slot's first position, or its
+        /// first hex when it has none.
         /// </summary>
         public int UiHex => Slots[0].Positions.Count > 0 ? Slots[0].Positions[0] : Slots[0].Hexes[0];
 
@@ -120,17 +110,77 @@ namespace CAIME.Exporters
 
             settlement.Port.Hexes.AddRange(PortHexes(model, ownBySlot, settlement.Slots[0].Hexes));
 
-            // A port hex at sea in a bridge area, such as a river crossing, is no dock.
-            settlement.DockHex = settlement.Port.Hexes
-                .Where(hexIndex => model.Areas.Areas[model.Areas.HexAreas[hexIndex]].Type == MapDataAreaType.Sea)
-                .DefaultIfEmpty(-1)
-                .First();
+            settlement.DockHex = FindDock(model, settlement.Slots[0].Hexes);
 
             // CAIME marks slot hexes as sprawl, so a region without sprawl is not expected; its main
             // slot stands in.
             var sprawl = ownSprawl.Count > 0 ? Joined(model, ownSprawl, hex => hex.IsTownSprawl) : settlement.Slots[0].Hexes;
             settlement.SetFootprint(model, sprawl);
             return settlement;
+        }
+
+        /// <summary>
+        /// The dock, as both Attila's and Pharaoh's builders find it (every dock of main_attila_map
+        /// and phar_main): a fill over town sprawl from the main slot takes in the region's own
+        /// hexes and any other region's water - sea, bridges and impassable hexes - and spreads
+        /// out of water only into water. The dock is its first open sea hex, column by column: not
+        /// a bridge, such as a river crossing, and not impassable.
+        /// </summary>
+        private static int FindDock(MapDataModel model, List<int> mainSlotHexes)
+        {
+            if (mainSlotHexes.Count == 0)
+            {
+                return -1;
+            }
+
+            var hexes   = model.Map.HexData;
+            int region  = hexes[mainSlotHexes[0]].RegionId;
+            var seen    = new HashSet<int>(mainSlotHexes);
+            var pending = new Stack<int>(mainSlotHexes);
+            int dock    = -1;
+
+            while (pending.Count > 0)
+            {
+                int hexIndex    = pending.Pop();
+                var hex         = hexes[hexIndex];
+                bool isWater    = IsWater(hex);
+
+                if (hex.IsTownSprawl == false || (hex.RegionId != region && isWater == false))
+                {
+                    continue;
+                }
+
+                if (hex.IsSea && hex.IsBridge == false && hex.IsPassable && IsBefore(model.Grid, hexIndex, dock))
+                {
+                    dock = hexIndex;
+                }
+
+                for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                {
+                    int neighbour = model.Grid.Neighbour(hexIndex, n);
+                    if (neighbour >= 0 && seen.Contains(neighbour) == false && hexes[neighbour].IsTownSprawl
+                        && (isWater == false || IsWater(hexes[neighbour])))
+                    {
+                        seen.Add(neighbour);
+                        pending.Push(neighbour);
+                    }
+                }
+            }
+
+            return dock;
+        }
+
+        private static bool IsWater(Hex hex)
+        {
+            return hex.IsSea || hex.IsPassable == false;
+        }
+
+        /// <summary>Whether a hex comes before another, column by column; any hex comes before -1.</summary>
+        private static bool IsBefore(MapDataGrid grid, int hexIndex, int other)
+        {
+            return other < 0
+                || grid.Column(hexIndex) < grid.Column(other)
+                || (grid.Column(hexIndex) == grid.Column(other) && grid.Row(hexIndex) < grid.Row(other));
         }
 
         /// <summary>

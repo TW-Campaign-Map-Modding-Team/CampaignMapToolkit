@@ -19,8 +19,7 @@ namespace CAIME.Exporters
     /// </para>
     ///
     /// <para>
-    /// TODO: slot positions (see <see cref="MapDataSlot.Positions"/>), and with them the campaign
-    /// UI's settlement positions.
+    /// Slot positions follow the Assembly Kit's builder (<see cref="MapDataSlotPositions.PlaceAttila"/>).
     /// </para>
     /// </summary>
     public static class AttilaMapDataWriter
@@ -33,6 +32,7 @@ namespace CAIME.Exporters
         {
             var model       = new MapDataModel(map, theatre, MapDataRadiusRounding.PerColumnAndAHalf);
             var settlements = MapDataSlotSettlement.FindAll(model);
+            MapDataSlotPositions.PlaceAttila(model, settlements);
 
             var esf = new EsfWriter(EsfFormat.Abca);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);

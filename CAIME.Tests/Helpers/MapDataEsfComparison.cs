@@ -9,18 +9,12 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace CAIME.Tests.Helpers
 {
     /// <summary>
-    /// Compares a written map_data.esf with a game's own file node by node, leaving out the parts
-    /// a template map.hex cannot reproduce.
+    /// Compares a written map_data.esf with a game's own file node by node, optionally leaving out
+    /// some bytes of one array, for an input that is older than the game's.
     /// </summary>
     public sealed class MapDataEsfComparison
     {
         private const int MAX_DIFFERENCES = 20;
-
-        /// <summary>Records and blocks whose contents are not compared.</summary>
-        public Func<string, bool>           SkipNode            { get; set; } = name => false;
-
-        /// <summary>How many values at the end of each REGION_DATA are not compared.</summary>
-        public int                          SkipRegionTail      { get; set; }
 
         /// <summary>For a byte array under the named record, which bytes are compared.</summary>
         public string                       MaskedArrayParent   { get; set; }
@@ -69,11 +63,6 @@ namespace CAIME.Tests.Helpers
                     return;
                 }
 
-                if (SkipNode(expectedParent.Name))
-                {
-                    return;
-                }
-
                 var expectedNodes   = expectedParent.Value;
                 var actualNodes     = actualParent.Value;
                 if (expectedNodes.Count != actualNodes.Count)
@@ -82,8 +71,7 @@ namespace CAIME.Tests.Helpers
                     return;
                 }
 
-                int compared = expectedParent.Name == "REGION_DATA" ? expectedNodes.Count - SkipRegionTail : expectedNodes.Count;
-                for (int i = 0; i < compared; ++i)
+                for (int i = 0; i < expectedNodes.Count; ++i)
                 {
                     Compare(expectedNodes[i], actualNodes[i], $"{path}[{i}]", expectedParent.Name);
                 }
