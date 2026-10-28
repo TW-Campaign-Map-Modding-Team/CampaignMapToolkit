@@ -12,9 +12,10 @@ namespace CAIME.Exporters
     /// The hex radius is rounded as Attila rounds it, not as Pharaoh does.
     ///
     /// <para>
-    /// Each mask in map.hex also has a bitmap of hexes. Every vanilla bitmap is empty, which makes
-    /// every entry a copy of the unnamed one, and CAIME writes them empty too, so what a set bit
-    /// would change is not known.
+    /// Each mask in map.hex also has a bitmap of hexes, and the builder makes a hex whose bit is set
+    /// impassable in that mask's entry (read from Warhammer III's Assembly Kit). Every vanilla
+    /// bitmap is empty, which makes every entry a copy of the unnamed one, and CAIME discards the
+    /// bitmaps, so it writes copies too.
     /// </para>
     /// </summary>
     public static class Wh1MapDataWriter

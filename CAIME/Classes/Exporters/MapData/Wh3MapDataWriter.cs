@@ -33,8 +33,9 @@ namespace CAIME.Exporters
             /// <summary>Whether the per-hex area runs are a u16 array rather than a block.</summary>
             public bool                     RunsAsArray         { get; set; }
 
-            public Func<MapDataModel, MapDataSettlement[]> FindSettlements { get; set; }
-                = model => MapDataSettlement.FindAll(model.Map, model.Grid, model.RegionCount);
+            public MapDataSeaFlag           SeaFlag             { get; set; } = MapDataSeaFlag.FirstArea;
+
+            public Func<MapDataModel, MapDataSettlement[]> FindSettlements { get; set; } = MapDataSettlement.FindAll;
         }
 
         private static readonly Layout WARHAMMER_3 = new Layout();
@@ -55,7 +56,7 @@ namespace CAIME.Exporters
 
         internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, Layout layout)
         {
-            var model       = new MapDataModel(map, theatre);
+            var model       = new MapDataModel(map, theatre, seaFlag: layout.SeaFlag);
             var settlements = layout.FindSettlements(model);
 
             var esf = new EsfWriter(layout.Format);
@@ -83,6 +84,10 @@ namespace CAIME.Exporters
             return esf.ToArray(timestamp);
         }
 
+        /// <summary>
+        /// The campaign UI puts a settlement at its logical position, which the builder clamps to
+        /// the grid: an invalid settlement goes to the last column and row.
+        /// </summary>
         private static IEnumerable<(int, float, float)> SettlementPositions(MapDataModel model, MapDataSettlement[] settlements)
         {
             for (int region = 0; region < settlements.Length; ++region)
@@ -90,14 +95,16 @@ namespace CAIME.Exporters
                 var settlement = settlements[region];
                 if (settlement != null)
                 {
-                    yield return (region, model.Geometry.CentreX(settlement.LogicalColumn), model.Geometry.CentreY(settlement.LogicalColumn, settlement.LogicalRow));
+                    int column  = Math.Min(settlement.LogicalColumn, model.Grid.Width - 1);
+                    int row     = Math.Min(settlement.LogicalRow, model.Grid.Height - 1);
+                    yield return (region, model.Geometry.CentreX(column), model.Geometry.CentreY(column, row));
                 }
             }
         }
 
         /// <summary>
         /// Six bytes a hex: ground type, climate, attrition + 1, the area of interest, road and river
-        /// masks. The builder copies the area of interest as bits 3-10 of map.hex's bytes 8-9, so the
+        /// masks. The builder copies the area of interest as bits 3-8 of map.hex's bytes 8-9, so the
         /// byte holds the index + 1 shifted up past the bit below it, which CAIME always writes as 0.
         /// </summary>
         private static byte[] HexBytes(MapHexFile map)
@@ -191,11 +198,12 @@ namespace CAIME.Exporters
 
             MapDataEsfParts.WriteHexList(esf, grid, "PRIMARY_SLOT_AREA_BLOCK", settlement.MainSlotHexes);
 
-            // The port stands at the settlement's logical position, and its slot block lists the
-            // port hexes and then the main slot's.
-            esf.WriteUInt16(settlement.HasPort ? (ushort)settlement.LogicalColumn : NONE);
-            esf.WriteUInt16(settlement.HasPort ? (ushort)settlement.LogicalRow : NONE);
-            MapDataEsfParts.WriteHexList(esf, grid, "PORT_SLOT_AREA_BLOCK", settlement.HasPort ? settlement.PortSlotHexes.Concat(settlement.MainSlotHexes) : Enumerable.Empty<int>());
+            // A valid settlement's port stands at its logical position, and its slot block lists
+            // the port hexes and then the main slot's; an invalid one's lists the port hexes alone.
+            bool placedPort = settlement.IsValid && settlement.HasPort;
+            esf.WriteUInt16(placedPort ? (ushort)settlement.LogicalColumn : NONE);
+            esf.WriteUInt16(placedPort ? (ushort)settlement.LogicalRow : NONE);
+            MapDataEsfParts.WriteHexList(esf, grid, "PORT_SLOT_AREA_BLOCK", placedPort ? settlement.PortSlotHexes.Concat(settlement.MainSlotHexes) : settlement.PortSlotHexes);
 
             esf.EndRecord();
         }

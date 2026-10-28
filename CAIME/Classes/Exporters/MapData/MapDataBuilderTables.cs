@@ -17,9 +17,11 @@ namespace CAIME.Exporters
     /// taken away or changed, on Rome II, Attila, Warhammer 1-3, Three Kingdoms and Pharaoh, showed:
     ///   - campaign_maps: the map's row, found by mapname. minx, miny, maxx and maxy must be present,
     ///     but no game uses their values.
-    ///   - campaign_map_playable_areas: the map's row. index, overlay_file, sea_trade and maxx shape
-    ///     the output, and so do minx and miny on Rome II and Attila. maxy must be present; only
-    ///     Rome II uses its value, and only stores it.
+    ///   - campaign_map_playable_areas: the map's row. index and maxx shape the output; maxy must be
+    ///     present, and only Rome II uses its value, only storing it. Warhammer III's builder
+    ///     (disassembled) also reads overlay_file and sea_trade but writes neither, never reads minx
+    ///     or miny, and uses only the first row. Probe runs suggested overlay_file, sea_trade, minx
+    ///     and miny change the older games' output; that is not confirmed.
     ///   - regions, campaign_map_settlements, campaign_ground_types: at least one row, of any content.
     ///   - campaign_map_slots (Rome II only): must exist, and may be empty.
     /// A missing or empty table crashes or fails the data builder, and with no campaign_maps row for

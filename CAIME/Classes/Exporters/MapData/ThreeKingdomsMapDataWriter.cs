@@ -7,8 +7,9 @@ namespace CAIME.Exporters
     /// Templates/3k_dlc07_main_map/map.hex. It is Warhammer III's MAP_DATA v2
     /// (<see cref="Wh3MapDataWriter"/>) but for: ABCA rather than ABCB; MAP_FILE_DATA_VERSION 2;
     /// MAP_FILE_VALIDATION holding the map.hex's save time (<see cref="MapHexFile.Timestamp"/>);
-    /// packed area references and per-hex runs, as in Pharaoh; and settlements made from a fill
-    /// over town sprawl (<see cref="MapDataSettlement.FindAllThreeKingdoms"/>).
+    /// packed area references and per-hex runs, as in Pharaoh; and settlements for the land regions
+    /// only (<see cref="MapDataSettlement.FindAllThreeKingdoms"/>). Its sea flag rule has not been
+    /// read from its DLL, so it keeps the one worked out from the game's files.
     /// </summary>
     public static class ThreeKingdomsMapDataWriter
     {
@@ -19,6 +20,7 @@ namespace CAIME.Exporters
             ValidatesMapHex     = true,
             AreaReferences      = MapDataAreaReferences.PackedArray,
             RunsAsArray         = true,
+            SeaFlag             = MapDataSeaFlag.AnySeaArea,
             FindSettlements     = MapDataSettlement.FindAllThreeKingdoms,
         };
 

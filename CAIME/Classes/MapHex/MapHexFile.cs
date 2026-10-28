@@ -1903,6 +1903,10 @@ namespace CAIME
             }
         }
 
+        // One hex bitmap per campaign mask in UnknownEntries: (width + 7) / 8 bytes a row, bit
+        // column % 8. The map_data builder writes the regions once per mask, and a set bit makes
+        // that hex impassable in its mask's copy (empireutility HEX_MAP_MASK_DATA::apply_mask in
+        // Warhammer III's Assembly Kit). Every vanilla bitmap is empty, and CAIME discards them.
         private void ReadUnknownTrailingBlocks(BinaryReader br)
         {
             unknownTrailingBlockCount = br.ReadInt32();

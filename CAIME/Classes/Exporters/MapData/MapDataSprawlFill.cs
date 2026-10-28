@@ -4,8 +4,8 @@ using System.Linq;
 namespace CAIME.Exporters
 {
     /// <summary>
-    /// The fill over town sprawl the Attila, Three Kingdoms and Pharaoh builders make around a
-    /// settlement (read from Attila's and Three Kingdoms' DLLs): from the seed hexes it takes in
+    /// The fill over town sprawl the Attila, Three Kingdoms, Pharaoh and Warhammer III builders make
+    /// around a settlement (read from Attila's, Three Kingdoms' and Warhammer III's DLLs): from the seed hexes it takes in
     /// sprawl hexes of the settlement's region and any other region's water - sea, bridges and
     /// impassable hexes - and spreads out of water only into water.
     /// </summary>

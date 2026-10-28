@@ -131,27 +131,41 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(MapDataAreaType.BridgeCliff, areas.HexTypes[1 * 6 + 3]);
         }
 
+        private static MapDataModel Model(MapHexFile map, MapDataSeaFlag seaFlag = MapDataSeaFlag.FirstArea)
+        {
+            return new MapDataModel(map, new MapDataTheatre { Index = "42", MaxX = 100f }, seaFlag: seaFlag);
+        }
+
+        /// <summary>Main slot hexes with town sprawl within <paramref name="radius"/> of (column, row).</summary>
+        private static System.Action<Hex> MainSlot(int column, int row, int radius)
+        {
+            return hex =>
+            {
+                if (MapDataGrid.Distance(column, row, hex.Q, hex.R) <= radius)
+                {
+                    hex.TownSlotIndex   = Hex.MAIN_SLOT_INDEX;
+                    hex.IsTownSprawl    = true;
+                }
+            };
+        }
+
         /// <summary>
-        /// A settlement is the radius-2 hexagon around its centre; the footprint marks it in a 5x5
-        /// square, row by row, lowest bit first. Values from wh3_main_prologue_map.
+        /// A 19-hex settlement's footprint is its fill's 5x5 bounds, row by row, lowest bit first.
+        /// Values from wh3_main_prologue_map.
         /// </summary>
         [TestMethod]
         public void Settlement_Footprint_MatchesTheBuilderForBothColumnParities()
         {
             foreach (var (column, expected) in new[] { (4, new byte[] { 238, 255, 79, 0 }), (5, new byte[] { 228, 255, 239, 0 }) })
             {
-                var map = BuildMap(10, 10, hex =>
-                {
-                    if (MapDataGrid.Distance(column, 4, hex.Q, hex.R) <= MapDataSettlement.RADIUS)
-                    {
-                        hex.TownSlotIndex = Hex.MAIN_SLOT_INDEX;
-                    }
-                });
+                var map         = BuildMap(10, 10, MainSlot(column, 4, 2));
+                var settlement  = MapDataSettlement.FindAll(Model(map))[LAND_A];
 
-                var settlement = MapDataSettlement.FindAll(map, new MapDataGrid(10, 10), 3)[LAND_A];
-
+                Assert.IsTrue(settlement.IsValid);
                 Assert.AreEqual(column, settlement.CentreColumn);
                 Assert.AreEqual(4, settlement.CentreRow);
+                Assert.AreEqual(column, settlement.LogicalColumn);
+                Assert.AreEqual(4, settlement.LogicalRow);
                 Assert.AreEqual(19, settlement.MainSlotHexes.Count);
                 Assert.IsFalse(settlement.HasPort);
                 CollectionAssert.AreEqual(expected, settlement.FootprintBits, $"centre column {column}");
@@ -161,18 +175,52 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void Write_Settlement_ReadsBackItsMainSlotHexes()
         {
-            var map = BuildMap(10, 10, hex =>
-            {
-                if (MapDataGrid.Distance(4, 4, hex.Q, hex.R) <= MapDataSettlement.RADIUS)
-                {
-                    hex.TownSlotIndex = Hex.MAIN_SLOT_INDEX;
-                }
-            });
-
+            var map      = BuildMap(10, 10, MainSlot(4, 4, 2));
             var contents = WriteAndRead(map);
             var expected = map.HexData.Where(hex => hex.TownSlotIndex == Hex.MAIN_SLOT_INDEX).Select(hex => hex.Index).OrderBy(i => i % 10).ThenBy(i => i / 10).ToArray();
 
             CollectionAssert.AreEqual(expected, contents.Regions[LAND_A].PrimarySlotHexes.ToArray());
+        }
+
+        /// <summary>
+        /// The builder only places a settlement whose slots are a 7- or 19-hex hexagon; any other is
+        /// still written, with its slots, but every position is LOGICAL_POSITION::INVALID.
+        /// </summary>
+        [TestMethod]
+        public void Settlement_NotAHexagon_IsKeptWithoutAPosition()
+        {
+            var map = BuildMap(10, 10, MainSlot(4, 4, 1));
+            map.HexData[4 * 10 + 5].TownSlotIndex = -1;  // one hex short of the 7-hex hexagon
+
+            var settlement = MapDataSettlement.FindAll(Model(map))[LAND_A];
+
+            Assert.IsFalse(settlement.IsValid);
+            Assert.AreEqual(6, settlement.MainSlotHexes.Count);
+            Assert.AreEqual(MapDataSettlement.INVALID_POSITION, settlement.LogicalColumn);
+            Assert.AreEqual(MapDataSettlement.INVALID_POSITION, settlement.LogicalRow);
+            Assert.AreEqual(MapDataSettlement.INVALID_POSITION, settlement.CentreColumn);
+            Assert.AreEqual(MapDataSettlement.INVALID_POSITION, settlement.CentreRow);
+        }
+
+        /// <summary>
+        /// The builder's sea flag is the kind of a region's first area that is not impassable, row by
+        /// row, so a land region with a lake after its land keeps it clear, and gets a settlement.
+        /// </summary>
+        [TestMethod]
+        public void SeaFlag_FirstArea_IgnoresSeaAfterTheRegionsFirstArea()
+        {
+            var map = BuildMap(10, 10, hex =>
+            {
+                MainSlot(4, 4, 1)(hex);
+                if (hex.R == 9)
+                {
+                    hex.IsSea = true;
+                }
+            });
+
+            Assert.IsFalse(Model(map).PassableSea[LAND_A]);
+            Assert.IsTrue(Model(map, MapDataSeaFlag.AnySeaArea).PassableSea[LAND_A]);
+            Assert.IsNotNull(MapDataSettlement.FindAll(Model(map))[LAND_A]);
         }
 
         /// <summary>

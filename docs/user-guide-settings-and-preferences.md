@@ -311,7 +311,7 @@ You do not normally need to open or edit this file manually — CAIME manages it
   RPFM read the game's packs from the game folder set in its settings and one of the tables CAIME needs wasn't in them. Check that the folder points at the game's actual, complete install.
 
 - **"campaign_map_playable_areas has no row for &lt;map&gt;" when processing `map_data.esf`.**
-  With RPFM as the Database source, `map_data.esf` is built from your map's row in `campaign_map_playable_areas`, and neither your mod nor the game has one. Add one for the map to your mod: its `index`, `overlay_file`, `sea_trade` and `maxx` all go into the map data.
+  With RPFM as the Database source, `map_data.esf` is built from your map's row in `campaign_map_playable_areas`, and neither your mod nor the game has one. Add one for the map to your mod. Its `index` and `maxx` go into the map data; the game also reads the row itself, so fill in its other columns as the game expects.
 
 - **"RPFM found no mod named &lt;name&gt;" in the log.**
   RPFM looked for that `.pack` in the game's `data` folder and its Steam Workshop folder and didn't find it, so the project opened without it. Check the name in **Settings > RPFM Workflow** — it must match the file name exactly, capitalisation included — and that the mod is installed or subscribed.
