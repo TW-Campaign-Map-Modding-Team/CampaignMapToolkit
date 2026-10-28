@@ -111,12 +111,16 @@ namespace CAIME.Exporters
             return types;
         }
 
+        /// <summary>
+        /// Whether a hex other than the east one beside it is a passable sea bridge. An impassable one
+        /// does not count (warhammer_map_1_1_twilight has a cliff that touches only that).
+        /// </summary>
         private static bool TouchesSeaBridge(Hex[] hexes, MapDataGrid grid, int hexIndex)
         {
             for (int n = MapDataGrid.FIRST_NON_EAST_NEIGHBOUR; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
             {
                 int neighbour = grid.Neighbour(hexIndex, n);
-                if (neighbour >= 0 && hexes[neighbour].IsSea && hexes[neighbour].IsBridge)
+                if (neighbour >= 0 && hexes[neighbour].IsPassable && hexes[neighbour].IsSea && hexes[neighbour].IsBridge)
                 {
                     return true;
                 }
