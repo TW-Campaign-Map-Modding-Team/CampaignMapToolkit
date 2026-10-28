@@ -90,32 +90,11 @@ namespace CAIME.Exporters
         /// </summary>
         public static MapDataSettlement[] FindAllThreeKingdoms(MapDataModel model)
         {
-            var map         = model.Map;
-            var grid        = model.Grid;
             var settlements = new MapDataSettlement[model.RegionCount];
 
-            for (int region = 0; region < map.LandRegions.Count; ++region)
+            for (int region = 0; region < model.Map.LandRegions.Count; ++region)
             {
-                var bounds = model.RegionBounds[region];
-                if (bounds.HexCount == 0)
-                {
-                    continue;
-                }
-
-                int seed = -1;
-                for (int column = bounds.MinColumn; column <= bounds.MaxColumn && seed < 0; ++column)
-                {
-                    for (int row = bounds.MinRow; row <= bounds.MaxRow && seed < 0; ++row)
-                    {
-                        int hexIndex    = row * grid.Width + column;
-                        var hex         = map.HexData[hexIndex];
-                        if (hex.RegionId == region && IsPlainLand(hex) && hex.TownSlotIndex >= 0)
-                        {
-                            seed = hexIndex;
-                        }
-                    }
-                }
-
+                int seed = MapDataSprawlFill.Seed(model, region);
                 if (seed >= 0)
                 {
                     settlements[region] = ThreeKingdomsSettlement(model, seed, region);
@@ -149,7 +128,7 @@ namespace CAIME.Exporters
             settlement.CentreRow    = grid.Row(centre);
 
             int logical = slots
-                .Where(hexIndex => IsPlainLand(model.Map.HexData[hexIndex]))
+                .Where(hexIndex => MapDataSprawlFill.IsPlainLand(model.Map.HexData[hexIndex]))
                 .OrderBy(hexIndex => Math.Abs(grid.Column(hexIndex) - settlement.CentreColumn) + Math.Abs(grid.Row(hexIndex) - settlement.CentreRow))
                 .DefaultIfEmpty(centre)
                 .First();
@@ -157,12 +136,6 @@ namespace CAIME.Exporters
             settlement.LogicalColumn    = grid.Column(logical);
             settlement.LogicalRow       = grid.Row(logical);
             return settlement;
-        }
-
-        /// <summary>Land as the builder types it: not sea, beach, cliff or impassable.</summary>
-        private static bool IsPlainLand(Hex hex)
-        {
-            return hex.IsSea == false && hex.IsBeach == false && hex.IsCliff == false && hex.IsPassable;
         }
 
         private static List<int>[] MainSlotHexesByRegion(MapHexFile map, MapDataGrid grid, int regionCount)

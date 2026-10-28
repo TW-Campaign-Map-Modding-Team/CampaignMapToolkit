@@ -11,6 +11,31 @@ namespace CAIME.Exporters
     /// </summary>
     public static class MapDataSprawlFill
     {
+        /// <summary>Where the builders start a settlement's fill: the region's first plain land hex with a town slot, column by column, or -1.</summary>
+        public static int Seed(MapDataModel model, int region)
+        {
+            var bounds = model.RegionBounds[region];
+            if (bounds.HexCount == 0)
+            {
+                return -1;
+            }
+
+            for (int column = bounds.MinColumn; column <= bounds.MaxColumn; ++column)
+            {
+                for (int row = bounds.MinRow; row <= bounds.MaxRow; ++row)
+                {
+                    int hexIndex    = row * model.Grid.Width + column;
+                    var hex         = model.Map.HexData[hexIndex];
+                    if (hex.RegionId == region && hex.TownSlotIndex >= 0 && IsPlainLand(hex))
+                    {
+                        return hexIndex;
+                    }
+                }
+            }
+
+            return -1;
+        }
+
         /// <summary>The filled hexes, column by column.</summary>
         public static List<int> Fill(MapDataModel model, IEnumerable<int> seeds, int region)
         {
@@ -51,6 +76,12 @@ namespace CAIME.Exporters
         public static int Dock(MapDataModel model, List<int> filled)
         {
             return filled.Where(hexIndex => IsOpenSea(model.Map.HexData[hexIndex])).DefaultIfEmpty(-1).First();
+        }
+
+        /// <summary>Land as the builders type it: not sea, beach, cliff or impassable.</summary>
+        public static bool IsPlainLand(Hex hex)
+        {
+            return hex.IsSea == false && hex.IsBeach == false && hex.IsCliff == false && hex.IsPassable;
         }
 
         public static bool IsOpenSea(Hex hex)

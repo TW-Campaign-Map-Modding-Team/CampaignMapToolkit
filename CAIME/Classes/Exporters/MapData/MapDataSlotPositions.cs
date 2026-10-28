@@ -29,22 +29,60 @@ namespace CAIME.Exporters
         private sealed class ValidationFailed : System.Exception { }
 
         /// <summary>
-        /// Pharaoh, worked out from phar_main (all 181 settlements): a position is a hex where a
-        /// building three hexes big - the hex, the hex north of it and the hex south-east of it -
-        /// stands on the slot's open ground: hexes that are not beach and touch no other region. In
-        /// a seven-hex slot that is its centre and its south-west hex, centre first. Where no
-        /// building fits, as in a port town's four-hex slot, the position is the first open hex,
-        /// column by column.
+        /// Pharaoh, as its Assembly Kit's builder places them (read from the DLL; all 181
+        /// settlements of phar_main match): each slot's candidates as in Attila - its hexes whose
+        /// six neighbours hold the same town slot index - and then, for a settlement shaped as the
+        /// builder expects, the first plain land hex of the main slot and the port, which the main
+        /// slot and the port both take. The builder expects a main slot of seven hexes without a
+        /// port, or of four with a port of three that together make a hexagon. A seven-hex main slot
+        /// so gets its centre and its first hex; a port town's, one hex.
         /// </summary>
         public static void PlacePharaoh(MapDataModel model, MapDataSlotSettlement[] settlements)
         {
             foreach (var settlement in settlements.Where(settlement => settlement != null))
             {
-                foreach (var slot in settlement.Slots)
+                var main    = settlement.Slots[0];
+                var port    = settlement.Port;
+                bool hasPort = port.Hexes.Count > 0;
+
+                foreach (var slot in settlement.Slots.Append(port))
                 {
-                    PlacePharaoh(model, slot);
+                    slot.Positions.Clear();
+                    slot.Positions.AddRange(slot.Hexes.Where(hexIndex => IsSurroundedBySameSlot(model, hexIndex)));
+                }
+
+                if (IsPharaohShape(model.Grid, main.Hexes, port.Hexes) == false)
+                {
+                    continue;
+                }
+
+                int first = main.Hexes.Concat(port.Hexes).Where(hexIndex => MapDataSprawlFill.IsPlainLand(model.Map.HexData[hexIndex])).DefaultIfEmpty(-1).First();
+                if (first >= 0)
+                {
+                    main.Positions.Add(first);
+                    if (hasPort)
+                    {
+                        port.Positions.Add(first);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// Seven main slot hexes, or four with three port hexes, whose middle hex, column by column,
+        /// has all seven within a hex of it.
+        /// </summary>
+        private static bool IsPharaohShape(MapDataGrid grid, List<int> main, List<int> port)
+        {
+            bool counts = port.Count == 0 ? main.Count == 7 : main.Count == 4 && port.Count == 3;
+            if (counts == false)
+            {
+                return false;
+            }
+
+            var all     = main.Concat(port).OrderBy(grid.Column).ThenBy(grid.Row).ToList();
+            int centre  = all[all.Count / 2];
+            return all.All(hexIndex => MapDataGrid.Distance(grid.Column(centre), grid.Row(centre), grid.Column(hexIndex), grid.Row(hexIndex)) <= 1);
         }
 
         /// <summary>
@@ -293,47 +331,6 @@ namespace CAIME.Exporters
             }
 
             return column >= 0 && column < grid.Width && row >= 0 && row < grid.Height ? row * grid.Width + column : -1;
-        }
-
-        private static void PlacePharaoh(MapDataModel model, MapDataSlot slot)
-        {
-            var open = new HashSet<int>(slot.Hexes.Where(hexIndex => IsOpen(model, hexIndex)));
-
-            // Slot hexes are listed column by column; the builder lists the buildings the other way.
-            var anchors = slot.Hexes
-                .Where(hexIndex => open.Contains(hexIndex)
-                                && open.Contains(Step(model.Grid, hexIndex, Direction.North))
-                                && open.Contains(Step(model.Grid, hexIndex, Direction.SouthEast)))
-                .Reverse()
-                .ToList();
-
-            if (anchors.Count == 0 && open.Count > 0)
-            {
-                anchors.Add(slot.Hexes.First(open.Contains));
-            }
-
-            slot.Positions.Clear();
-            slot.Positions.AddRange(anchors);
-        }
-
-        private static bool IsOpen(MapDataModel model, int hexIndex)
-        {
-            var hex = model.Map.HexData[hexIndex];
-            if (hex.IsBeach)
-            {
-                return false;
-            }
-
-            for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
-            {
-                int neighbour = model.Grid.Neighbour(hexIndex, n);
-                if (neighbour >= 0 && model.Map.HexData[neighbour].RegionId != hex.RegionId)
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
     }
 }

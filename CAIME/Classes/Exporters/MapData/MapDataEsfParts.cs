@@ -157,8 +157,8 @@ namespace CAIME.Exporters
 
         /// <summary>
         /// A settlement with building slots (Attila and Pharaoh): its footprint, its slots and its
-        /// port. With <paramref name="portIncludesMainSlot"/> (Pharaoh), a port also lists the main
-        /// slot's hexes after its own and takes the main slot's positions, as Warhammer III's does.
+        /// port. With <paramref name="portIncludesMainSlot"/> (Pharaoh), a port's area also lists
+        /// the main slot's hexes after its own, as Warhammer III's does.
         /// </summary>
         public static void WriteSlotSettlement(EsfWriter esf, MapDataGrid grid, MapDataSlotSettlement settlement, bool portIncludesMainSlot = false)
         {
@@ -181,7 +181,7 @@ namespace CAIME.Exporters
             bool addMain    = portIncludesMainSlot && port.Hexes.Count > 0;
             var mainSlot    = settlement.Slots[0];
 
-            WriteHexList(esf, grid, "PORT_POSITIONS_BLOCK", addMain ? port.Positions.Concat(mainSlot.Positions) : port.Positions);
+            WriteHexList(esf, grid, "PORT_POSITIONS_BLOCK", port.Positions);
             WriteHexList(esf, grid, "PORT_AREA_BLOCK", addMain ? port.Hexes.Concat(mainSlot.Hexes) : port.Hexes);
             esf.EndRecord();
         }
