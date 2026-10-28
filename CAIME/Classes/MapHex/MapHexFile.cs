@@ -1803,9 +1803,9 @@ namespace CAIME
             byte byteValueOffset10;
             byte byteValueOffset16;
 
-            // Hoisted out of the per-hex loop - comparing the string once instead of
-            // once per hex (~731k times on the largest maps).
-            bool remapPharaohRegions = GameName == "phar";
+            // Only Pharaoh Dynasties' combined region list has a remap table; vanilla Pharaoh
+            // maps (0x12) are also "phar" but list land and sea regions apart.
+            bool remapPharaohRegions = MinorFileVersion == FAKE_DYNASTIES_MINOR_VER;
             var areaOfInterestShift  = this.AreaOfInterestShift;
             var areaOfInterestMask   = (1 << this.AreaOfInterestIndexBits) - 1;
 
