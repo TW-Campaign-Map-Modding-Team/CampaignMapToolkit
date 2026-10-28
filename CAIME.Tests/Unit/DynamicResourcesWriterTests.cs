@@ -57,6 +57,103 @@ namespace CAIME.Tests.Unit
             CollectionAssert.AreEqual(reference, written);
         }
 
+        /// <summary>
+        /// Templates/main_attila_map holds the inputs of TestData/dynamic_resources/main_attila_map.esf,
+        /// Attila's own build. Everything must match except the hex order of the one group
+        /// <see cref="DynamicResourceRegions"/> documents as not reproduced.
+        /// </summary>
+        [TestMethod]
+        public void Find_AttilaMainMap_MatchesTheGamesFile()
+        {
+            var reference   = FindTestData(Path.Combine("dynamic_resources", "main_attila_map.esf"));
+            var templates   = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(reference))), "Templates", "main_attila_map");
+
+            var map = new MapHexFile();
+            Assert.IsTrue(map.Load(Path.Combine(templates, "map.hex")));
+
+            var found = DynamicResourceRegions.Find(map,
+                DynamicResourcesImage.Load(Path.Combine(templates, "dynamic_resources.png")),
+                DynamicResourceType.LoadDatabase(Path.Combine(templates, "dynamic_resources_database.xml")));
+
+            var expected = ReadRegions(reference);
+
+            CollectionAssert.AreEqual(expected.Select(region => region.Region).ToArray(), found.Select(region => region.Region).ToArray(), "region order");
+
+            int groupsInADifferentHexOrder = 0;
+            for (int r = 0; r < expected.Count; ++r)
+            {
+                var expectedAreas   = expected[r].Areas;
+                var foundAreas      = found[r].Areas;
+                Assert.AreEqual(expectedAreas.Count, foundAreas.Count, $"region {expected[r].Region}: areas");
+
+                for (int a = 0; a < expectedAreas.Count; ++a)
+                {
+                    var context = $"region {expected[r].Region}, area {a}";
+                    Assert.AreEqual(expectedAreas[a].BuildingSuperchain, foundAreas[a].BuildingSuperchain, context);
+                    Assert.AreEqual(expectedAreas[a].Level, foundAreas[a].Level, context);
+                    Assert.AreEqual(expectedAreas[a].TileUpgradeId, foundAreas[a].TileUpgradeId, context);
+                    Assert.AreEqual(expectedAreas[a].HexGroups.Count, foundAreas[a].HexGroups.Count, $"{context}: groups");
+
+                    for (int g = 0; g < expectedAreas[a].HexGroups.Count; ++g)
+                    {
+                        var expectedHexes   = Pairs(expectedAreas[a].HexGroups[g]);
+                        var foundHexes      = Pairs(foundAreas[a].HexGroups[g]);
+
+                        CollectionAssert.AreEquivalent(expectedHexes, foundHexes, $"{context}, group {g}: hexes");
+                        if (expectedHexes.SequenceEqual(foundHexes) == false)
+                        {
+                            ++groupsInADifferentHexOrder;
+                        }
+                    }
+                }
+            }
+
+            Assert.AreEqual(1, groupsInADifferentHexOrder, "Only the one documented group may list its hexes in another order.");
+        }
+
+        private static List<(ushort, ushort)> Pairs(List<ushort> coordinates)
+        {
+            var pairs = new List<(ushort, ushort)>();
+            for (int i = 0; i < coordinates.Count; i += 2)
+            {
+                pairs.Add((coordinates[i], coordinates[i + 1]));
+            }
+
+            return pairs;
+        }
+
+        private static List<DynamicResourceRegion> ReadRegions(string path)
+        {
+            var root    = (ParentNode)EsfCodecUtil.LoadEsfFile(path).RootNode;
+            var regions = new List<DynamicResourceRegion>();
+
+            foreach (var regionEntry in root.Children.Single().Children)
+            {
+                var region = new DynamicResourceRegion { Region = ((EsfValueNode<ushort>)regionEntry.Values[0]).Value & 0x1FF };
+
+                foreach (var areaEntry in regionEntry.Children.Single().Children)
+                {
+                    var area = new DynamicResourceArea
+                    {
+                        BuildingSuperchain  = ((EsfValueNode<string>)areaEntry.Values[0]).Value,
+                        Level               = ((EsfValueNode<uint>)areaEntry.Values[1]).Value,
+                        TileUpgradeId       = ((EsfValueNode<string>)areaEntry.Values[2]).Value,
+                    };
+
+                    foreach (var groupEntry in areaEntry.Children.Single().Children)
+                    {
+                        area.HexGroups.Add(((EsfValueNode<ushort[]>)groupEntry.Values[0]).Value.ToList());
+                    }
+
+                    region.Areas.Add(area);
+                }
+
+                regions.Add(region);
+            }
+
+            return regions;
+        }
+
         [TestMethod]
         public void BuildTimeStamp_LeavesTheHourUnpadded()
         {

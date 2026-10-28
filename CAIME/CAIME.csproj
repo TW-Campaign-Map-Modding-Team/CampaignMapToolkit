@@ -302,6 +302,7 @@
     <Compile Include="Classes\Exporters\BaselineTilemapExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGBordersExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGRoadExporter.cs" />
+    <Compile Include="Classes\Exporters\DynamicResources\DynamicResourceRegions.cs" />
     <Compile Include="Classes\Exporters\DynamicResources\DynamicResourcesWriter.cs" />
     <Compile Include="Classes\Exporters\DynamicResources\ProcessDynamicResources.cs" />
     <Compile Include="Classes\Exporters\LayerToImageExporter.cs" />
