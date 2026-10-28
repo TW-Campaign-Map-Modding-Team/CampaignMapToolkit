@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace CAIME.Tests.Unit
 {
     [TestClass]
-    public class AbcbWriterTests
+    public class EsfWriterTests
     {
         private const int HEADER_SIZE = 16;
 
@@ -36,7 +36,7 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void Write_SmallFile_ReadsBackThroughTheAbcbCodec()
         {
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 2);
             esf.WriteAscii("hello");
             esf.WriteUInt16(513);
@@ -77,7 +77,7 @@ namespace CAIME.Tests.Unit
                 (256, EsfType.UINT32_SHORT), (0x10000, EsfType.UINT32_24BIT), (0x1000000, EsfType.UINT32),
             };
 
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 0);
             foreach (var item in expected)
             {
@@ -101,7 +101,7 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void Write_SizesStillInTheBuffer_TakeTheirShortestEncoding()
         {
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 0);
             esf.WriteUInt16(7);
             esf.EndRecord();
@@ -122,7 +122,7 @@ namespace CAIME.Tests.Unit
         {
             var data = new byte[3 * 1024 * 1024];
 
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 0);
             esf.WriteByteArray(data);
             esf.EndRecord();
@@ -153,7 +153,7 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void Write_StringIds_AreGivenInOrderOfFirstUse()
         {
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 0);
             esf.WriteAscii("b");
             esf.WriteAscii("a");
@@ -172,7 +172,7 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void ToArray_WithARecordStillOpen_Throws()
         {
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("ROOT", 0);
 
             Assert.ThrowsException<InvalidOperationException>(() => esf.ToArray(0));

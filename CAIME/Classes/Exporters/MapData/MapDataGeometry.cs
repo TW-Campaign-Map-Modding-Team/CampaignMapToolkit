@@ -2,6 +2,16 @@ using System;
 
 namespace CAIME.Exporters
 {
+    /// <summary>How a game's map_data builder works out the hex radius, in floats.</summary>
+    public enum MapDataRadiusRounding
+    {
+        /// <summary>Warhammer III: maxx * ((2 / 3) / (columns - 1)).</summary>
+        TwoThirdsPerColumn,
+
+        /// <summary>Attila: maxx / ((columns - 1) * 1.5).</summary>
+        PerColumnAndAHalf,
+    }
+
     /// <summary>
     /// Where the map_data builder puts a hex in world space. Hexes are flat-topped: column 0's
     /// centres lie on x = 0 and the last column's on x = the playable area's maxx, and odd columns
@@ -12,7 +22,9 @@ namespace CAIME.Exporters
     /// map_data.esf stores them and a different rounding changes the file. The hex radius is maxx
     /// times ((2 / 3) / (columns - 1)): computing it as maxx / (columns - 1) / 1.5 differs by a unit
     /// in the last place for some maps, such as wh3_main_chaos_map_4. Builds of maps 800, 1108,
-    /// 1440 and 1600 columns wide, each with ten values of maxx, all agree with this form.
+    /// 1440 and 1600 columns wide, each with ten values of maxx, all agree with this form. Attila's
+    /// builder computes it as maxx / ((columns - 1) * 1.5) instead, which is a unit in the last place
+    /// larger for main_attila_map (the only Attila map checked).
     /// </para>
     /// </summary>
     public sealed class MapDataGeometry
@@ -24,15 +36,16 @@ namespace CAIME.Exporters
         public float MaxX           { get; }
         public float MaxY           { get; }
 
-        public MapDataGeometry(float maxX, uint columns, uint rows)
+        public MapDataGeometry(float maxX, uint columns, uint rows, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn)
         {
             if (columns < 2)
             {
                 throw new ArgumentOutOfRangeException(nameof(columns), "A map needs at least two columns of hexes.");
             }
 
-            float radiusPerUnit = (float)((2f / 3f) / (float)(columns - 1));
-            Radius              = (float)(maxX * radiusPerUnit);
+            Radius              = rounding == MapDataRadiusRounding.TwoThirdsPerColumn
+                                ? (float)(maxX * (float)((2f / 3f) / (float)(columns - 1)))
+                                : (float)(maxX / (float)((float)(columns - 1) * 1.5f));
             ColumnSpacing       = (float)(1.5f * Radius);
             RowSpacing          = (float)((float)Math.Sqrt(3f) * Radius);
             HalfRow             = (float)(RowSpacing / 2f);

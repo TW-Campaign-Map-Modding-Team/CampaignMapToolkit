@@ -325,11 +325,15 @@
     <Compile Include="Classes\Editor\LayerCompositor.cs" />
     <Compile Include="Classes\Editor\LayerOpacityPreview.cs" />
     <Compile Include="Classes\Exporters\LookupImageExporter.cs" />
+    <Compile Include="Classes\Exporters\MapData\AttilaMapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataAreas.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataGeometry.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataEsfParts.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataGrid.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataModel.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataRegionLinks.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataSettlement.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataSlotSettlement.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />

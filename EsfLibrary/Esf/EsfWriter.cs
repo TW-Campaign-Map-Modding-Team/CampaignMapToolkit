@@ -5,9 +5,18 @@ using System.Text;
 
 namespace EsfLibrary
 {
+    /// <summary>The ESF layouts <see cref="EsfWriter"/> writes.</summary>
+    public enum EsfFormat
+    {
+        /// <summary>Rome II to Three Kingdoms: string table entries have a 16-bit length.</summary>
+        Abca,
+
+        /// <summary>Warhammer III: as ABCA, but string table entries have a 32-bit length.</summary>
+        Abcb,
+    }
+
     /// <summary>
-    /// Writes an ABCB file (the ABCA layout Warhammer III writes map_data.esf in) node by node, byte
-    /// for byte as the games' own writer does.
+    /// Writes an ABCA or ABCB file node by node, byte for byte as the games' own writer does.
     ///
     /// <para>
     /// The games write through a 1 MiB buffer. Every size - of a record, a block, a block entry or an
@@ -25,9 +34,8 @@ namespace EsfLibrary
     /// id, so the order does not change what the file holds.
     /// </para>
     /// </summary>
-    public sealed class AbcbWriter
+    public sealed class EsfWriter
     {
-        private const uint MAGIC              = 0xABCB;
         private const int  HEADER_SIZE        = 16;
         private const int  BUFFER_SIZE        = 0x100000;
         private const int  BUFFER_LIMIT       = BUFFER_SIZE - 1;
@@ -38,6 +46,7 @@ namespace EsfLibrary
         private const int  SHORT_INFO_MAX_NAME_INDEX = 0x1FF;
         private const int  SHORT_INFO_MAX_VERSION    = 0x0F;
 
+        private readonly EsfFormat                  format;
         private readonly List<string>               nodeNames       = new List<string>();
         private readonly Dictionary<string, int>    nodeNameIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string>               asciiStrings    = new List<string>();
@@ -68,8 +77,9 @@ namespace EsfLibrary
             }
         }
 
-        public AbcbWriter()
+        public EsfWriter(EsfFormat format)
         {
+            this.format = format;
             frames.Push(root);
         }
 
@@ -299,6 +309,20 @@ namespace EsfLibrary
             WriteSized(bytes);
         }
 
+        public void WriteCoordinates3DArray(IReadOnlyList<(float X, float Y, float Z)> values)
+        {
+            var bytes = new byte[values.Count * 3 * sizeof(float)];
+            for (int i = 0; i < values.Count; ++i)
+            {
+                Buffer.BlockCopy(BitConverter.GetBytes(values[i].X), 0, bytes, i * 12, 4);
+                Buffer.BlockCopy(BitConverter.GetBytes(values[i].Y), 0, bytes, i * 12 + 4, 4);
+                Buffer.BlockCopy(BitConverter.GetBytes(values[i].Z), 0, bytes, i * 12 + 8, 4);
+            }
+
+            WriteByteRaw((byte)EsfType.COORD3D_ARRAY);
+            WriteSized(bytes);
+        }
+
         public void WriteAsciiArray(IReadOnlyList<string> values)
         {
             var bytes = new byte[values.Count * sizeof(int)];
@@ -334,7 +358,7 @@ namespace EsfLibrary
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
             {
-                writer.Write(MAGIC);
+                writer.Write(format == EsfFormat.Abca ? 0xABCAu : 0xABCBu);
                 writer.Write(0u);
                 writer.Write(timestamp);
                 writer.Write((uint)(HEADER_SIZE + root.Content.Length));
@@ -363,7 +387,15 @@ namespace EsfLibrary
             writer.Write(asciiStrings.Count);
             for (int id = 0; id < asciiStrings.Count; ++id)
             {
-                writer.Write(asciiStrings[id].Length);
+                if (format == EsfFormat.Abca)
+                {
+                    writer.Write(checked((ushort)asciiStrings[id].Length));
+                }
+                else
+                {
+                    writer.Write(asciiStrings[id].Length);
+                }
+
                 writer.Write(Encoding.ASCII.GetBytes(asciiStrings[id]));
                 writer.Write(id);
             }

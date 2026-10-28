@@ -58,7 +58,7 @@ namespace CAIME.Exporters
 
         public static byte[] Write(IReadOnlyList<DynamicResourceRegion> regions, DateTime buildTimeUtc)
         {
-            var esf = new AbcbWriter();
+            var esf = new EsfWriter(EsfFormat.Abcb);
             esf.BeginRecord("CAMPAIGN_DYNAMIC_RESOURCES", 0);
             esf.WriteAscii(BuildTimeStamp(buildTimeUtc));
 
@@ -87,7 +87,7 @@ namespace CAIME.Exporters
             return buildTimeUtc.ToString("yyyyMMdd") + buildTimeUtc.Hour + buildTimeUtc.ToString("mmss");
         }
 
-        private static void WriteAreas(AbcbWriter esf, List<DynamicResourceArea> areas)
+        private static void WriteAreas(EsfWriter esf, List<DynamicResourceArea> areas)
         {
             esf.BeginBlock("REGION_RESOURCE_INFO_AREAS_BLOCK", 1);
             foreach (var area in areas)
