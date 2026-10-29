@@ -44,8 +44,8 @@ namespace CAIME.Tests.Unit
         [TestMethod] public void RoundTrip_WarhammerMasks()  => AssertGameFileRoundTrip(GameTemplate.Warhammer, "wh_dlc03_beastmen_map_1");
         [TestMethod] public void RoundTrip_WarhammerII()     => AssertGameFileRoundTrip(GameTemplate.Warhammer2, "wh2_main_great_vortex_map_7");
         [TestMethod] public void RoundTrip_WarhammerIIBig()  => AssertGameFileRoundTrip(GameTemplate.Warhammer2, "warhammer_map_1_1_twilight");
-        [TestMethod] public void RoundTrip_Troy()            => AssertGameFileRoundTrip(GameTemplate.Troy, "main_troy", saveFirst: false);
-        [TestMethod] public void RoundTrip_TroyMythic()      => AssertGameFileRoundTrip(GameTemplate.Troy, "troy_mythic", saveFirst: false);
+        [TestMethod] public void RoundTrip_Troy()            => AssertGameFileRoundTrip(GameTemplate.Troy, "main_troy");
+        [TestMethod] public void RoundTrip_TroyMythic()      => AssertGameFileRoundTrip(GameTemplate.Troy, "troy_mythic");
         [TestMethod] public void RoundTrip_Pharaoh()         => AssertGameFileRoundTrip(GameTemplate.Pharaoh, "phar_main");
         [TestMethod] public void RoundTrip_ThreeKingdoms()   => AssertGameFileRoundTrip(GameTemplate.Three_Kingdoms, "3k_dlc07_main_map");
 
@@ -61,18 +61,12 @@ namespace CAIME.Tests.Unit
             AssertRoundTrip(GameTemplate.Warhammer3, source);
         }
 
-        private void AssertGameFileRoundTrip(GameTemplate game, string mapName, bool saveFirst = true)
+        private void AssertGameFileRoundTrip(GameTemplate game, string mapName)
         {
-            AssertRoundTrip(game, MapDataEsfComparison.FindRepoFile("TestData", "campaign_maps", mapName, "map_data.esf"), saveFirst);
+            AssertRoundTrip(game, MapDataEsfComparison.FindRepoFile("TestData", "campaign_maps", mapName, "map_data.esf"));
         }
 
-        /// <param name="saveFirst">
-        /// Whether to save and reload the map before writing. Saving makes every land hex that
-        /// touches sea and is not a beach a cliff, and every other hex not one (MapHexFile.UpdateCliffs).
-        /// Troy's maps have cliffs away from the sea, which any save loses, the game's own map.hex
-        /// included, so their test writes from the imported map as it is.
-        /// </param>
-        private void AssertRoundTrip(GameTemplate game, string sourcePath, bool saveFirst = true)
+        private void AssertRoundTrip(GameTemplate game, string sourcePath)
         {
             var contents = MapDataReader.Read(sourcePath);
             CollectionAssert.Contains(MapDataReader.Games(contents), game);
@@ -83,13 +77,12 @@ namespace CAIME.Tests.Unit
             var map = MapHexFile.CreateMapHex(mapDir, "map", ProjectManager.GetGameNameFromGame(game), "map", contents.Width, contents.Height, ProjectManager.GetMapHexVersion(game));
             MapDataImporter.Import(contents, map);
 
-            if (saveFirst)
-            {
-                Assert.IsTrue(map.Save(mapDir, "map"), "The imported map did not save.");
+            // Saving sets land and sea from the ground types and cliffs from land and sea
+            // (MapHexFile.UpdateHexTypes), so the inferred ground types must be right.
+            Assert.IsTrue(map.Save(mapDir, "map"), "The imported map did not save.");
 
-                map = new MapHexFile();
-                Assert.IsTrue(map.Load(Path.Combine(mapDir, "map.hex")), "The imported map did not load back.");
-            }
+            map = new MapHexFile();
+            Assert.IsTrue(map.Load(Path.Combine(mapDir, "map.hex")), "The imported map did not load back.");
 
             // Only Rome II's builder stores the playable area's maxy; the others derive it.
             var theatre = new MapDataTheatre

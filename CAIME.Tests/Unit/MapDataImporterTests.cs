@@ -116,6 +116,31 @@ namespace CAIME.Tests.Unit
             CollectionAssert.AreEqual(new[] { "ocean", "lake_water" }, map.SeaGroundTypes);
         }
 
+        /// <summary>
+        /// The lake's ground type comes before the ocean's and is only under impassable hexes, so only
+        /// the cliffs on its shore show it is sea. Columns 3 and 4 become land, 4 a cliff.
+        /// </summary>
+        [TestMethod]
+        public void Import_ImpassableLakeGround_IsSeaWhenItsShoreIsCliffs()
+        {
+            var contents = BuildContents();
+            contents.GroundTypes.Clear();
+            contents.GroundTypes.AddRange(new[] { "grassland", "mountain", "lake_water", "ocean" });
+
+            for (int row = 0; row < H; ++row)
+            {
+                Set(contents, Index(3, row), 2, MapDataAreaType.Land, 0);
+                Set(contents, Index(4, row), 2, MapDataAreaType.Cliff, 0);
+                Set(contents, Index(5, row), 3, MapDataAreaType.Impassable, 2);
+            }
+
+            var map = Import(contents);
+
+            CollectionAssert.AreEqual(new[] { "grassland", "mountain" }, map.LandGroundTypes);
+            CollectionAssert.AreEqual(new[] { "lake_water", "ocean" }, map.SeaGroundTypes);
+            Assert.IsTrue(map.HexData[Index(5, 0)].IsSea);
+        }
+
         [TestMethod]
         public void Import_UnflaggedRegionWithOnlySeaGround_IsASeaRegion()
         {

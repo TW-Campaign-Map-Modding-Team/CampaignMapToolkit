@@ -20,7 +20,7 @@ namespace CAIME.Classes.Importers
                 throw new ArgumentException($"The map is {map.MapWidth}x{map.MapHeight}; map_data.esf is {contents.Width}x{contents.Height}.", nameof(map));
             }
 
-            int landGroundTypeCount = CountLandGroundTypes(contents);
+            int landGroundTypeCount = CountLandGroundTypes(contents, map);
 
             map.LandGroundTypes.AddRange(contents.GroundTypes.GetRange(0, landGroundTypeCount));
             map.SeaGroundTypes.AddRange(contents.GroundTypes.GetRange(landGroundTypeCount, contents.GroundTypes.Count - landGroundTypeCount));
@@ -42,32 +42,93 @@ namespace CAIME.Classes.Importers
 
         /// <summary>
         /// map.hex lists its land ground types before its sea ground types, and map_data.esf keeps
-        /// both as one list, so the first ground type found under passable sea starts the sea
-        /// ground types. A map without passable sea gives no answer and keeps them all as land.
+        /// both as one list. The split lies between the last ground type under passable land and
+        /// the first under passable sea; ground types used only under impassable hexes, such as an
+        /// impassable lake's, fall between them. Within that range the split is the one that best
+        /// explains the cliffs: CAIME makes a passable land hex a cliff exactly when it touches sea,
+        /// impassable sea included, as CA's maps do.
         /// </summary>
-        private static int CountLandGroundTypes(MapDataContents contents)
+        private static int CountLandGroundTypes(MapDataContents contents, MapHexFile map)
         {
-            int firstSeaGroundType = contents.GroundTypes.Count;
+            int lowest  = 0;
+            int highest = contents.GroundTypes.Count;
 
             for (int hexIndex = 0; hexIndex < contents.HexCount; ++hexIndex)
             {
                 var areaType    = contents.HexAreaTypes[hexIndex];
                 var groundType  = contents.HexGroundTypes[hexIndex];
 
-                if ((areaType == MapDataAreaType.Sea || areaType == MapDataAreaType.Bridge)
-                    && groundType != MapDataContents.None
-                    && groundType < firstSeaGroundType)
+                if (groundType == MapDataContents.None || areaType == MapDataAreaType.Impassable)
                 {
-                    firstSeaGroundType = groundType;
+                    continue;
+                }
+
+                if (areaType == MapDataAreaType.Sea || areaType == MapDataAreaType.Bridge)
+                {
+                    highest = Math.Min(highest, groundType);
+                }
+                else
+                {
+                    lowest = Math.Max(lowest, groundType + 1);
                 }
             }
 
-            if (firstSeaGroundType == contents.GroundTypes.Count)
+            if (lowest >= highest)
             {
-                LoggerViewModel.Log("map_data.esf has no passable sea, so every ground type has been imported as land. Check the ground types against the database.", LogLevel.Warning);
+                return highest;
             }
 
-            return firstSeaGroundType;
+            int best        = highest;
+            int bestErrors  = int.MaxValue;
+            for (int split = highest; split >= lowest; --split)
+            {
+                int errors = CountCliffErrors(contents, map, split);
+                if (errors < bestErrors)
+                {
+                    best        = split;
+                    bestErrors  = errors;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// How many passable land hexes are a cliff without touching sea, or touch sea without being
+        /// a cliff or beach, if the sea ground types start at <paramref name="split"/>.
+        /// </summary>
+        private static int CountCliffErrors(MapDataContents contents, MapHexFile map, int split)
+        {
+            int errors = 0;
+            for (int hexIndex = 0; hexIndex < contents.HexCount; ++hexIndex)
+            {
+                var areaType = contents.HexAreaTypes[hexIndex];
+                if (areaType != MapDataAreaType.Land && areaType != MapDataAreaType.Cliff && areaType != MapDataAreaType.BridgeCliff)
+                {
+                    continue;
+                }
+
+                bool touchesSea = false;
+                for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT && touchesSea == false; ++dir)
+                {
+                    int nbrIndex = map.GetNeighbourIndex(map.HexData[hexIndex], dir);
+                    if (nbrIndex == -1)
+                    {
+                        continue;
+                    }
+
+                    var nbrType = contents.HexAreaTypes[nbrIndex];
+                    touchesSea = nbrType == MapDataAreaType.Sea || nbrType == MapDataAreaType.Bridge
+                        || (nbrType == MapDataAreaType.Impassable && contents.HexGroundTypes[nbrIndex] >= split);
+                }
+
+                if (touchesSea != (areaType != MapDataAreaType.Land))
+                {
+                    ++errors;
+                }
+            }
+
+            return errors;
         }
 
         /// <summary>
