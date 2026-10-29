@@ -9,9 +9,9 @@ using Newtonsoft.Json.Linq;
 namespace CAIME.Tests.Unit
 {
     /// <summary>
-    /// Unit tests for <see cref="DatabaseTableConverter"/>. The inline TSV mirrors the exact format
-    /// RPFM's TSV export produces (column-names line, then a "#&lt;table&gt;;&lt;version&gt;;..." metadata
-    /// line, then true/false booleans) and the inline schema mirrors the columns RPFM's
+    /// Unit tests for <see cref="DatabaseTableConverter"/>. The inline fragments hold values as
+    /// RPFM's table.rows sends them, made text by <see cref="RpfmService"/> (true/false booleans, a
+    /// colour as one RRGGBB column), and the inline schema mirrors the columns RPFM's
     /// schema.definition returns. The key behaviour verified is that yes/no columns become "1"/"0" -
     /// the form the database loader expects.
     /// </summary>
@@ -26,30 +26,7 @@ namespace CAIME.Tests.Unit
             Column("is_sea",        "Boolean",  defaultValue: "false"),
         };
 
-        // Column order deliberately differs from the schema order, as RPFM's does.
-        private const string Tsv =
-"type\tmovement_cost\tcan_ambush\tis_sea\n" +
-"#test_table_tables;7;db/test_table_tables/rom_test\t\t\t\n" +
-"brownlands\t80\ttrue\tfalse\n" +
-"deep_sea\t1800\tfalse\ttrue\n";
-
-        private string _dir;
-
-        [TestInitialize]
-        public void Setup()
-        {
-            _dir = Path.Combine(Path.GetTempPath(), "caime_rpfm_conv_" + System.Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(_dir);
-        }
-
-        [TestCleanup]
-        public void Cleanup()
-        {
-            if (Directory.Exists(_dir))
-            {
-                Directory.Delete(_dir, recursive: true);
-            }
-        }
+        private static readonly string[] TestColumns = { "type", "movement_cost", "can_ambush", "is_sea" };
 
         [TestMethod]
         public void GetBooleanColumns_ReturnsYesNoFieldsOnly()
@@ -84,16 +61,17 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsv_WritesBooleansAsOneAndZero()
+        public void MergeFragments_WritesBooleansAsOneAndZero()
         {
-            var tsvPath = Path.Combine(_dir, "rom_test.tsv");
-            File.WriteAllText(tsvPath, Tsv);
+            var fragment = Fragment("rom_test", TestColumns,
+                new[] { "brownlands", "80", "true", "false" },
+                new[] { "deep_sea", "1800", "false", "true" });
 
-            var doc     = MergeWithoutSchemaFields(tsvPath, "test_table", TestSchema());
+            var doc     = MergeWithoutSchemaFields(fragment, "test_table", TestSchema());
             var records = doc.Root.Elements("test_table").ToList();
 
             Assert.AreEqual("dataroot", doc.Root.Name.LocalName, "Root element must be dataroot.");
-            Assert.AreEqual(2, records.Count, "Both data rows should be converted; the # metadata line skipped.");
+            Assert.AreEqual(2, records.Count);
 
             var first = records[0];
             Assert.AreEqual("brownlands", first.Element("type").Value);
@@ -108,21 +86,16 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsv_ExpandsRpfmColourColumnIntoRgb_AndSkipsUnmappableNames()
+        public void MergeFragments_ExpandsRpfmColourColumnIntoRgb_AndSkipsUnmappableNames()
         {
             // Mirrors the real RPFM "regions" table: a colour packed into a single hex column whose
-            // header is not a valid XML name. Row 2 has an empty colour (must not emit r/g/b).
-            var tsv =
-"key\tis_sea\tunnamed colour group_1\n" +
-"#regions_tables;3;db/regions_tables/rom_regions\t\t\n" +
-"reg_a\tfalse\tB66216\n" +
-"reg_b\ttrue\t\n";
-
-            var tsvPath = Path.Combine(_dir, "rom_regions.tsv");
-            File.WriteAllText(tsvPath, tsv);
+            // name is not a valid XML name. Row 2 has an empty colour (must not emit r/g/b).
+            var fragment = Fragment("rom_regions", new[] { "key", "is_sea", "unnamed colour group_1" },
+                new[] { "reg_a", "false", "B66216" },
+                new[] { "reg_b", "true", "" });
 
             var schema  = DatabaseTableConverter.SchemaFromRpfm(new[] { Column("key", "StringU8", isKey: true), Column("is_sea", "Boolean") }, null);
-            var records = MergeWithoutSchemaFields(tsvPath, "regions", schema).Root.Elements("regions").ToList();
+            var records = MergeWithoutSchemaFields(fragment, "regions", schema).Root.Elements("regions").ToList();
             Assert.AreEqual(2, records.Count);
 
             // B66216 -> r=182 (0xB6), g=98 (0x62), b=22 (0x16).
@@ -137,51 +110,39 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsv_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
+        public void MergeFragments_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
         {
             // Two fragments that happen to share the exact same in-pack fragment name (e.g. two packs
             // both shipping a "!!!mod" fragment for this table) - fragment-name sorting alone cannot
-            // break this tie, so MergeTsv must fall back to a stable sort and let whichever
+            // break this tie, so MergeFragments must fall back to a stable sort and let whichever
             // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists a
             // mod's fragments before the game's, so a mod wins this tie.
-            var tsvFromFirstPack = Path.Combine(_dir, "pack1.tsv");
-            File.WriteAllText(tsvFromFirstPack,
-                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
-                "#test_table_tables;7;db/test_table_tables/!!!mod\t\t\t\n" +
-                "brownlands\t111\ttrue\tfalse\n");
+            var fromFirstPack  = Fragment("!!!mod", TestColumns, new[] { "brownlands", "111", "true", "false" });
+            var fromSecondPack = Fragment("!!!mod", TestColumns, new[] { "brownlands", "222", "true", "false" });
 
-            var tsvFromSecondPack = Path.Combine(_dir, "pack2.tsv");
-            File.WriteAllText(tsvFromSecondPack,
-                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
-                "#test_table_tables;7;db/test_table_tables/!!!mod\t\t\t\n" +
-                "brownlands\t222\ttrue\tfalse\n");
-
-            var merged   = Merge(new[] { (tsvFromFirstPack, "!!!mod"), (tsvFromSecondPack, "!!!mod") }, null);
+            var merged   = Merge(new[] { fromFirstPack, fromSecondPack }, null);
             var records  = merged.Root.Elements("test_table").ToList();
             Assert.AreEqual(1, records.Count, "Same primary key across both fragments must collapse to one record.");
             Assert.AreEqual("111", records[0].Element("movement_cost").Value,
                 "With tied fragment names, the fragment listed first must win.");
 
             // Reversing the listed order must reverse the winner - proves the tiebreak really tracks
-            // input order rather than, say, file path or an unstable sort.
-            var reversed = Merge(new[] { (tsvFromSecondPack, "!!!mod"), (tsvFromFirstPack, "!!!mod") }, null);
+            // input order rather than an unstable sort.
+            var reversed = Merge(new[] { fromSecondPack, fromFirstPack }, null);
             Assert.AreEqual("222", reversed.Root.Elements("test_table").First().Element("movement_cost").Value);
         }
 
         [TestMethod]
-        public void MergeTsv_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
+        public void MergeFragments_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
         {
             // The RPFM workflow keeps only one campaign map's regions; dropping the rest must not
             // reorder the ones kept, since CAIME numbers regions by their order in the table.
-            var tsvPath = Path.Combine(_dir, "rom_test.tsv");
-            File.WriteAllText(tsvPath,
-                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
-                "#test_table_tables;7;db/test_table_tables/rom_test\t\t\t\n" +
-                "zz_kept\t1\ttrue\tfalse\n" +
-                "dropped\t2\ttrue\tfalse\n" +
-                "aa_kept\t3\tfalse\ttrue\n");
+            var fragment = Fragment("rom_test", TestColumns,
+                new[] { "zz_kept", "1", "true", "false" },
+                new[] { "dropped", "2", "true", "false" },
+                new[] { "aa_kept", "3", "false", "true" });
 
-            var merged = Merge(new[] { (tsvPath, "rom_test") }, new TsvRowFilter("type", new[] { "AA_KEPT", "zz_kept" }));
+            var merged = Merge(new[] { fragment }, new RowFilter("type", new[] { "AA_KEPT", "zz_kept" }));
 
             var kept = merged.Root.Elements("test_table").Select(r => r.Element("type").Value).ToArray();
             CollectionAssert.AreEqual(new[] { "zz_kept", "aa_kept" }, kept,
@@ -189,26 +150,21 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsv_RowFilterOnAMissingColumn_Throws()
+        public void MergeFragments_RowFilterOnAMissingColumn_Throws()
         {
-            var tsvPath = Path.Combine(_dir, "rom_test.tsv");
-            File.WriteAllText(tsvPath, Tsv);
+            var fragment = Fragment("rom_test", TestColumns, new[] { "brownlands", "80", "true", "false" });
 
-            Assert.ThrowsException<InvalidDataException>(() => Merge(new[] { (tsvPath, "rom_test") }, new TsvRowFilter("no_such_column", new[] { "x" })),
+            Assert.ThrowsException<InvalidDataException>(() => Merge(new[] { fragment }, new RowFilter("no_such_column", new[] { "x" })),
                 "A filter that cannot be applied must fail rather than silently keep every row or none.");
         }
 
         [TestMethod]
-        public void ReadTsvRows_ReturnsDataRowsByColumnName_SkippingTheMetadataLine()
+        public void ReadRows_ReturnsRowsByColumnName()
         {
-            var tsvPath = Path.Combine(_dir, "campaign_map_regions.tsv");
-            File.WriteAllText(tsvPath,
-                "campaign_map\tregion\n" +
-                "#campaign_map_regions_tables;0;db/campaign_map_regions_tables/data__\t\n" +
-                "main_map\treg_a\n" +
-                "other_map\treg_b\n");
+            var fragment = new TableFragment("campaign_map_regions", "data__", new[] { "campaign_map", "region" },
+                new[] { new[] { "main_map", "reg_a" }, new[] { "other_map", "reg_b" } });
 
-            var rows = DatabaseTableConverter.ReadTsvRows(tsvPath).ToList();
+            var rows = DatabaseTableConverter.ReadRows(fragment).ToList();
 
             Assert.AreEqual(2, rows.Count);
             Assert.AreEqual("main_map", rows[0]["campaign_map"]);
@@ -220,17 +176,22 @@ namespace CAIME.Tests.Unit
             return DatabaseTableConverter.SchemaFromRpfm(TestTableColumns, null);
         }
 
-        private static XDocument Merge((string, string)[] fragments, TsvRowFilter rowFilter)
+        private static TableFragment Fragment(string fragmentName, string[] columns, params string[][] rows)
+        {
+            return new TableFragment("test_table", fragmentName, columns, rows);
+        }
+
+        private static XDocument Merge(TableFragment[] fragments, RowFilter rowFilter)
         {
             var schema = TestSchema();
-            return DatabaseTableConverter.MergeTsv(fragments, "test_table",
+            return DatabaseTableConverter.MergeFragments(fragments, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schema), DatabaseTableConverter.GetPrimaryKeyColumns(schema), schema.Fields, null, rowFilter);
         }
 
-        // One fragment, in its TSV's own column order, with the schema giving only its yes/no columns.
-        private static XDocument MergeWithoutSchemaFields(string tsvPath, string recordElementName, XmlSchema schema)
+        // One fragment, in its own column order, with the schema giving only its yes/no columns.
+        private static XDocument MergeWithoutSchemaFields(TableFragment fragment, string recordElementName, XmlSchema schema)
         {
-            return DatabaseTableConverter.MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName,
+            return DatabaseTableConverter.MergeFragments(new[] { fragment }, recordElementName,
                 DatabaseTableConverter.GetBooleanColumns(schema), Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null);
         }
 

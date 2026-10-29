@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CAIME.Rpfm
 {
     /// <summary>
     /// The RPFM operations the database workflow needs, run in one rpfm_server session for one game:
-    /// extract db tables as TSV, either from the game's own packs or from a mod RPFM locates by name.
+    /// read db tables, either from the game's own packs or from a mod RPFM locates by name.
     /// It contains no workflow logic; callers interpret the results. Everything opened stays open
     /// until the service is disposed, which ends the session and releases it all.
     /// </summary>
@@ -16,8 +18,8 @@ namespace CAIME.Rpfm
     {
         private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(2);
 
-        /// <summary>Ceiling for a batched extraction, however many tables it covers.</summary>
-        private static readonly TimeSpan MaxBatchTimeout = TimeSpan.FromMinutes(15);
+        // Rows asked for in one table.rows call. RPFM sends 100 when not told, and takes any limit.
+        private const int RowsPerPage = 10000;
 
         // dependencies.info sends RPFM's whole vanilla file list along with the mods' files, hundreds
         // of thousands of entries for the newer games, which takes far longer than any other request.
@@ -106,11 +108,11 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Extracts every fragment of <paramref name="tables"/> found in the game's own packs, read from
-        /// the install folder RPFM has for the game, as TSV into <paramref name="destinationFolder"/>.
-        /// A table the game has no fragment of is simply absent from the result.
+        /// Reads every fragment of <paramref name="tables"/> found in the game's own packs, read from
+        /// the install folder RPFM has for the game. A table the game has no fragment of is simply
+        /// absent from the result.
         /// </summary>
-        public IReadOnlyList<ExtractedTableFragment> ExtractGameTables(IReadOnlyList<string> tables, string destinationFolder)
+        public IReadOnlyList<TableFragment> ReadGameTables(IReadOnlyList<string> tables)
         {
             if (_gamePacksKey == null)
             {
@@ -128,7 +130,7 @@ namespace CAIME.Rpfm
                 }
             }
 
-            return ExtractTables(new { pack = _gamePacksKey }, tables, destinationFolder, $"{_game}'s packs");
+            return ReadTables(new { pack = _gamePacksKey }, tables, $"{_game}'s packs");
         }
 
         /// <summary>
@@ -159,19 +161,19 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Extracts every fragment of <paramref name="tables"/> found in the mods loaded by
-        /// <see cref="LoadMod"/>, as TSV into <paramref name="destinationFolder"/>. RPFM serves the
-        /// mods as one set of files, in which a mod's own file replaces one at the same path in a mod
-        /// it depends on; the result does not say which mod each fragment came from.
+        /// Reads every fragment of <paramref name="tables"/> found in the mods loaded by
+        /// <see cref="LoadMod"/>. RPFM serves the mods as one set of files, in which a mod's own file
+        /// replaces one at the same path in a mod it depends on; the result does not say which mod
+        /// each fragment came from.
         /// </summary>
-        public IReadOnlyList<ExtractedTableFragment> ExtractModTables(IReadOnlyList<string> tables, string destinationFolder)
+        public IReadOnlyList<TableFragment> ReadModTables(IReadOnlyList<string> tables)
         {
             if (_modHolderPackKey == null)
             {
-                throw new InvalidOperationException("Load the mod before extracting tables from it.");
+                throw new InvalidOperationException("Load the mod before reading tables from it.");
             }
 
-            return ExtractTables("parent_files", tables, destinationFolder, "the mods");
+            return ReadTables("parent_files", tables, "the mods");
         }
 
         /// <summary>
@@ -189,32 +191,80 @@ namespace CAIME.Rpfm
             _server.Dispose();
         }
 
-        // Asks for each table's whole folder rather than for files listed beforehand: RPFM skips a
-        // folder it does not have, and listing the game's packs first would mean receiving every
-        // file name in them.
-        private IReadOnlyList<ExtractedTableFragment> ExtractTables(
-            object source, IReadOnlyList<string> tables, string destinationFolder, string sourceDescription)
+        // Lists each table's folder, which RPFM filters by prefix itself, so the game's hundreds of
+        // thousands of other files are never sent. A table the source does not have lists nothing.
+        private IReadOnlyList<TableFragment> ReadTables(object source, IReadOnlyList<string> tables, string sourceDescription)
         {
-            if (tables.Count == 0)
+            var fragments = new List<TableFragment>();
+
+            foreach (var table in tables)
             {
-                return Array.Empty<ExtractedTableFragment>();
+                var operation = $"read {table} from {sourceDescription}";
+
+                foreach (var path in ListFiles(source, $"db/{table}_tables/", operation))
+                {
+                    fragments.Add(ReadFragment(source, path, operation));
+                }
             }
 
-            // The budget scales with the batch so one call is not held to a single table's allowance.
-            var timeout = TimeSpan.FromTicks(Math.Min(DefaultTimeout.Ticks * tables.Count, MaxBatchTimeout.Ticks));
+            return fragments;
+        }
 
-            var operation = $"extract tables from {sourceDescription}";
-            var extracted = _server.Call<FilesExtracted>(operation, "files.extract", new
+        private List<string> ListFiles(object source, string prefix, string operation)
+        {
+            var paths = new List<string>();
+
+            while (true)
             {
-                source,
-                paths       = tables.Select(table => $"db/{table}_tables").ToArray(),
-                destination = destinationFolder,
-                as_tsv      = true,
-            }, timeout);
+                var page = _server.Call<FileList>(operation, "files.list",
+                    new { source, path_prefix = prefix, offset = paths.Count }, DefaultTimeout);
 
-            return extracted.Extracted
-                .Select(path => ExtractedTableFragment.FromExtractedPath(path, operation))
-                .ToList();
+                paths.AddRange(page.Files.Select(file => file.Path));
+
+                if (page.Files.Count == 0 || paths.Count >= page.Total)
+                {
+                    return paths;
+                }
+            }
+        }
+
+        // RPFM decodes a fragment with the table version it was saved with, so its columns can be
+        // fewer than the newest version's.
+        private TableFragment ReadFragment(object source, string path, string operation)
+        {
+            var (table, fragmentName) = TableFragment.ParsePackedPath(path, operation);
+
+            List<string> columns = null;
+            var rows = new List<IReadOnlyList<string>>();
+
+            while (true)
+            {
+                var page = _server.Call<TableRows>(operation, "table.rows",
+                    new { file = new { source, path }, offset = rows.Count, limit = RowsPerPage }, DefaultTimeout);
+
+                columns = columns ?? page.Columns;
+                rows.AddRange(page.Rows.Select(row => (IReadOnlyList<string>)row.Values.Select(ToText).ToList()));
+
+                if (page.Rows.Count == 0 || rows.Count >= page.Total)
+                {
+                    return new TableFragment(table, fragmentName, columns, rows);
+                }
+            }
+        }
+
+        // A value as the converter reads it: a boolean as true/false, and a float in the shortest
+        // form that reads back as the same number, which is how RPFM sends an F32, so none is rounded.
+        private static string ToText(JToken value)
+        {
+            switch (value.Type)
+            {
+                case JTokenType.Null:       return string.Empty;
+                case JTokenType.String:     return (string)value;
+                case JTokenType.Boolean:    return (bool)value ? "true" : "false";
+                case JTokenType.Float:      return ((double)value).ToString("R", CultureInfo.InvariantCulture);
+                case JTokenType.Integer:    return ((JValue)value).ToString(CultureInfo.InvariantCulture);
+                default:                    return value.ToString(Formatting.None);
+            }
         }
 
         private sealed class TableDefinition
@@ -235,10 +285,37 @@ namespace CAIME.Rpfm
             public string Key { get; set; }
         }
 
-        private sealed class FilesExtracted
+        private sealed class FileList
         {
-            [JsonProperty("extracted")]
-            public List<string> Extracted { get; set; } = new List<string>();
+            [JsonProperty("files")]
+            public List<ListedFile> Files { get; set; } = new List<ListedFile>();
+
+            [JsonProperty("total")]
+            public int Total { get; set; }
+        }
+
+        private sealed class ListedFile
+        {
+            [JsonProperty("path")]
+            public string Path { get; set; }
+        }
+
+        private sealed class TableRows
+        {
+            [JsonProperty("columns")]
+            public List<string> Columns { get; set; } = new List<string>();
+
+            [JsonProperty("rows")]
+            public List<TableRow> Rows { get; set; } = new List<TableRow>();
+
+            [JsonProperty("total")]
+            public int Total { get; set; }
+        }
+
+        private sealed class TableRow
+        {
+            [JsonProperty("values")]
+            public List<JToken> Values { get; set; } = new List<JToken>();
         }
 
         // Only the member LoadMod reads from dependencies.info; the vanilla and other file lists
@@ -276,8 +353,8 @@ namespace CAIME.Rpfm
         public string DefaultValue { get; set; }
     }
 
-    /// <summary>One table fragment RPFM extracted to disk as TSV.</summary>
-    public sealed class ExtractedTableFragment
+    /// <summary>One fragment of a db table, read through RPFM.</summary>
+    public sealed class TableFragment
     {
         private const string TableFolderSuffix = "_tables";
 
@@ -290,36 +367,42 @@ namespace CAIME.Rpfm
         /// </summary>
         public string FragmentName { get; }
 
-        public string TsvPath { get; }
+        /// <summary>The fragment's columns, as the table version it was saved with has them.</summary>
+        public IReadOnlyList<string> Columns { get; }
 
-        private ExtractedTableFragment(string table, string fragmentName, string tsvPath)
+        /// <summary>
+        /// Each row's values in <see cref="Columns"/> order, as text: booleans as <c>true</c> and
+        /// <c>false</c>, a colour as <c>RRGGBB</c>, and a float in the shortest form that reads back as it.
+        /// </summary>
+        public IReadOnlyList<IReadOnlyList<string>> Rows { get; }
+
+        public TableFragment(string table, string fragmentName, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows)
         {
             Table = table;
             FragmentName = fragmentName;
-            TsvPath = tsvPath;
+            Columns = columns;
+            Rows = rows;
         }
 
         /// <summary>
-        /// Reads a path RPFM reports having written, which mirrors the fragment's place in its pack:
-        /// <c>&lt;destination&gt;/db/&lt;table&gt;_tables/&lt;fragment&gt;.tsv</c>, with forward and back
-        /// slashes mixed. Throws <see cref="RpfmException"/>, naming <paramref name="operation"/>, for a
-        /// path of any other shape, such as a fragment RPFM could not write out as TSV.
+        /// The table and fragment name of a fragment's path inside its pack,
+        /// <c>db/&lt;table&gt;_tables/&lt;fragment&gt;</c>, as RPFM lists it. Throws
+        /// <see cref="RpfmException"/>, naming <paramref name="operation"/>, for a path of any other shape.
         /// </summary>
-        public static ExtractedTableFragment FromExtractedPath(string extractedPath, string operation)
+        public static (string Table, string FragmentName) ParsePackedPath(string packedPath, string operation)
         {
-            var path = (extractedPath ?? string.Empty).Replace('/', Path.DirectorySeparatorChar);
-            var tableFolder = Path.GetFileName(Path.GetDirectoryName(path)) ?? string.Empty;
-            var dbFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(path)));
+            var parts = (packedPath ?? string.Empty).Split('/');
 
-            if (!path.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase)
-                || !tableFolder.EndsWith(TableFolderSuffix, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(dbFolder, "db", StringComparison.OrdinalIgnoreCase))
+            if (parts.Length != 3
+                || !string.Equals(parts[0], "db", StringComparison.OrdinalIgnoreCase)
+                || parts[1].Length <= TableFolderSuffix.Length
+                || !parts[1].EndsWith(TableFolderSuffix, StringComparison.OrdinalIgnoreCase)
+                || parts[2].Length == 0)
             {
-                throw new RpfmException(operation, $"RPFM wrote '{extractedPath}', which is not a db table exported as TSV.");
+                throw new RpfmException(operation, $"RPFM listed '{packedPath}', which is not a db table fragment.");
             }
 
-            var table = tableFolder.Substring(0, tableFolder.Length - TableFolderSuffix.Length);
-            return new ExtractedTableFragment(table, Path.GetFileNameWithoutExtension(path), path);
+            return (parts[1].Substring(0, parts[1].Length - TableFolderSuffix.Length), parts[2]);
         }
     }
 }

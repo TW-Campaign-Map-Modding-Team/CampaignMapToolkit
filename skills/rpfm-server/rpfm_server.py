@@ -1,19 +1,21 @@
 """Talk to RPFM's rpfm_server the way CAIME's RPFM database workflow does.
 
-Extracts db tables as TSV through the same JSON-RPC methods CAIME calls, from one of:
+Reads db tables through the same JSON-RPC methods CAIME calls (files.list, then table.rows
+for each fragment), from one of:
   --game-packs     the game's own packs (pack.open_vanilla), as CAIME reads vanilla tables
   --mod NAME       mods by .pack file name, found by RPFM in the data or Workshop folder
                    (dependencies.rebuild on a throwaway pack), as CAIME reads a project's mods
   --pack PATH      one .pack file on disk (pack.open)
-Also lists the db tables in one .pack. Starts rpfm_server from --rpfm when none is already
-listening; the server exits by itself once the last session disconnects.
+and prints each fragment's columns and rows as JSON, one fragment a line. Also lists the db
+tables in one .pack. Starts rpfm_server from --rpfm when none is already listening; the server
+exits by itself once the last session disconnects.
 
 Requires: pip install websocket-client
 
 Examples:
   python rpfm_server.py --rpfm "<RPFM folder>" --game warhammer_3 list "<pack>" --table regions
-  python rpfm_server.py --rpfm "<RPFM folder>" --game warhammer_3 extract "<out dir>" --table regions --game-packs
-  python rpfm_server.py --rpfm "<RPFM folder>" --game warhammer_3 extract "<out dir>" --table regions --mod my_campaign.pack
+  python rpfm_server.py --rpfm "<RPFM folder>" --game warhammer_3 rows --table regions --game-packs
+  python rpfm_server.py --rpfm "<RPFM folder>" --game warhammer_3 rows --table regions --mod my_campaign.pack
 """
 
 import argparse
@@ -31,6 +33,8 @@ SESSIONS_URL = "http://127.0.0.1:45127/sessions"
 STARTUP_TIMEOUT_SECONDS = 30
 SERVER_EXIT_TIMEOUT_SECONDS = 10
 JOB_WAIT_SECONDS = 30
+# Rows asked for in one table.rows call; RPFM sends 100 when not told, and takes any limit.
+ROWS_PER_PAGE = 10000
 
 
 class RpfmError(Exception):
@@ -131,8 +135,28 @@ def select_game(session, game):
         raise RpfmError(f"RPFM has no schema for {game}; open the game in RPFM once")
 
 
+def list_files(session, source, prefix):
+    paths = []
+    while True:
+        page = session.call("files.list", {"source": source, "path_prefix": prefix, "offset": len(paths)})
+        paths += [f["path"] for f in page["files"]]
+        if not page["files"] or len(paths) >= page["total"]:
+            return paths
+
+
+def read_rows(session, source, path):
+    """Returns a fragment's columns and every row's values, paging through table.rows."""
+    columns, rows = None, []
+    while True:
+        page = session.call("table.rows", {"file": {"source": source, "path": path}, "offset": len(rows), "limit": ROWS_PER_PAGE})
+        columns = columns or page["columns"]
+        rows += [row["values"] for row in page["rows"]]
+        if not page["rows"] or len(rows) >= page["total"]:
+            return columns, rows
+
+
 def open_source(session, args):
-    """Returns the source to extract from."""
+    """Returns the source to read from."""
     if args.game_packs:
         try:
             return {"pack": session.call("pack.open_vanilla")["key"]}
@@ -162,11 +186,10 @@ def main():
     list_cmd.add_argument("pack")
     list_cmd.add_argument("--table", help="only this table, e.g. regions (no _tables suffix)")
 
-    extract_cmd = sub.add_parser("extract", help="extract db tables as TSV")
-    extract_cmd.add_argument("destination")
-    extract_cmd.add_argument("--table", action="append", required=True,
-                             help="table to extract, e.g. regions (no _tables suffix); repeatable")
-    source = extract_cmd.add_mutually_exclusive_group(required=True)
+    rows_cmd = sub.add_parser("rows", help="print db tables' rows as JSON")
+    rows_cmd.add_argument("--table", action="append", required=True,
+                          help="table to read, e.g. regions (no _tables suffix); repeatable")
+    source = rows_cmd.add_mutually_exclusive_group(required=True)
     source.add_argument("--game-packs", action="store_true", help="the game's own packs")
     source.add_argument("--mod", action="append", help="a mod's .pack file name; repeatable")
     source.add_argument("--pack", help="one .pack file on disk")
@@ -180,24 +203,18 @@ def main():
         if args.action == "list":
             key = session.call("pack.open", {"paths": [os.path.abspath(args.pack)]})["key"]
             prefix = f"db/{args.table}_tables/" if args.table else "db/"
-            paths, offset = [], 0
-            while True:
-                page = session.call("files.list", {"source": {"pack": key}, "path_prefix": prefix, "offset": offset})
-                paths += [f["path"] for f in page["files"]]
-                offset += len(page["files"])
-                if not page["files"] or offset >= page["total"]:
-                    break
-            print("\n".join(paths))
+            print("\n".join(list_files(session, {"pack": key}, prefix)))
             return
 
-        # Whole table folders: RPFM skips any it does not have, so nothing needs listing first.
-        written = session.call("files.extract", {
-            "source": open_source(session, args),
-            "paths": [f"db/{table}_tables" for table in args.table],
-            "destination": os.path.abspath(args.destination),
-            "as_tsv": True,
-        })["extracted"]
-        print("\n".join(written) or "no fragments of those tables found")
+        source = open_source(session, args)
+        found = False
+        for table in args.table:
+            for path in list_files(session, source, f"db/{table}_tables/"):
+                columns, rows = read_rows(session, source, path)
+                print(json.dumps({"path": path, "columns": columns, "rows": rows}))
+                found = True
+        if not found:
+            print("no fragments of those tables found", file=sys.stderr)
     finally:
         session.close()
 

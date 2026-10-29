@@ -11,14 +11,10 @@ using System.Xml.Linq;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Converts RPFM's TSV export format into CAIME's in-memory database tables, laid out as the
-    /// Assembly Kit's data XML. Reusable and self-contained: it takes explicit inputs (record element name, which columns are yes/no) rather
-    /// than reaching into any workflow state.
-    ///
-    /// RPFM TSV layout:
-    ///   line 1 : tab-separated column names
-    ///   line 2 : a "#&lt;table&gt;_tables;&lt;version&gt;;&lt;path&gt;" metadata comment
-    ///   line 3+: tab-separated data rows, booleans written as "true"/"false"
+    /// Converts the table fragments RPFM reads (<see cref="TableFragment"/>) into CAIME's in-memory
+    /// database tables, laid out as the Assembly Kit's data XML. Reusable and self-contained: it takes
+    /// explicit inputs (record element name, which columns are yes/no) rather than reaching into any
+    /// workflow state.
     ///
     /// Assembly Kit data XML layout:
     ///   &lt;dataroot&gt;&lt;record&gt;&lt;field&gt;value&lt;/field&gt;...&lt;/record&gt;...&lt;/dataroot&gt;
@@ -37,7 +33,7 @@ namespace CAIME.Rpfm
         /// <summary>
         /// A table's schema from the columns RPFM's schema defines for it, followed by
         /// <paramref name="extraFields"/>. A colour column becomes the r, g and b integer fields the
-        /// merged records hold (see <see cref="MergeTsv"/>).
+        /// merged records hold (see <see cref="MergeFragments"/>).
         /// </summary>
         public static XmlSchema SchemaFromRpfm(IReadOnlyList<RpfmColumn> columns, IEnumerable<XmlSchemaField> extraFields)
         {
@@ -81,7 +77,7 @@ namespace CAIME.Rpfm
             return new XmlSchema(fields);
         }
 
-        /// <summary>The yes/no columns of <paramref name="schema"/>, whose TSV true/false become 1/0.</summary>
+        /// <summary>The yes/no columns of <paramref name="schema"/>, whose true/false become 1/0.</summary>
         public static ISet<string> GetBooleanColumns(XmlSchema schema)
         {
             return new HashSet<string>(schema.Fields.Where(field => field.Type == XmlSchemaFieldType.YesNo).Select(field => field.Name),
@@ -114,32 +110,17 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Reads an RPFM TSV file's data rows, each as its values by column name, skipping the
-        /// metadata line. For a caller that needs a table's raw values rather than its XML.
+        /// A fragment's rows, each as its values by column name. For a caller that needs a table's raw
+        /// values rather than its XML.
         /// </summary>
-        public static IEnumerable<IReadOnlyDictionary<string, string>> ReadTsvRows(string tsvPath)
+        public static IEnumerable<IReadOnlyDictionary<string, string>> ReadRows(TableFragment fragment)
         {
-            string[] header = null;
-
-            foreach (var line in File.ReadLines(tsvPath))
+            foreach (var cells in fragment.Rows)
             {
-                if (line.Length == 0 || line[0] == '#')
-                {
-                    continue;
-                }
-
-                var cells = line.Split('\t');
-
-                if (header == null)
-                {
-                    header = cells;
-                    continue;
-                }
-
                 var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                for (int i = 0; i < header.Length; ++i)
+                for (int i = 0; i < fragment.Columns.Count; ++i)
                 {
-                    row[header[i]] = i < cells.Length ? cells[i] : string.Empty;
+                    row[fragment.Columns[i]] = i < cells.Count ? cells[i] : string.Empty;
                 }
 
                 yield return row;
@@ -147,7 +128,7 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Merges the records of several TSV fragments of the same table into a single Assembly Kit
+        /// Merges the records of several fragments of the same table into a single Assembly Kit
         /// data XML document. A table can be split across multiple fragment files both within one pack
         /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
         /// the game itself combines them.
@@ -167,7 +148,7 @@ namespace CAIME.Rpfm
         /// the fragments that should win that case first (RpfmWorkflowSession puts mods before the
         /// game), since fragment name is otherwise silent on which pack wins.
         ///
-        /// A fragment's TSV only has the columns its table version was saved with, which can be older
+        /// A fragment only has the columns its table version was saved with, which can be older
         /// than <paramref name="schemaFields"/>. A schema field missing from a row gets the field's
         /// default rather than being left out, since CAIME's table loader expects every field, in the
         /// schema's order.
@@ -179,14 +160,14 @@ namespace CAIME.Rpfm
         /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
         /// row of every fragment is dropped before merging.
         /// </summary>
-        public static XDocument MergeTsv(
-            IReadOnlyList<(string TsvPath, string FragmentName)> fragments,
+        public static XDocument MergeFragments(
+            IReadOnlyList<TableFragment> fragments,
             string recordElementName,
             ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns,
             IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
-            TsvRowFilter rowFilter = null)
+            RowFilter rowFilter = null)
         {
             var ordered = fragments.OrderBy(f => f.FragmentName, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -195,8 +176,8 @@ namespace CAIME.Rpfm
 
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
-                var keyedRecords = TsvToKeyedRecords(
-                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, regionIsSeaByKey, rowFilter, fragmentIndex);
+                var keyedRecords = ToKeyedRecords(
+                    ordered[fragmentIndex], recordElementName, booleanColumns, primaryKeyColumns, schemaFields, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
@@ -216,50 +197,29 @@ namespace CAIME.Rpfm
             return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
         }
 
-        private static List<(string Key, XElement Record)> TsvToKeyedRecords(
-            string tsvPath, string recordElementName, ISet<string> booleanColumns,
+        private static List<(string Key, XElement Record)> ToKeyedRecords(
+            TableFragment fragment, string recordElementName, ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<XmlSchemaField> schemaFields,
-            IReadOnlyDictionary<string, bool> regionIsSeaByKey, TsvRowFilter rowFilter, int fragmentIndex)
+            IReadOnlyDictionary<string, bool> regionIsSeaByKey, RowFilter rowFilter, int fragmentIndex)
         {
-            var lines = File.ReadAllLines(tsvPath);
-
-            string[] header = null;
+            var header = fragment.Columns.ToArray();
             int filterColumnIndex = -1;
             var results = new List<(string, XElement)>();
             int rowIndex = 0;
 
-            foreach (var line in lines)
+            if (rowFilter != null)
             {
-                if (line.Length == 0)
+                filterColumnIndex = Array.IndexOf(header, rowFilter.Column);
+                if (filterColumnIndex < 0)
                 {
-                    continue;
+                    throw new InvalidDataException(
+                        $"The {fragment.Table} fragment {fragment.FragmentName} has no {rowFilter.Column} column to select rows by.");
                 }
+            }
 
-                // The "#<table>;<version>;..." metadata line is not data.
-                if (line[0] == '#')
-                {
-                    continue;
-                }
-
-                var cells = line.Split('\t');
-
-                if (header == null)
-                {
-                    header = cells;
-
-                    if (rowFilter != null)
-                    {
-                        filterColumnIndex = Array.IndexOf(header, rowFilter.Column);
-                        if (filterColumnIndex < 0)
-                        {
-                            throw new InvalidDataException($"'{tsvPath}' has no {rowFilter.Column} column to select rows by.");
-                        }
-                    }
-
-                    continue;
-                }
-
-                if (rowFilter != null && !rowFilter.Keeps(filterColumnIndex < cells.Length ? cells[filterColumnIndex] : string.Empty))
+            foreach (var cells in fragment.Rows)
+            {
+                if (rowFilter != null && !rowFilter.Keeps(filterColumnIndex < cells.Count ? cells[filterColumnIndex] : string.Empty))
                 {
                     continue;
                 }
@@ -271,7 +231,7 @@ namespace CAIME.Rpfm
                     foreach (var pkColumn in primaryKeyColumns)
                     {
                         var idx = Array.IndexOf(header, pkColumn);
-                        keyValues.Add(idx >= 0 && idx < cells.Length ? cells[idx] : string.Empty);
+                        keyValues.Add(idx >= 0 && idx < cells.Count ? cells[idx] : string.Empty);
                     }
                     key = string.Join(KeySeparator, keyValues);
                 }
@@ -286,7 +246,7 @@ namespace CAIME.Rpfm
 
                 if (schemaFields != null && schemaFields.Count > 0)
                 {
-                    // Collect this row's raw TSV values by column name first, expanding the packed
+                    // Collect this row's raw values by column name first, expanding the packed
                     // colour column into synthetic "r"/"g"/"b" entries so it can be pulled out like any
                     // other schema field below.
                     var rawValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -298,7 +258,7 @@ namespace CAIME.Rpfm
                             continue;
                         }
 
-                        var value = i < cells.Length ? cells[i] : string.Empty;
+                        var value = i < cells.Count ? cells[i] : string.Empty;
 
                         if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
                         {
@@ -313,7 +273,7 @@ namespace CAIME.Rpfm
                         rawValues[columnName] = value;
                     }
 
-                    // Emit fields in the schema's own declared order, so a fragment's TSV column order
+                    // Emit fields in the schema's own declared order, so a fragment's column order
                     // - which can differ from the schema, especially for an older table version - does
                     // not leak into the output. A field missing from this row gets its default.
                     foreach (var field in schemaFields)
@@ -336,7 +296,7 @@ namespace CAIME.Rpfm
                 }
                 else
                 {
-                    // No schema available (a table with no schema fields given) - fall back to TSV column
+                    // No schema available (a table with no schema fields given) - fall back to the fragment's column
                     // order.
                     for (int i = 0; i < header.Length; ++i)
                     {
@@ -346,7 +306,7 @@ namespace CAIME.Rpfm
                             continue;
                         }
 
-                        var value = i < cells.Length ? cells[i] : string.Empty;
+                        var value = i < cells.Count ? cells[i] : string.Empty;
 
                         if (booleanColumns != null && booleanColumns.Contains(columnName))
                         {
@@ -431,7 +391,7 @@ namespace CAIME.Rpfm
         }
 
         // XmlSchemaField.DefaultValue is already typed (bool/int/float/double/string) by XmlSchema's
-        // own parsing - just needs formatting to match how MergeTsv writes each type to XML.
+        // own parsing - just needs formatting to match how MergeFragments writes each type to XML.
         // Formatted invariantly: a float default written on a machine whose culture uses a comma
         // decimal separator would otherwise land in the file as "0,5" and be misread downstream.
         private static string FormatDefaultValue(XmlSchemaField field)
@@ -451,11 +411,11 @@ namespace CAIME.Rpfm
     /// Selects the rows of a table to convert: those whose <see cref="Column"/> holds one of the
     /// given values, compared ignoring case.
     /// </summary>
-    public sealed class TsvRowFilter
+    public sealed class RowFilter
     {
         private readonly HashSet<string> _values;
 
-        public TsvRowFilter(string column, IEnumerable<string> values)
+        public RowFilter(string column, IEnumerable<string> values)
         {
             Column = column;
             _values = new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
