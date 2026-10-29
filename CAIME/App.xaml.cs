@@ -60,11 +60,6 @@ namespace CAIME
         {
             base.OnStartup(e);
 
-            // Restore any Assembly Kit an earlier CAIME version's RPFM session left changed when it was
-            // killed before it could clean up (End Task, kill, or Visual Studio "Stop Debugging"). Must
-            // happen before a project can be opened.
-            CAIME.Rpfm.RpfmRecoveryJournal.RecoverAll();
-
             _ = CheckForUpdatesAsync();
 
             string currentVersion = AppInfo.Version;

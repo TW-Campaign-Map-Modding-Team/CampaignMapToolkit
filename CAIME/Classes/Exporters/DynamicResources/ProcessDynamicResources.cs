@@ -10,10 +10,10 @@ namespace CAIME.Exporters
 
         /// <summary>
         /// Writes the project's dynamic_resources.esf (<see cref="DynamicResourcesWriter"/>) from its
-        /// saved map.hex, dynamic_resources.png and dynamic_resources_database.xml to the Assembly
-        /// Kit's working_data, next to map_data.esf.
+        /// saved map.hex, dynamic_resources.png and dynamic_resources_database.xml into
+        /// <paramref name="outputPath"/>.
         /// </summary>
-        public static bool Process(Project project)
+        public static bool Process(Project project, string outputPath)
         {
             var imagePath       = Path.Combine(project.ProjectPath, IMAGE_FILE_NAME);
             var databasePath    = Path.Combine(project.ProjectPath, DATABASE_FILE_NAME);
@@ -35,8 +35,7 @@ namespace CAIME.Exporters
                 return false;
             }
 
-            var asskitPath      = PreferencesViewModel.Instance.GetAssKitPath(project.Game).Replace('\\', '/');
-            var outputFilePath  = $"{asskitPath}/working_data/campaign_maps/{project.MapName}/dynamic_resources.esf";
+            var outputFilePath = Path.Combine(outputPath, "dynamic_resources.esf");
 
             try
             {

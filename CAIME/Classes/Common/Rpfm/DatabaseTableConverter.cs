@@ -35,125 +35,82 @@ namespace CAIME.Rpfm
         private const string KeySeparator = "\u0001";
 
         /// <summary>
-        /// Parses a TWaD_*.xml Assembly Kit schema. A caller needing more than one of the Get*
-        /// helpers below should load the schema once and pass it in, rather than reparsing the file
-        /// for each of them.
+        /// A table's schema from the columns RPFM's schema defines for it, followed by
+        /// <paramref name="extraFields"/>. A colour column becomes the r, g and b integer fields the
+        /// merged records hold (see <see cref="MergeTsv"/>).
         /// </summary>
-        public static XmlSchema LoadSchema(string twadSchemaPath)
+        public static XmlSchema SchemaFromRpfm(IReadOnlyList<RpfmColumn> columns, IEnumerable<XmlSchemaField> extraFields)
         {
-            var schema = new XmlSchema();
-            schema.Load(XDocument.Load(twadSchemaPath));
-            return schema;
+            var fields = new List<XmlSchemaField>();
+
+            void Add(XmlSchemaField field)
+            {
+                if (fields.All(existing => !string.Equals(existing.Name, field.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    fields.Add(field);
+                }
+            }
+
+            foreach (var column in columns)
+            {
+                var type = column.FieldType?.Type == Newtonsoft.Json.Linq.JTokenType.String ? (string)column.FieldType : null;
+
+                if (type == "ColourRGB")
+                {
+                    foreach (var channel in new[] { "r", "g", "b" })
+                    {
+                        Add(XmlSchema.CreateField(channel, XmlSchemaFieldType.Integer, false, null));
+                    }
+
+                    continue;
+                }
+
+                var fieldType   = ToFieldType(type);
+                var value       = fieldType == XmlSchemaFieldType.YesNo && column.DefaultValue != null
+                                ? (string.Equals(column.DefaultValue, "true", StringComparison.OrdinalIgnoreCase) ? "1" : "0")
+                                : column.DefaultValue;
+
+                Add(XmlSchema.CreateField(column.Name, fieldType, column.IsKey, value));
+            }
+
+            foreach (var field in extraFields ?? Enumerable.Empty<XmlSchemaField>())
+            {
+                Add(field);
+            }
+
+            return new XmlSchema(fields);
         }
 
-        /// <summary>
-        /// Derives the set of yes/no column names from a TWaD_*.xml Assembly Kit schema. Used so the
-        /// converter knows which TSV columns to translate from true/false to 1/0.
-        /// </summary>
-        public static ISet<string> GetBooleanColumns(string twadSchemaPath)
-        {
-            return GetBooleanColumns(LoadSchema(twadSchemaPath));
-        }
-
-        /// <inheritdoc cref="GetBooleanColumns(string)"/>
+        /// <summary>The yes/no columns of <paramref name="schema"/>, whose TSV true/false become 1/0.</summary>
         public static ISet<string> GetBooleanColumns(XmlSchema schema)
         {
-            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var field in schema.Fields)
-            {
-                if (field.Type == XmlSchemaFieldType.YesNo)
-                {
-                    columns.Add(field.Name);
-                }
-            }
-
-            return columns;
+            return new HashSet<string>(schema.Fields.Where(field => field.Type == XmlSchemaFieldType.YesNo).Select(field => field.Name),
+                StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>
-        /// Derives the primary key column name(s) from a TWaD_*.xml Assembly Kit schema. Used to
-        /// detect which rows from different table fragments actually refer to the same record when
-        /// merging fragments from multiple packs. A table with no primary key returns an empty list.
+        /// The primary key columns of <paramref name="schema"/>, which tell when rows of different
+        /// fragments are the same record. A table with no primary key returns an empty list.
         /// </summary>
-        public static IReadOnlyList<string> GetPrimaryKeyColumns(string twadSchemaPath)
-        {
-            return GetPrimaryKeyColumns(LoadSchema(twadSchemaPath));
-        }
-
-        /// <inheritdoc cref="GetPrimaryKeyColumns(string)"/>
         public static IReadOnlyList<string> GetPrimaryKeyColumns(XmlSchema schema)
         {
-            var columns = new List<string>();
-
-            foreach (var field in schema.Fields)
-            {
-                if (field.PrimaryKey == 1)
-                {
-                    columns.Add(field.Name);
-                }
-            }
-
-            return columns;
+            return schema.Fields.Where(field => field.PrimaryKey == 1).Select(field => field.Name).ToList();
         }
 
-        /// <summary>
-        /// Derives the full field list from a TWaD_*.xml Assembly Kit schema, in schema order. Used to
-        /// backfill columns a fragment's TSV doesn't have (see <see cref="MergeTsv"/>).
-        /// </summary>
-        public static IReadOnlyList<XmlSchemaField> GetFields(string twadSchemaPath)
+        // RPFM's integer types, by name; anything else that is no float or boolean, strings and
+        // sequences among them, is text. Floats are doubles, the type CAIME reads them as (roads'
+        // "threshold").
+        private static XmlSchemaFieldType ToFieldType(string rpfmType)
         {
-            return LoadSchema(twadSchemaPath).Fields;
-        }
-
-        /// <summary>
-        /// Reads an existing Assembly Kit data XML file (the Assembly Kit's own copy of a table) into a
-        /// lookup by primary key. Used to source fields RPFM has no way to supply at all - some
-        /// Assembly Kit fields (e.g. "regions.is_sea") are computed/maintained by the Assembly Kit
-        /// itself and never appear in any pack's raw table data, at any version - so a schema type
-        /// default (e.g. "false") is often simply wrong for an existing record, whereas the Assembly
-        /// Kit's own last-known value for it is correct by construction.
-        /// Returns an empty lookup if the file does not exist or fails to parse (e.g. a table that is
-        /// new to this Assembly Kit installation) rather than throwing - this is a best-effort source,
-        /// not a required one.
-        /// </summary>
-        public static IReadOnlyDictionary<string, XElement> LoadExistingRecords(
-            string existingXmlPath, string recordElementName, IReadOnlyList<string> primaryKeyColumns)
-        {
-            var result = new Dictionary<string, XElement>();
-
-            if (string.IsNullOrEmpty(existingXmlPath) || !File.Exists(existingXmlPath)
-                || primaryKeyColumns == null || primaryKeyColumns.Count == 0)
+            switch (rpfmType)
             {
-                return result;
+                case "Boolean":                                 return XmlSchemaFieldType.YesNo;
+                case "F32": case "F64":                         return XmlSchemaFieldType.Double;
+                case "I16": case "I32": case "I64":
+                case "OptionalI16": case "OptionalI32": case "OptionalI64":
+                                                                return XmlSchemaFieldType.Integer;
+                default:                                        return XmlSchemaFieldType.Text;
             }
-
-            try
-            {
-                var document = XDocument.Load(existingXmlPath);
-                foreach (var record in document.Root.Elements(recordElementName))
-                {
-                    var keyValues = new List<string>(primaryKeyColumns.Count);
-                    foreach (var pkColumn in primaryKeyColumns)
-                    {
-                        keyValues.Add(record.Element(pkColumn)?.Value ?? string.Empty);
-                    }
-
-                    // An earlier record with the same key (should not normally happen) keeps its slot -
-                    // consistent with how fragment merging resolves key collisions.
-                    var key = string.Join(KeySeparator, keyValues);
-                    if (!result.ContainsKey(key))
-                    {
-                        result[key] = record;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                LoggerViewModel.Log($"Could not read existing Assembly Kit data for backfilling: {ex.Message}", LogLevel.Warning);
-            }
-
-            return result;
         }
 
         /// <summary>
@@ -211,22 +168,13 @@ namespace CAIME.Rpfm
         /// game), since fragment name is otherwise silent on which pack wins.
         ///
         /// A fragment's TSV only has the columns its table version was saved with, which can be older
-        /// than <paramref name="schemaFields"/> (RPFM's schema lags newer game patches). A schema field
-        /// missing from a row is backfilled - preferably from <paramref name="existingRecords"/> (the
-        /// Assembly Kit's own last-known value for that primary key, when there is one), falling back to
-        /// the field's schema type default only for a key that has no existing record at all - rather
-        /// than left out of the record entirely. CAIME's table loader expects every field to be present
-        /// (e.g. "regions.is_sea", which tells land regions from sea) in the schema's exact declared
-        /// order, and some such fields (again "is_sea") are never present in any pack's raw table data
-        /// at all, at any version, because the Assembly Kit computes/maintains them itself - so a blind
-        /// type default (e.g. "false") is often simply wrong where an existing record exists.
+        /// than <paramref name="schemaFields"/>. A schema field missing from a row gets the field's
+        /// default rather than being left out, since CAIME's table loader expects every field, in the
+        /// schema's order.
         ///
-        /// "is_sea" specifically is instead sourced from <paramref name="regionIsSeaByKey"/> when the
-        /// row's key is in it - the open map itself is ground truth for which regions are sea (it is
-        /// what the game actually builds passable edges from), ranked above even
-        /// <paramref name="existingRecords"/> since that may be stale relative to the currently open map.
-        /// A row whose key <paramref name="regionIsSeaByKey"/> does not recognise falls through to
-        /// <paramref name="existingRecords"/>/the schema default same as any other field.
+        /// "is_sea", which no pack's table has, is sourced from <paramref name="regionIsSeaByKey"/>
+        /// when the row's key is in it: the open map is ground truth for which regions are sea. A row
+        /// whose key it does not recognise gets the field's default like any other.
         ///
         /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
         /// row of every fragment is dropped before merging.
@@ -237,7 +185,6 @@ namespace CAIME.Rpfm
             ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns,
             IReadOnlyList<XmlSchemaField> schemaFields,
-            IReadOnlyDictionary<string, XElement> existingRecords,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
             TsvRowFilter rowFilter = null)
         {
@@ -249,7 +196,7 @@ namespace CAIME.Rpfm
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
                 var keyedRecords = TsvToKeyedRecords(
-                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, rowFilter, fragmentIndex);
+                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
@@ -272,7 +219,6 @@ namespace CAIME.Rpfm
         private static List<(string Key, XElement Record)> TsvToKeyedRecords(
             string tsvPath, string recordElementName, ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<XmlSchemaField> schemaFields,
-            IReadOnlyDictionary<string, XElement> existingRecords,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey, TsvRowFilter rowFilter, int fragmentIndex)
         {
             var lines = File.ReadAllLines(tsvPath);
@@ -356,8 +302,8 @@ namespace CAIME.Rpfm
 
                         if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
                         {
-                            // Invariant, not the current culture: these are data values read back by
-                            // the Assembly Kit, not text shown to the user.
+                            // Invariant, not the current culture: these are data values, not text shown
+                            // to the user.
                             rawValues["r"] = r.ToString(CultureInfo.InvariantCulture);
                             rawValues["g"] = g.ToString(CultureInfo.InvariantCulture);
                             rawValues["b"] = b.ToString(CultureInfo.InvariantCulture);
@@ -367,18 +313,9 @@ namespace CAIME.Rpfm
                         rawValues[columnName] = value;
                     }
 
-                    XElement existingRecord = null;
-                    existingRecords?.TryGetValue(key, out existingRecord);
-
-                    // Emit fields in the schema's own declared order. The Assembly Kit loader reads a
-                    // fixed field sequence per record rather than by name, so a fragment's TSV column
-                    // order - which can differ from the schema, especially for an older table version -
-                    // must not leak into the output. A field missing from this row (the fragment's
-                    // table version predates it - e.g. added in a later game patch, or the field is
-                    // Assembly-Kit-maintained and never appears in any pack at all, like "is_sea") is
-                    // backfilled from the Assembly Kit's own existing record for this key when there is
-                    // one - its last-known value is correct by construction, unlike a blind type default
-                    // - falling back to the schema default only when the key has no existing record.
+                    // Emit fields in the schema's own declared order, so a fragment's TSV column order
+                    // - which can differ from the schema, especially for an older table version - does
+                    // not leak into the output. A field missing from this row gets its default.
                     foreach (var field in schemaFields)
                     {
                         if (rawValues.TryGetValue(field.Name, out var value))
@@ -390,10 +327,6 @@ namespace CAIME.Rpfm
                             && regionIsSeaByKey != null && regionIsSeaByKey.TryGetValue(key, out var isSea))
                         {
                             record.Add(new XElement(field.Name, isSea ? "1" : "0"));
-                        }
-                        else if (existingRecord?.Element(field.Name) is XElement existingField)
-                        {
-                            record.Add(new XElement(field.Name, existingField.Value));
                         }
                         else
                         {
@@ -422,8 +355,8 @@ namespace CAIME.Rpfm
                         }
 
                         // RPFM packs an RGB colour into a single hex column (e.g. "B66216") under a
-                        // name the Assembly Kit does not use ("unnamed colour group_1"). The Assembly
-                        // Kit expects separate decimal r/g/b integer fields, so expand it.
+                        // name that is no XML name ("unnamed colour group_1"). CAIME reads separate
+                        // decimal r/g/b integer fields, so expand it.
                         if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
                         {
                             record.Add(new XElement("r", r));
@@ -433,8 +366,8 @@ namespace CAIME.Rpfm
                         }
 
                         // Skip columns whose names are not valid XML element names and that we cannot
-                        // map. The Assembly Kit loader reads fields by name from its own schema, so any
-                        // extra pack columns it does not know about are irrelevant to it.
+                        // map. CAIME's loader reads fields by name, so pack columns it does not know
+                        // about are irrelevant to it.
                         if (!IsValidXmlName(columnName))
                         {
                             continue;
@@ -491,7 +424,7 @@ namespace CAIME.Rpfm
             return true;
         }
 
-        // RPFM writes "true"/"false"; the Assembly Kit XML stores "1"/"0".
+        // RPFM writes "true"/"false"; the data XML stores "1"/"0".
         private static string ToXmlBoolean(string value)
         {
             return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "1" : "0";

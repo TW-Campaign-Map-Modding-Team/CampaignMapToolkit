@@ -15,8 +15,8 @@ namespace CAIME.Tests.Unit
     ///
     /// <para>
     /// <see cref="PreferencesViewModel"/> is a process-wide singleton backed by the user's real
-    /// preferences.json, and opening a project reads it. These tests blank the Assembly Kit path for
-    /// the game under test so no database load is attempted, and restore every value they touched
+    /// preferences.json, and opening a project reads it. These tests blank the RPFM path so no
+    /// database is read, and restore every value they touched
     /// afterwards. They keep the remembered game in step so the open path never *changes* a setting;
     /// constructing the singleton at all still rewrites the file with identical content, because
     /// <c>Load()</c> ends in a <c>Save()</c>.
@@ -28,7 +28,7 @@ namespace CAIME.Tests.Unit
         private const GameTemplate GAME = GameTemplate.Warhammer3;
 
         private string _dir;
-        private string _savedAssKitPath;
+        private string _savedRpfmPath;
         private int _savedGameIndex;
 
         [TestInitialize]
@@ -38,10 +38,10 @@ namespace CAIME.Tests.Unit
             _dir = MapHexHarness.CreateTempDir("caime_project");
 
             var prefs = PreferencesViewModel.Instance;
-            _savedAssKitPath = prefs.GetAssKitPath(GAME);
-            _savedGameIndex  = prefs.SelectedGameIndex;
+            _savedRpfmPath  = prefs.RpfmPath;
+            _savedGameIndex = prefs.SelectedGameIndex;
 
-            SetAssKitPath(GAME, null);
+            prefs.RpfmPath = null;
 
             // ProjectManager.Open persists the preferences when the remembered game changes. Matching
             // it up front keeps this suite from writing to the user's real preferences file.
@@ -52,7 +52,7 @@ namespace CAIME.Tests.Unit
         public void Cleanup()
         {
             var prefs = PreferencesViewModel.Instance;
-            SetAssKitPath(GAME, _savedAssKitPath);
+            prefs.RpfmPath = _savedRpfmPath;
             prefs.SelectedGameIndex = _savedGameIndex;
 
             MapHexHarness.DeleteTempDir(_dir);
@@ -175,23 +175,13 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void CreateNew_PharaohDynasties_ProducesAReopenableDynastiesProject()
         {
-            var saved = PreferencesViewModel.Instance.GetAssKitPath(GameTemplate.Pharaoh_Dynasties);
-            SetAssKitPath(GameTemplate.Pharaoh_Dynasties, null);
+            Project.CreateNew(_dir + "\\", GameTemplate.Pharaoh_Dynasties, "dynasties_map", 6, 4);
 
-            try
-            {
-                Project.CreateNew(_dir + "\\", GameTemplate.Pharaoh_Dynasties, "dynasties_map", 6, 4);
-
-                var reopened = new Project();
-                Assert.IsTrue(reopened.Open(Path.Combine(_dir, "map.hex")),
-                    "A new Pharaoh Dynasties project must be reopenable.");
-                Assert.AreEqual(GameTemplate.Pharaoh_Dynasties, reopened.Game,
-                    "A Dynasties map must be recognised as Dynasties, not vanilla Pharaoh.");
-            }
-            finally
-            {
-                SetAssKitPath(GameTemplate.Pharaoh_Dynasties, saved);
-            }
+            var reopened = new Project();
+            Assert.IsTrue(reopened.Open(Path.Combine(_dir, "map.hex")),
+                "A new Pharaoh Dynasties project must be reopenable.");
+            Assert.AreEqual(GameTemplate.Pharaoh_Dynasties, reopened.Game,
+                "A Dynasties map must be recognised as Dynasties, not vanilla Pharaoh.");
         }
 
         [TestMethod]
@@ -406,12 +396,6 @@ namespace CAIME.Tests.Unit
             var project = new Project();
             Assert.IsTrue(project.Open(CreateMap()), "Precondition: the map should open.");
             return project;
-        }
-
-        private static void SetAssKitPath(GameTemplate game, string path)
-        {
-            var dirs = (string[])MapHexHarness.GetPrivateField(PreferencesViewModel.Instance, "asskitDirs");
-            dirs[(int)game] = path;
         }
     }
 }

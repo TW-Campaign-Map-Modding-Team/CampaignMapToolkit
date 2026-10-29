@@ -129,6 +129,19 @@ namespace CAIME
             }
         }
 
+        // Where processed files go, laid out as in a pack (campaign_maps/<map>/); null for the
+        // Assembly Kit's working_data.
+        private string outputFolder;
+        public string OutputFolder
+        {
+            get => outputFolder;
+            set
+            {
+                outputFolder = string.IsNullOrWhiteSpace(value) ? null : value;
+                OnPropertyChanged(nameof(OutputFolder));
+            }
+        }
+
         #endregion
 
         #region UI Bindings
@@ -164,11 +177,12 @@ namespace CAIME
 
         public bool OnApply()
         {
-            if (AssKitPath == null)
+            if (AssKitPath == null && OutputFolder == null)
             {
-                var msg = "Please, provide a path to the assembly_kit folder!";
+                var msg = "Please, provide an output folder or a path to the assembly_kit folder! Processed files go to the " +
+                          "output folder, or to the Assembly Kit's working_data when none is set.";
                 LoggerViewModel.Log(msg, LogLevel.Warning);
-                MessageBox.Show(msg, "Missing Aseembly Kit path");
+                MessageBox.Show(msg, "Missing output folder");
                 return false;
             }
 
@@ -221,6 +235,7 @@ namespace CAIME
             json[nameof(AutoBackupsToKeep)] = AutoBackupsToKeep;
             json[nameof(IsMapDataConfigPostProcessEnabled)] = IsMapDataConfigPostProcessEnabled;
             json[nameof(RpfmPath)] = RpfmPath ?? "";
+            json[nameof(OutputFolder)] = OutputFolder ?? "";
             json[nameof(SelectedGameIndex)] = SelectedGameIndex;
 
             var assKitPaths = new JObject();
@@ -298,6 +313,11 @@ namespace CAIME
                     RpfmPath = string.IsNullOrEmpty(rpfmPathValue) ? null : rpfmPathValue;
                 }
 
+                if (json.TryGetValue(nameof(OutputFolder), out var outputFolderToken))
+                {
+                    OutputFolder = outputFolderToken.ToString();
+                }
+
                 if (json.TryGetValue(nameof(SelectedGameIndex), out var selectedGameToken) &&
                     int.TryParse(selectedGameToken.ToString(), out int selectedGameIndex) &&
                     selectedGameIndex >= 0 && selectedGameIndex < (int)GameTemplate.Count)
@@ -354,6 +374,22 @@ namespace CAIME
             return asskitDirs[(int)game];
         }
 
+        /// <summary>
+        /// The folder a campaign map's processed files are written to:
+        /// <c>&lt;output folder&gt;\campaign_maps\&lt;map&gt;\</c>, or, with no output folder set, the
+        /// game's Assembly Kit <c>working_data\campaign_maps\&lt;map&gt;\</c>. Null when neither is set.
+        /// </summary>
+        public string GetCampaignMapOutputPath(GameTemplate game, string mapName)
+        {
+            if (OutputFolder != null)
+            {
+                return Path.Combine(OutputFolder, "campaign_maps", mapName) + "\\";
+            }
+
+            var asskitPath = GetAssKitPath(game);
+            return string.IsNullOrEmpty(asskitPath) ? null : Path.Combine(asskitPath, "working_data", "campaign_maps", mapName) + "\\";
+        }
+
         public IReadOnlyList<LayerType> GetLayerOrder(GameTemplate game)
         {
             return layerOrders.TryGetValue(game, out var order) ? order : null;
@@ -381,6 +417,7 @@ namespace CAIME
             IsAutoBackup                        = true;
             IsMapDataConfigPostProcessEnabled   = false;
             RpfmPath                            = null;
+            OutputFolder                        = null;
         }
     }
 }

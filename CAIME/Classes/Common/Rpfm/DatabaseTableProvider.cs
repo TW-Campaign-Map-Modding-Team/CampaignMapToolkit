@@ -13,10 +13,10 @@ namespace CAIME.Rpfm
         {
             Constants.TABLE_CAMPAIGN_GROUND_TYPES,
             Constants.TABLE_CAMPAIGN_MAP_ATTRITIONS,
-            // Unlike every other table here, its primary key ("index") is an autonumber Dave assigns
-            // once when a row is created - not a natural key - but that value is preserved verbatim
-            // through export, so a mod pack's row still matches the Assembly Kit's existing row for the
-            // same map and the primary-key merge in DatabaseTableConverter still applies correctly.
+            // Unlike every other table here, its primary key ("index") is an autonumber assigned once
+            // when a row is created - not a natural key - but that value is preserved verbatim through
+            // export, so a mod pack's row still matches the game's row for the same map and the
+            // primary-key merge in DatabaseTableConverter still applies correctly.
             Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS,
             Constants.TABLE_CAMPAIGN_MAP_REGIONS,
             Constants.TABLE_CAMPAIGN_MAP_ROADS,

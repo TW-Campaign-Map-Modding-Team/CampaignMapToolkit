@@ -7,17 +7,16 @@ using System.Xml.Linq;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Reads the database tables a project needs through rpfm_server, as Assembly Kit data XML held
-    /// in memory. For each required table it gathers every fragment of that table found anywhere - the
+    /// Reads the database tables a project needs through rpfm_server, with RPFM's schema for each,
+    /// held in memory. For each required table it gathers every fragment of that table found anywhere - the
     /// game's own packs and the project's mod with the mods it depends on - and merges them the same
     /// way the game itself does: when two fragments define a row for the same primary key, the
     /// fragment whose name sorts earlier wins; rows unique to any one fragment are all kept. When a mod
     /// and the game share the exact same fragment name too (so fragment name breaks no tie), the mod
     /// wins, since its fragments are read first.
     ///
-    /// Nothing is written to the Assembly Kit. Its TWaD schemas give each table's fields, and its own
-    /// copy of each table is read for the fields no pack carries (see
-    /// <see cref="DatabaseTableConverter.MergeTsv"/>). RPFM extracts the fragments as TSV into a
+    /// RPFM's schema gives each table's fields. The one field CAIME needs that no pack carries,
+    /// "regions.is_sea", comes from the open map. RPFM extracts the fragments as TSV into a
     /// temporary folder of CAIME's own, deleted before <see cref="Prepare"/> returns.
     ///
     /// Everything is read through rpfm_server (see <see cref="RpfmService"/>), one server session for
@@ -33,7 +32,6 @@ namespace CAIME.Rpfm
     public sealed class RpfmWorkflowSession
     {
         private readonly GameTemplate           _game;
-        private readonly string                 _dbRootPath;
         private readonly string                 _modPackName;
         private readonly string                 _rpfmFolder;
         private readonly string                 _campaignMapName;
@@ -49,7 +47,7 @@ namespace CAIME.Rpfm
         /// tables keep, and its land and sea regions are the source of "regions.is_sea" (see
         /// <see cref="RestrictRegionsToThisMap"/> and <see cref="BuildRegionSeaStatus"/>).
         /// </param>
-        public RpfmWorkflowSession(GameTemplate game, string assemblyKitPath, string rpfmFolder, string modPackName, MapHexFile mapHex)
+        public RpfmWorkflowSession(GameTemplate game, string rpfmFolder, string modPackName, MapHexFile mapHex)
         {
             if (mapHex == null)
             {
@@ -57,7 +55,6 @@ namespace CAIME.Rpfm
             }
 
             _game            = game;
-            _dbRootPath      = Path.Combine(assemblyKitPath, "raw_data", "db");
             _modPackName     = modPackName;
             _rpfmFolder      = rpfmFolder;
             _campaignMapName = mapHex.CampaignMapName;
@@ -69,7 +66,7 @@ namespace CAIME.Rpfm
         /// Reads every required table, each merged from the game's packs and every mod that contains
         /// a fragment of it, keyed by table name. Throws a descriptive exception on any failure.
         /// </summary>
-        public IReadOnlyDictionary<string, XDocument> Prepare()
+        public IReadOnlyDictionary<string, RpfmTable> Prepare()
         {
             ValidatePreconditions();
 
@@ -82,7 +79,7 @@ namespace CAIME.Rpfm
                     var fragmentsByTable = ExtractFragments(rpfm, requiredTables);
                     var rowFilters = RestrictRegionsToThisMap(fragmentsByTable);
 
-                    return MergeTables(requiredTables, fragmentsByTable, rowFilters);
+                    return MergeTables(rpfm, requiredTables, fragmentsByTable, rowFilters);
                 }
             }
             finally
@@ -102,11 +99,6 @@ namespace CAIME.Rpfm
                 throw new NotSupportedException($"The RPFM workflow does not support {_game}.");
             }
 
-            if (!Directory.Exists(_dbRootPath))
-            {
-                throw new DirectoryNotFoundException($"Assembly Kit db folder not found: {_dbRootPath}");
-            }
-
             // Everything about RPFM itself - its schema for the game, where the game is installed - is
             // checked by RpfmService.Open, since only the server knows it.
         }
@@ -117,7 +109,7 @@ namespace CAIME.Rpfm
         // and the game land in separate folders because their fragments can share a path - every
         // pack's default "db/<table>_tables/data__", say. A failure reading the game propagates and
         // aborts the workflow; a failure reading the mods only drops them. Every required table must
-        // turn up in one or the other: the Assembly Kit's own copy is never a stand-in for game data.
+        // turn up in one or the other.
         private Dictionary<string, List<ExtractedTableFragment>> ExtractFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
             var fragmentsByTable = new Dictionary<string, List<ExtractedTableFragment>>(StringComparer.OrdinalIgnoreCase);
@@ -231,29 +223,19 @@ namespace CAIME.Rpfm
             };
         }
 
-        // Merges each table's extracted fragments into an Assembly Kit data XML document, keeping only
-        // the rows rowFilters selects for the tables it covers.
-        private Dictionary<string, XDocument> MergeTables(
-            IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable,
+        // Merges each table's extracted fragments into one document under RPFM's schema for it,
+        // keeping only the rows rowFilters selects for the tables it covers.
+        private Dictionary<string, RpfmTable> MergeTables(
+            RpfmService rpfm, IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable,
             IReadOnlyDictionary<string, TsvRowFilter> rowFilters)
         {
-            var merged = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
+            var merged = new Dictionary<string, RpfmTable>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var table in tables)
             {
-                var twadSchemaPath = Path.Combine(_dbRootPath, "TWaD_" + table + ".xml");
-                if (!File.Exists(twadSchemaPath))
-                {
-                    throw new FileNotFoundException(
-                        $"Assembly Kit schema file missing: {twadSchemaPath}. The Assembly Kit installation looks incomplete.");
-                }
-
-                // One parse of the schema file, not three.
-                var schema            = DatabaseTableConverter.LoadSchema(twadSchemaPath);
+                var schema            = DatabaseTableConverter.SchemaFromRpfm(rpfm.GetTableDefinition(table), FieldsNoPackCarries(table));
                 var booleanColumns    = DatabaseTableConverter.GetBooleanColumns(schema);
                 var primaryKeyColumns = DatabaseTableConverter.GetPrimaryKeyColumns(schema);
-
-                var existingRecords = DatabaseTableConverter.LoadExistingRecords(Path.Combine(_dbRootPath, table + ".xml"), table, primaryKeyColumns);
 
                 var fragments = new List<(string TsvPath, string FragmentName)>();
                 foreach (var fragment in fragmentsByTable[table])
@@ -269,18 +251,25 @@ namespace CAIME.Rpfm
                 }
 
                 rowFilters.TryGetValue(table, out var rowFilter);
-                merged[table] = DatabaseTableConverter.MergeTsv(
-                    fragments, table, booleanColumns, primaryKeyColumns, schema.Fields, existingRecords, _regionIsSeaByKey, rowFilter);
+                merged[table] = new RpfmTable(schema, DatabaseTableConverter.MergeTsv(
+                    fragments, table, booleanColumns, primaryKeyColumns, schema.Fields, _regionIsSeaByKey, rowFilter));
             }
 
             return merged;
         }
 
-        // Ground truth for "regions.is_sea": which regions this map treats as sea. That field never
-        // appears in any pack's raw table data at any version - the Assembly Kit computes it itself -
-        // and the Assembly Kit's own regions.xml can be arbitrarily stale (it will not know a region
-        // added since the last export at all), so the open map is the only source that is right by
-        // construction. It is already parsed and in memory by the time a session is built: Project.Open
+        // "regions.is_sea", which tells land regions from sea, is in no pack's table; it is filled in
+        // from the open map (see BuildRegionSeaStatus).
+        private static IEnumerable<XmlSchemaField> FieldsNoPackCarries(string table)
+        {
+            if (string.Equals(table, Constants.TABLE_REGIONS, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return XmlSchema.CreateField("is_sea", XmlSchemaFieldType.YesNo, false, "0");
+            }
+        }
+
+        // Ground truth for "regions.is_sea": which regions this map treats as sea. No pack's table has
+        // that field, so the open map is the source, right by construction. It is already parsed and in memory by the time a session is built: Project.Open
         // loads the map first and only then runs the hook that prepares this workflow.
         private static IReadOnlyDictionary<string, bool> BuildRegionSeaStatus(MapHexFile mapHex)
         {
@@ -312,6 +301,19 @@ namespace CAIME.Rpfm
             {
                 LoggerViewModel.Log($"RPFM workflow - failed to delete temporary extraction folder: {ex.Message}", LogLevel.Warning);
             }
+        }
+    }
+
+    /// <summary>A database table read through RPFM: its schema, and its records as data XML.</summary>
+    public sealed class RpfmTable
+    {
+        public XmlSchema Schema { get; }
+        public XDocument Rows   { get; }
+
+        public RpfmTable(XmlSchema schema, XDocument rows)
+        {
+            Schema  = schema;
+            Rows    = rows;
         }
     }
 }

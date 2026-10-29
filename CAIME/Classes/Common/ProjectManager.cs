@@ -103,8 +103,8 @@ namespace CAIME
         public DatabaseViewModel    Database        { get; private set; }
         public ColourTable          ColourTable     { get; private set; }
 
-        // The database tables read through RPFM, as Assembly Kit data XML by table name.
-        public IReadOnlyDictionary<string, XDocument> RpfmTables { get; set; }
+        // The database tables read through RPFM, by table name; null when no RPFM path is configured.
+        public IReadOnlyDictionary<string, Rpfm.RpfmTable> RpfmTables { get; set; }
 
         public string MapName
         {
@@ -177,13 +177,12 @@ namespace CAIME
                 return false;
             }
 
-            var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(Game);
-            if (string.IsNullOrEmpty(asskitPath) || Directory.Exists(asskitPath) == false)
+            if (RpfmTables == null)
             {
                 LoggerViewModel.Log(
-                    $"No Assembly Kit is configured for {Game}, so database-driven data (ground type names/costs, " +
-                    "region names, campaign data) can't be loaded. Opening the map read-only for this session - set " +
-                    "the Assembly Kit path in Settings > Preferences and reopen the project for full editing.",
+                    $"No RPFM path is configured, so {Game}'s database (ground type names/costs, region names, " +
+                    "campaign data) can't be read. Opening the map read-only for this session - set the RPFM path " +
+                    "in Settings > Preferences and reopen the project for full editing.",
                     LogLevel.Warning);
             }
             else
@@ -288,9 +287,6 @@ namespace CAIME
         public RoutedEventHandler   OnCloseProject;
         public RoutedEventHandler   OnMapResized;
         public FilePathEventHandler OnFilePathChanged;
-
-        private string _campaignMapExportPath;
-        private string _campaignMapDebugPath;
 
         public string   RootPath        { get; private set; }
         public string   ProjectsDir     { get; private set; }
@@ -461,26 +457,6 @@ namespace CAIME
                     PreferencesViewModel.Instance.Save();
                 }
 
-                var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(project.Game);
-                if (string.IsNullOrEmpty(asskitPath))
-                {
-                    // Without an assembly kit path the export target is unknown - building a path
-                    // from an empty string would be rooted and create junk directories at the
-                    // drive root. Exporters re-check the path before running.
-                    _campaignMapExportPath = null;
-                    _campaignMapDebugPath  = null;
-                    LoggerViewModel.Log($"No assembly kit path is configured for {project.Game}. " +
-                                        "Exports are unavailable until it is set in Settings > Preferences.", LogLevel.Warning);
-                }
-                else
-                {
-                    _campaignMapExportPath = $"{asskitPath}\\working_data\\campaign_maps\\{project.MapName}\\";
-                    Directory.CreateDirectory(_campaignMapExportPath);
-
-                    _campaignMapDebugPath = $"{_campaignMapExportPath}debug\\";
-                    Directory.CreateDirectory(_campaignMapDebugPath);
-                }
-
                 var projectLoadedArgs = new ProjectEventArgs(project);
                 OnOpenProject?.Invoke(this, projectLoadedArgs);
 
@@ -514,15 +490,13 @@ namespace CAIME
         /// <summary>
         /// Reads the required database tables through RPFM from the game's own packs, layering the
         /// project's mod over them when one is recorded, into <see cref="Project.RpfmTables"/>.
-        /// Returns false to abort opening. Without an Assembly Kit, whose schemas the tables need,
-        /// nothing is read and <see cref="Project.Open"/> opens the map read-only.
+        /// Returns false to abort opening. Without an RPFM path nothing is read, and
+        /// <see cref="Project.Open"/> opens the map read-only.
         /// </summary>
         private bool PrepareRpfmDatabase(Project project, GameTemplate game)
         {
-            var prefs = PreferencesViewModel.Instance;
-
-            var assemblyKitPath = prefs.GetAssKitPath(game);
-            if (string.IsNullOrEmpty(assemblyKitPath) || Directory.Exists(assemblyKitPath) == false)
+            var rpfmFolder = PreferencesViewModel.Instance.RpfmPath;
+            if (string.IsNullOrEmpty(rpfmFolder))
             {
                 return true;
             }
@@ -530,13 +504,6 @@ namespace CAIME
             if (!Rpfm.GameMappingProvider.IsSupported(game))
             {
                 LoggerViewModel.Log($"CAIME cannot read {game}'s database through RPFM.", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            var rpfmFolder = prefs.RpfmPath;
-            if (string.IsNullOrEmpty(rpfmFolder))
-            {
-                LoggerViewModel.Log("No RPFM installation path is configured. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
                 return false;
             }
 
@@ -548,7 +515,7 @@ namespace CAIME
 
             try
             {
-                var session = new Rpfm.RpfmWorkflowSession(game, assemblyKitPath, rpfmFolder, modPackName, project.MapHexFile);
+                var session = new Rpfm.RpfmWorkflowSession(game, rpfmFolder, modPackName, project.MapHexFile);
                 project.RpfmTables = session.Prepare();
 
                 LoggerViewModel.Log("RPFM database tables read successfully.", LogLevel.Info);
@@ -602,26 +569,37 @@ namespace CAIME
 
         #region Exporters
 
-        private bool EnsureExportPathAvailable()
+        /// <summary>
+        /// The folder the open project's processed files go to (see
+        /// <see cref="PreferencesViewModel.GetCampaignMapOutputPath"/>), created with its debug
+        /// subfolder; null, after telling the user, when no output folder or Assembly Kit is set.
+        /// </summary>
+        private string GetOutputPath()
         {
-            if (string.IsNullOrEmpty(_campaignMapExportPath))
+            var outputPath = PreferencesViewModel.Instance.GetCampaignMapOutputPath(Project.Game, Project.MapName);
+            if (outputPath == null)
             {
-                LoggerViewModel.Log($"Cannot export - no assembly kit path is configured for {Project.Game}. " +
-                                    "Set it in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
-                return false;
+                LoggerViewModel.Log($"Cannot export - no output folder, and no assembly kit path for {Project.Game}, is configured. " +
+                                    "Set one in Settings > Preferences.", LogLevel.ErrorMessageBox);
+                return null;
             }
 
-            return true;
+            Directory.CreateDirectory(DebugPath(outputPath));
+            return outputPath;
         }
+
+        private static string DebugPath(string outputPath) => $"{outputPath}debug\\";
 
         public bool ExportProcessedPathfindingData()
         {
-            return EnsureExportPathAvailable() && PathfindingExporter.Export(Project, _campaignMapExportPath, _campaignMapDebugPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && PathfindingExporter.Export(Project, outputPath, DebugPath(outputPath));
         }
 
         public bool ExportProcessedBordersData()
         {
-            return EnsureExportPathAvailable() && BordersExporter.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && BordersExporter.Export(Project, outputPath);
         }
 
         public bool ExportSVGBorders()
@@ -636,79 +614,47 @@ namespace CAIME
 
         public bool ExportProcessedTradeRoutesData()
         {
-            return EnsureExportPathAvailable() && TradeRoutesProcessor.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && TradeRoutesProcessor.Export(Project, outputPath);
         }
 
         /// <summary>
-        /// Checks the preconditions the two Assembly Kit processing steps share: an open, saved
-        /// project and a configured Assembly Kit. On success <paramref name="expectedPath"/> is the
-        /// directory the project must live in for the Assembly Kit to find it.
+        /// The output folder for the two steps that build from the saved map.hex, map_data.esf and
+        /// dynamic_resources.esf: null, after telling the user, unless a project is open and saved.
         /// </summary>
-        private bool EnsureProjectReadyForProcessing(out string expectedPath)
+        private string GetOutputPathForSavedProject()
         {
-            expectedPath = null;
-
             if (Project == null)
             {
                 LoggerViewModel.Log("No project is open.", LogLevel.ErrorMessageBox);
-                return false;
+                return null;
             }
 
             if (Project.HasUnsavedChanges)
             {
                 LoggerViewModel.Log("Please, save the project before trying to process it.", LogLevel.ErrorMessageBox);
-                return false;
+                return null;
             }
 
-            var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(Project.Game);
-            if (string.IsNullOrEmpty(asskitPath))
-            {
-                LoggerViewModel.Log($"Cannot process - no assembly kit path is configured for {Project.Game}. " +
-                                    "Set it in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            expectedPath = $"{asskitPath}\\raw_data\\EmpireDesignData\\campaign_maps\\{Project.MapName}\\";
-            return true;
+            return GetOutputPath();
         }
 
         public bool ProcessMapDataEsf()
         {
-            if (EnsureProjectReadyForProcessing(out string expectedPath) == false)
-            {
-                return false;
-            }
-
-            if (string.Equals(expectedPath, Project.ProjectPath) == false)
-            {
-                LoggerViewModel.Log($"Map Data Process denied - the project has to be named map.hex and located in {expectedPath}.\n" +
-                                    $"Current project name is {Project.MapHexFileName}.hex, located in {Project.ProjectPath}", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            return ProcessMapData.Process(Project);
+            var outputPath = GetOutputPathForSavedProject();
+            return outputPath != null && ProcessMapData.Process(Project, outputPath);
         }
 
         public bool ProcessDynamicResourcesEsf()
         {
-            if (EnsureProjectReadyForProcessing(out string expectedPath) == false)
-            {
-                return false;
-            }
-
-            if (string.Equals(expectedPath, Project.ProjectPath) == false)
-            {
-                LoggerViewModel.Log($"Dynamic Resources Process denied - the project has to be named map.hex and located in {expectedPath}.\n" +
-                                    $"Current project name is {Project.MapHexFileName}.hex, located in {Project.ProjectPath}", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            return ProcessDynamicResources.Process(Project);
+            var outputPath = GetOutputPathForSavedProject();
+            return outputPath != null && ProcessDynamicResources.Process(Project, outputPath);
         }
 
         public bool GenerateLookupImage()
         {
-            return EnsureExportPathAvailable() && LookupImageExporter.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && LookupImageExporter.Export(Project, outputPath);
         }
 
         public bool GenerateBaselineTilemap()

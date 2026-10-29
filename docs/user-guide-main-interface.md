@@ -188,7 +188,7 @@ After a validation run, a pop-up will tell you either:
 
 | Menu Item | Shortcut | What It Does |
 |-----------|----------|--------------|
-| **Preferences** | Ctrl+P | Opens the *Preferences* window where you can set your hex spacing, base game, and Assembly Kit path |
+| **Preferences** | Ctrl+P | Opens the *Preferences* window where you can set your hex spacing, base game, Assembly Kit path, RPFM path and output folder |
 
 ---
 

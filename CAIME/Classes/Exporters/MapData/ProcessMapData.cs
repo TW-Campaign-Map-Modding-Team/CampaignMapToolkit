@@ -6,11 +6,11 @@ namespace CAIME.Exporters
     public static class ProcessMapData
     {
         /// <summary>
-        /// Writes the project's map_data.esf with its game's writer (<see cref="MapDataWriter"/>) to
-        /// the Assembly Kit's working_data. The playable area comes from the project's database
+        /// Writes the project's map_data.esf with its game's writer (<see cref="MapDataWriter"/>) into
+        /// <paramref name="outputPath"/>. The playable area comes from the project's database
         /// tables, read through RPFM.
         /// </summary>
-        public static bool Process(Project project)
+        public static bool Process(Project project, string outputPath)
         {
             if (project.RpfmTables == null)
             {
@@ -19,8 +19,7 @@ namespace CAIME.Exporters
                 return false;
             }
 
-            var asskitPath      = PreferencesViewModel.Instance.GetAssKitPath(project.Game).Replace('\\', '/');
-            var outputFilePath  = $"{asskitPath}/working_data/campaign_maps/{project.MapName}/map_data.esf";
+            var outputFilePath = Path.Combine(outputPath, "map_data.esf");
 
             // The saved map.hex, not the one open in the editor: saving can reorder its regions.
             var map = new MapHexFile();
@@ -33,7 +32,7 @@ namespace CAIME.Exporters
             byte[] mapData;
             try
             {
-                var theatre = MapDataWriter.ReadTheatre(project.Game, project.MapName, project.RpfmTables[Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS]);
+                var theatre = MapDataWriter.ReadTheatre(project.Game, project.MapName, project.RpfmTables[Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS].Rows);
                 mapData     = MapDataWriter.Write(project.Game, map, theatre, (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
             catch (InvalidOperationException ex)

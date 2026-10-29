@@ -850,9 +850,6 @@ The sea region indices must shift up to make room for the new land region. Every
 - **"I moved a land region's boundary and now the Regions validator says it is split into disconnected areas."**
   A land region whose hexes form two isolated blobs (e.g., an island and a mainland both belonging to the same region) is a known startpos bug. Sea regions can legitimately be split (e.g., a sea region that wraps around a peninsula), but land regions should be contiguous. Repaint one of the isolated blobs to belong to a different region.
 
-- **"Process → Map Data fails with a path error."**
-  This processor requires the map file to be located exactly at `[AKit]\raw_data\EmpireDesignData\campaign_maps\[MapName]\map.hex`. If your project is saved elsewhere, use **File → Save as...** to save a copy at that path, then open that copy and try again. The CAIME log (shown in **Tools → Show Logger**, Ctrl+L) will display the expected path in the error message.
-
 - **"My Pharaoh map opens fine, but after I added a region the map won't open anymore."**
   CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If the index values are out of sync, the load is rejected. Open Dave, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save, and try opening the map again. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.
 

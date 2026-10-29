@@ -95,9 +95,6 @@ namespace CAIME
             ConsoleManager.EnsureConsole();
             LoggerViewModel.ConsoleSink = WriteLog;
 
-            // Restore any Assembly Kit an earlier CAIME version's RPFM session left changed when killed mid-run.
-            CAIME.Rpfm.RpfmRecoveryJournal.RecoverAll();
-
             try
             {
                 return Dispatch(args);
@@ -158,11 +155,10 @@ namespace CAIME
             try
             {
                 var project = projectManager.Project;
-                var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(project.Game);
-                if (string.IsNullOrEmpty(asskitPath))
+                if (PreferencesViewModel.Instance.GetCampaignMapOutputPath(project.Game, project.MapName) == null)
                 {
-                    WriteError($"No assembly kit path is configured for {project.Game}. " +
-                               "Set it once in the GUI (Settings > Preferences) before using the CLI.");
+                    WriteError($"No output folder, and no assembly kit path for {project.Game}, is configured. " +
+                               "Set one once in the GUI (Settings > Preferences) before using the CLI.");
                     return ExitProcessingError;
                 }
 
@@ -443,10 +439,10 @@ namespace CAIME
 
             sb.AppendLine();
             sb.AppendLine("NOTES:");
-            sb.AppendLine("  - The assembly kit path must already be configured per game in the GUI");
-            sb.AppendLine("    (Settings > Preferences) before running 'process'.");
-            sb.AppendLine("  - --map-data and --dynamic-resources require the project to be saved as");
-            sb.AppendLine("    map.hex under <assembly_kit>\\raw_data\\EmpireDesignData\\campaign_maps\\<map>\\.");
+            sb.AppendLine("  - Processed files go to <output folder>\\campaign_maps\\<map>\\, or to the game's");
+            sb.AppendLine("    <assembly_kit>\\working_data\\campaign_maps\\<map>\\ with no output folder set.");
+            sb.AppendLine("    Set either once in the GUI (Settings > Preferences) before running 'process'.");
+            sb.AppendLine("  - --map-data reads the project's database through RPFM, whose path is set there too.");
             sb.AppendLine();
             sb.AppendLine("EXIT CODES:");
             sb.AppendLine("  0  success    1  invalid arguments    2  processing failure");

@@ -37,15 +37,11 @@ When you launch CAIME with arguments, it runs the requested processing in a cons
 
 The CLI relies on settings you configure **once** in the graphical editor. Make sure both of the following are true before running it:
 
-1. **The Assembly Kit path must already be set for the game you are processing.**
-   The CLI reads the per-game Assembly Kit path that you save under **Settings > Preferences** in the editor. If it is not configured, processing stops with a clear error. See [Settings & Preferences](user-guide-settings-and-preferences.md) and the [Processing & Exporting](user-guide-processing-and-exporting.md) guide for how to set this.
+1. **An output folder, or the Assembly Kit path for the game you are processing, must already be set.**
+   The CLI writes where the editor does: the **Output folder** saved under **Settings > Preferences**, or the game's Assembly Kit `working_data` when none is set. If neither is configured, processing stops with a clear error. See [Settings & Preferences](user-guide-settings-and-preferences.md).
 
-2. **For `--map-data` and `--dynamic-resources`, the map must be saved in the required location.**
-   Exactly as in the editor, these two tasks require your project to be saved as `map.hex` inside:
-   ```
-   {Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\map.hex
-   ```
-   `--map-data` also needs the project's database, read through RPFM. The other tasks (pathfinding, borders, trade routes, lookup) can process a `.hex` file from any location.
+2. **For `--map-data`, the RPFM path must be set.**
+   `--map-data` needs the project's database, read through RPFM, exactly as in the editor.
 
 ---
 
@@ -170,8 +166,9 @@ Each task corresponds exactly to one entry in the **Process** menu. See [Process
 
 All outputs are written to the same place as the editor:
 ```
-{Assembly Kit path}\working_data\campaign_maps\{your map name}\
+{output folder}\campaign_maps\{your map name}\
 ```
+or `{Assembly Kit path}\working_data\campaign_maps\{your map name}\` with no output folder set.
 
 ---
 
@@ -260,8 +257,8 @@ In PowerShell the code is available as `$LASTEXITCODE`; in Command Prompt as `%E
 
 ## Troubleshooting
 
-**"No assembly kit path is configured for *\<game\>*."**
-The CLI uses the Assembly Kit path you saved in the editor. Open CAIME normally, go to **Settings > Preferences**, select the matching game, set its Assembly Kit path, and click **Save**. Then re-run the CLI. See [Settings & Preferences](user-guide-settings-and-preferences.md).
+**"No output folder, and no assembly kit path for *\<game\>*, is configured."**
+The CLI writes to the output folder you saved in the editor, or the game's Assembly Kit `working_data`. Open CAIME normally, go to **Settings > Preferences**, set an **Output folder** (or the game's Assembly Kit path), and click **Save**. Then re-run the CLI. See [Settings & Preferences](user-guide-settings-and-preferences.md).
 
 **"Map file not found" / "The map file must be a .hex file."**
 Check the path after `--map`. It must point to an existing file ending in `.hex`. Wrap paths containing spaces in double quotes.
@@ -270,7 +267,7 @@ Check the path after `--map`. It must point to an existing file ending in `.hex`
 The CLI validates every argument and refuses to run anything it does not recognise — this prevents a typo from silently doing the wrong thing. Run `CAIME.exe --help` to see the exact, supported spelling of every command, option, and task.
 
 **`--map-data` or `--dynamic-resources` reports a failure.**
-These two tasks have the same strict requirements as in the editor: the project must be saved as `map.hex` under `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`, the project must have no unsaved changes, and the Assembly Kit application must be closed. See [Processing & Exporting](user-guide-processing-and-exporting.md) for details.
+These two tasks have the same requirements as in the editor: the project must have no unsaved changes, and `--map-data` needs the project's database, read through RPFM. See [Processing & Exporting](user-guide-processing-and-exporting.md) for details.
 
 **The editor window opened instead of running the CLI.**
 The graphical editor only opens when CAIME is launched **with no arguments**. If a window appeared, the arguments did not reach the program — double-check that you typed a command (`process` or `--help`) after the executable name.

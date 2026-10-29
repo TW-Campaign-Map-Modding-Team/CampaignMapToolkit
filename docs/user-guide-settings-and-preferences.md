@@ -59,6 +59,7 @@ The diagram below maps every control in the Preferences window to its purpose.
 │  Map data config auto-patch:         ○ Enabled   ● Disabled                  │◄─ Auto-patch map_data.esf on export
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  RPFM path:                  [C:\...\rpfm                  ] [Browse]        │◄─ RPFM, which reads the database
+│  Output folder:              [C:\...\my_mod                ] [Browse]        │◄─ Where processed files go
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                              [  Save  ] [Cancel]             │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -93,7 +94,7 @@ The **Base game** dropdown tells CAIME which Total War game you are creating a m
 
 ## 4. Setting the Assembly Kit Path
 
-The Assembly Kit is a folder that Creative Assembly provides with its modding tools. CAIME needs to know where this folder is on your computer so it can read game-specific data files and generate the correct output.
+The Assembly Kit is a folder that Creative Assembly provides with its modding tools. CAIME writes processed files to its `working_data` folder when no **Output folder** is set (see Section 10), so you only need this path if you don't set one.
 
 **How to set it:**
 
@@ -249,9 +250,11 @@ When two sources both define a row for the same primary key (e.g. both a mod and
 
 - **RPFM installation, version 5.3 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
 - **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, opening a project tells you so.
-- **The Assembly Kit path** — CAIME takes the tables' schemas, and the few fields no pack carries, from the Assembly Kit's own tables, and writes processed files to its `working_data`. It only ever reads from the Assembly Kit's database. Without an Assembly Kit path, a project opens read-only, with no database.
+- **Without an RPFM path**, a project opens read-only, with no database. CAIME uses RPFM's schema for every table; the one field it needs that no pack carries, `regions.is_sea`, comes from your map's own land and sea regions.
 
-**Processing `map_data.esf`.** CAIME builds `map_data.esf` from your map's first row in `campaign_map_playable_areas` — from your mod or the game — so it must have one. No game's packs carry that row's `maxy`: CAIME uses the Assembly Kit's value when its own table has a row for the map, and otherwise works it out from `maxx` and the map's size in hexes.
+**Output folder.** Processed files go to `campaign_maps\{your map name}\` inside the **Output folder**, laid out as in a pack, so the folder can be your mod's own. Leave it empty to use the game's Assembly Kit `working_data` folder; then the Assembly Kit path is what CAIME needs, and Preferences won't **Save** with neither set.
+
+**Processing `map_data.esf`.** CAIME builds `map_data.esf` from your map's first row in `campaign_map_playable_areas` — from your mod or the game — so it must have one. Rome 2 stores the row's `maxy`, which no game's packs carry: CAIME works it out from `maxx` and the map's size in hexes.
 
 **Optional: your campaign's mod, set per project, not in Preferences.** This is the mod containing *this specific campaign's* own data (its region list, campaign definition, etc.). It's entirely optional: a project without one simply reads everything from the game. Set it any time via **Settings > RPFM Workflow** in the menu bar (only enabled while a project is open): type the mod's `.pack` file name, or **Browse...** to pick the `.pack` from disk — either way only the file name is kept. Leave the field empty to go back to the game's tables only.
 
@@ -282,8 +285,8 @@ You do not normally need to open or edit this file manually — CAIME manages it
 
 ## 12. Pro-Tips & Troubleshooting
 
-- **"Please, provide a path to the assembly_kit folder!" — Save button does nothing.**
-  This warning appears if you click **Save** while the Assembly kit path field is empty. CAIME requires a valid path to function. Click **Browse**, select your game's `assembly_kit` folder, and then click **Save** again.
+- **"Please, provide an output folder or a path to the assembly_kit folder!" — Save button does nothing.**
+  Processed files go to the **Output folder**, or to the Assembly Kit's `working_data` when none is set, so CAIME needs one of them. Set an **Output folder**, or click **Browse** next to **Assembly kit path** and select your game's `assembly_kit` folder, then click **Save** again.
 
 - **"Please, provide a path to the RPFM folder!" — Save button does nothing.**
   CAIME reads the database through RPFM, so it needs an **RPFM path**. Click **Browse** next to it, select the folder containing `rpfm_server.exe`, and then click **Save** again.

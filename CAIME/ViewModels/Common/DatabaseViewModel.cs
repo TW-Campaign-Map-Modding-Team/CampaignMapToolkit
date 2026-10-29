@@ -9,9 +9,8 @@ namespace CAIME
 {
     public class DatabaseViewModel : BaseViewModel
     {
-        private string  _asskitPath;
         private string _campaignMapName;
-        private IReadOnlyDictionary<string, XDocument> _preparedTables;
+        private IReadOnlyDictionary<string, Rpfm.RpfmTable> _preparedTables;
 
         public DataSet DataSet { get; private set; }
 
@@ -46,15 +45,11 @@ namespace CAIME
             CachedRegionsToProvinces    = new List<DBRegionToProvince>();
         }
 
-        /// <param name="preparedTables">
-        /// The tables read through RPFM, as Assembly Kit data XML keyed by table name. The Assembly
-        /// Kit supplies every table's schema.
-        /// </param>
-        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile, IReadOnlyDictionary<string, XDocument> preparedTables)
+        /// <param name="preparedTables">The tables read through RPFM, with their schemas, keyed by table name.</param>
+        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile, IReadOnlyDictionary<string, Rpfm.RpfmTable> preparedTables)
         {
             ShutDown();
 
-            this._asskitPath        = PreferencesViewModel.Instance.GetAssKitPath(game);
             this._campaignMapName   = mapHexFile.CampaignMapName;
             this._preparedTables    = preparedTables;
 
@@ -98,17 +93,15 @@ namespace CAIME
 
         public DataTable LoadTable(string tableName)
         {
-            var table       = new DelayedDataTable(tableName);
-            var schema_path = $@"{_asskitPath}\raw_data\db\TWaD_{tableName}.xml";
+            var table = new DelayedDataTable(tableName);
 
-            var schema_doc  = XDocument.Load(schema_path);
-            if (_preparedTables.TryGetValue(tableName, out var table_doc) == false)
+            if (_preparedTables.TryGetValue(tableName, out var prepared) == false)
             {
                 throw new InvalidOperationException($"The {tableName} table was not read through RPFM.");
             }
 
-            var schema = new XmlSchema();
-            schema.Load(schema_doc);
+            var schema      = prepared.Schema;
+            var table_doc   = prepared.Rows;
 
             var primaryKey = new List<DataColumn>();
                 

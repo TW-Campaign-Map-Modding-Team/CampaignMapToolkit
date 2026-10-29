@@ -174,6 +174,16 @@ namespace CAIME.Rpfm
             return ExtractTables("parent_files", tables, destinationFolder, "the mods");
         }
 
+        /// <summary>
+        /// The columns RPFM's schema defines for <paramref name="table"/> (without the <c>_tables</c>
+        /// suffix), in order: the version the game's files have, or the newest one.
+        /// </summary>
+        public IReadOnlyList<RpfmColumn> GetTableDefinition(string table)
+        {
+            return _server.Call<TableDefinition>($"read the schema of {table}", "schema.definition",
+                new { table_name = $"{table}_tables" }, DefaultTimeout).Columns;
+        }
+
         public void Dispose()
         {
             _server.Dispose();
@@ -207,6 +217,12 @@ namespace CAIME.Rpfm
                 .ToList();
         }
 
+        private sealed class TableDefinition
+        {
+            [JsonProperty("columns")]
+            public List<RpfmColumn> Columns { get; set; } = new List<RpfmColumn>();
+        }
+
         private sealed class SessionStatus
         {
             [JsonProperty("schema_loaded")]
@@ -225,7 +241,7 @@ namespace CAIME.Rpfm
             public List<string> Extracted { get; set; } = new List<string>();
         }
 
-        // Only the member LoadMod reads from dependencies.info; the vanilla and Assembly Kit file lists
+        // Only the member LoadMod reads from dependencies.info; the vanilla and other file lists
         // that arrive with it are skipped unread rather than built in memory.
         private sealed class LoadedDependencies
         {
@@ -238,6 +254,26 @@ namespace CAIME.Rpfm
             [JsonProperty("container_name")]
             public string ContainerName { get; set; }
         }
+    }
+
+    /// <summary>A column of a table as RPFM's schema defines it.</summary>
+    public sealed class RpfmColumn
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        /// <summary>
+        /// The type of its values, like <c>StringU8</c>, <c>I32</c>, <c>F32</c>, <c>Boolean</c> or
+        /// <c>ColourRGB</c>; an object for a sequence.
+        /// </summary>
+        [JsonProperty("field_type")]
+        public Newtonsoft.Json.Linq.JToken FieldType { get; set; }
+
+        [JsonProperty("is_key")]
+        public bool IsKey { get; set; }
+
+        [JsonProperty("default_value")]
+        public string DefaultValue { get; set; }
     }
 
     /// <summary>One table fragment RPFM extracted to disk as TSV.</summary>

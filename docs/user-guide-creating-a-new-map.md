@@ -494,7 +494,7 @@ Select a Swatch → Paint on the map canvas
   This means CAIME could not find any entries for your map in the Assembly Kit database. Open Dave and confirm that your map name in the `campaign_map` column of `campaign_map_regions` exactly matches what you typed in the CAIME dialog (case-sensitive). Then reload the map with **File → Reload** (Ctrl+R).
 
 - **CAIME shows a "failed to load" error when opening the new map.**
-  This usually means one of two things: (a) the Assembly Kit path for your game is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in the Assembly Kit's `raw_data\db\` folder. Check both before retrying.
+  This usually means one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both before retrying.
 
 - **I typed an odd number for the map width and got an error.**
   Map widths must be even numbers (e.g., 512, 1016, 1024). This is a technical requirement of the hex grid layout. Simply increase or decrease your width by 1 to make it even.

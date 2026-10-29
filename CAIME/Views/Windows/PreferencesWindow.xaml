@@ -286,7 +286,7 @@
 
         </Grid>
 
-        <!-- RPFM, through which CAIME reads the database -->
+        <!-- RPFM, through which CAIME reads the database, and where processed files go -->
         <Grid Grid.Row="10"
               Grid.Column="0"
               Grid.ColumnSpan="3">
@@ -298,6 +298,8 @@
             </Grid.ColumnDefinitions>
 
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -348,6 +350,46 @@
                        Foreground="Gray"
                        TextWrapping="Wrap"
                        Text="CAIME reads the database through RPFM 5.3 or later: vanilla tables from the game's own packs, found through the game folder set in RPFM's own settings. The campaign's mod is set per project, not here - use Settings &gt; RPFM Workflow (menu bar, while a project is open)." />
+
+            <TextBlock Grid.Row="3"
+                       Grid.Column="0"
+                       Margin="0 10 10 0"
+                       Text="Output folder:"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+
+            <Grid Grid.Row="3"
+                  Grid.Column="1"
+                  Grid.ColumnSpan="2"
+                  Margin="0 5 0 0">
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0"
+                         Margin="0 5"
+                         Text="{Binding OutputFolder}"
+                         Style="{StaticResource DarkTextBox}" />
+
+                <Button Grid.Column="1"
+                        Content="Browse"
+                        Padding="5 0"
+                        Margin="0 5"
+                        Click="BrowseOutputFolder_Click"
+                        Style="{StaticResource DarkButton}" />
+
+            </Grid>
+
+            <TextBlock Grid.Row="4"
+                       Grid.Column="0"
+                       Grid.ColumnSpan="3"
+                       Margin="0 3 0 0"
+                       FontStyle="Italic"
+                       Foreground="Gray"
+                       TextWrapping="Wrap"
+                       Text="Processed files go to campaign_maps\&lt;map&gt;\ inside this folder, laid out as in a pack. Leave it empty to use the Assembly Kit's working_data folder." />
         </Grid>
 
         <Separator Grid.Row="11"

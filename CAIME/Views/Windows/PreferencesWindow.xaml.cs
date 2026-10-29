@@ -59,6 +59,19 @@ namespace CAIME.Windows
             viewModel.AssKitPath = viewModel.GetAssKitPath((GameTemplate)viewModel.SelectedGameIndex);
         }
 
+        private void BrowseOutputFolder_Click(object sender, RoutedEventArgs e)
+        {
+            using (var dialog = new CommonOpenFileDialog())
+            {
+                dialog.IsFolderPicker = true;
+
+                if (dialog.ShowDialog() == CommonFileDialogResult.Ok)
+                {
+                    viewModel.OutputFolder = dialog.FileName;
+                }
+            }
+        }
+
         private void BrowseRpfm_Click(object sender, RoutedEventArgs e)
         {
             using (var dialog = new CommonOpenFileDialog())
