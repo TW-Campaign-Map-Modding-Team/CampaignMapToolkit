@@ -314,6 +314,7 @@
     <Compile Include="Classes\MapHex\MapHexEditor.GroundTypes.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.Regions.cs" />
     <Compile Include="Classes\MapHex\CampaignMask.cs" />
+    <Compile Include="Classes\MapHex\MapHexEditor.CampaignMasks.cs" />
     <Compile Include="Classes\MapHex\MapHexFile.cs" />
     <Compile Include="Classes\Common\UndoRedoManager.cs" />
     <Compile Include="Classes\Common\HotkeyManager.cs" />
@@ -412,6 +413,7 @@
     <Compile Include="Models\Common\MessageItem.cs" />
     <Compile Include="Models\Editor\Swatch.cs" />
     <Compile Include="Models\Editor\Layer.cs" />
+    <Compile Include="Models\Editor\CampaignMaskLayer.cs" />
     <Compile Include="Models\Editor\Tool.cs" />
     <Compile Include="Models\Editor\Tools\BackImageTool.cs" />
     <Compile Include="Models\Editor\Tools\ColorPickerTool.cs" />
@@ -460,6 +462,7 @@
     <Compile Include="ViewModels\Editor\Actions\BorderActionsControlViewModel.cs" />
     <Compile Include="ViewModels\Editor\Actions\CreateSwatchViewModel.cs" />
     <Compile Include="ViewModels\Editor\Actions\ActionsControlViewModel.cs" />
+    <Compile Include="ViewModels\Editor\Actions\CampaignMasksActionsControlViewModel.cs" />
     <Compile Include="ViewModels\Editor\Actions\RenameSwatchViewModel.cs" />
     <Compile Include="ViewModels\Editor\Actions\ChangeSwatchColourViewModel.cs" />
     <Compile Include="ViewModels\Editor\Actions\GroundTypeActionsControlViewModel.cs" />
@@ -523,6 +526,9 @@
     </Compile>
     <Compile Include="Views\Controls\ActionsControls\TownSlotsActionsControl.xaml.cs">
       <DependentUpon>TownSlotsActionsControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Controls\ActionsControls\CampaignMasksActionsControl.xaml.cs">
+      <DependentUpon>CampaignMasksActionsControl.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Controls\ColourPickControl.xaml.cs">
       <DependentUpon>ColourPickControl.xaml</DependentUpon>
@@ -593,6 +599,9 @@
     </Compile>
     <Compile Include="Views\Windows\MapHexFile\RenameSwatchWindow.xaml.cs">
       <DependentUpon>RenameSwatchWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Windows\MapHexFile\AddCampaignMaskWindow.xaml.cs">
+      <DependentUpon>AddCampaignMaskWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Windows\NewProjectWindow.xaml.cs">
       <DependentUpon>NewProjectWindow.xaml</DependentUpon>
@@ -695,6 +704,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\Controls\ActionsControls\TownSlotsActionsControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Controls\ActionsControls\CampaignMasksActionsControl.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -832,6 +845,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Views\Windows\MapHexFile\RenameSwatchWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Windows\MapHexFile\AddCampaignMaskWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

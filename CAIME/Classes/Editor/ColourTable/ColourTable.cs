@@ -24,6 +24,7 @@ namespace CAIME
         public const int Beach                      = -14094096;
         public const int Bridge                     = -1382640;
         public const int River                      = -65536;
+        public const int MaskedHex                  = -65281;
 
         public static int[] MicrosoftColourTable = new int[]
         {
@@ -408,6 +409,13 @@ namespace CAIME
                         newColours[i] = this.GetAreaOfInterestColour(hex.InterestIndex);
                     }
                     break;
+                case LayerType.CampaignMasks:
+                    var maskLayer = (CampaignMaskLayer)layer;
+                    for (int i = 0; i < _mapHexFile.Capacity; ++i)
+                    {
+                        newColours[i] = GetCampaignMaskColour(maskLayer.IsMasked(_mapHexFile.HexData[i]));
+                    }
+                    break;
                 default:
                     LoggerViewModel.Log($"{layer.Name} is not implemented in ColourTable.SetColours()", LogLevel.Warning);
                     break;
@@ -530,6 +538,11 @@ namespace CAIME
         public static int GetRegionBorderColour(bool isBorder)
         {
             return isBorder ? White : Zero;
+        }
+
+        public static int GetCampaignMaskColour(bool isMasked)
+        {
+            return isMasked ? MaskedHex : Zero;
         }
 
         public static int GenerateRandomColour(int minR = byte.MinValue, int maxR = byte.MaxValue, int minG = byte.MinValue, int maxG = byte.MaxValue, int minB = byte.MinValue, int maxB = byte.MaxValue)

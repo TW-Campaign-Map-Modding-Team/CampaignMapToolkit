@@ -317,6 +317,7 @@ The **Sidebar** is the 250-pixel-wide panel on the right side of the editor. It 
  │  ───────────────────────●   100%    │
  ├─────────────────────────────────────┤
  │ ▼ Layers                            │
+ │  ☐     Campaign Masks           ⋮   │
  │  ☐     Impassable               ⋮   │
  │  ☐     Trade Routes             ⋮   │
  │  ☐     Roads                    ⋮   │
@@ -447,8 +448,9 @@ To see the layers below one without hiding it, lower its opacity in the [Layer O
 | **Region Borders** | Attila and later |
 | **Restrictions** | Attila and later |
 | **Areas of Interest** | Warhammer 3, Three Kingdoms |
+| **Campaign Masks** | Warhammer, Warhammer 2, Warhammer 3, Troy, Pharaoh, Pharaoh Dynasties |
 
-In the built-in order, **Trade Routes** sits just below **Impassable**, and **Restrictions**, **Region Borders** and **Areas of Interest** sit between **Beaches** and **Regions**, in that order.
+In the built-in order, **Campaign Masks** sits at the top, just above **Impassable**, **Trade Routes** sits just below **Impassable**, and **Restrictions**, **Region Borders** and **Areas of Interest** sit between **Beaches** and **Regions**, in that order.
 
 ---
 

@@ -406,7 +406,11 @@ namespace CAIME
                 }
             }
 
-            this.CampaignMasks = this.CampaignMasks.Select(mask => mask.Resampled(sourceHexes, this.MapWidth, newWidth, newHeight)).ToList();
+            foreach (var mask in this.CampaignMasks)
+            {
+                mask.Resample(sourceHexes, this.MapWidth, newWidth, newHeight);
+            }
+
             this.MapWidth = newWidth;
             this.MapHeight = newHeight;
             this.Capacity = newWidth * newHeight;

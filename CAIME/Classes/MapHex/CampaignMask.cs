@@ -50,17 +50,18 @@ namespace CAIME
         }
 
         /// <summary>
-        /// This mask on a resized grid, where hex <c>i</c> of the new grid takes its bit from hex
-        /// <c>sourceHexes[i]</c> of the old one.
+        /// Moves this mask onto a resized grid, where hex <c>i</c> of the new grid takes its bit from
+        /// hex <c>sourceHexes[i]</c> of the old one. The mask changes in place, so the editor's mask
+        /// layer and swatches still refer to it after a resize.
         /// </summary>
-        public CampaignMask Resampled(int[] sourceHexes, uint oldWidth, uint newWidth, uint newHeight)
+        public void Resample(int[] sourceHexes, uint oldWidth, uint newWidth, uint newHeight)
         {
-            var resampled = new CampaignMask(Name, Value);
             if (Bitmap.Length == 0)
             {
-                return resampled;
+                return;
             }
 
+            var resampled = new CampaignMask(Name, Value);
             for (int hexIndex = 0; hexIndex < sourceHexes.Length; ++hexIndex)
             {
                 int source = sourceHexes[hexIndex];
@@ -70,7 +71,7 @@ namespace CAIME
                 }
             }
 
-            return resampled;
+            Bitmap = resampled.Bitmap;
         }
     }
 }

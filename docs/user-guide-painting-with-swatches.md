@@ -134,6 +134,7 @@ The **Swatches** section is near the top of the right-hand Sidebar.
 | **Town Slots** | Main Settlement, Port, Slot 2, Slot 3… |
 | **Trade Routes** | Trade route markers |
 | **Restrictions** | Restriction level values |
+| **Campaign Masks** | Masked — paint (mask) or Erase (unmask) hexes of the mask chosen in the Actions panel |
 
 ---
 
@@ -197,7 +198,7 @@ The **Source** dropdown in the Quick-Settings Bar at the top of the screen contr
 4. Select the **Flood Fill** tool and click any hex inside the Gaul region.
 5. The fill spreads across all hexes that belong to Gaul (as defined by the Regions layer) and paints them "Temperate".
 
-> **Supported source layers for Flood Fill:** Ground Types, Climates, Attritions, Regions, Impassable, Roads, Trade Routes, Restrictions.
+> **Supported source layers for Flood Fill:** Ground Types, Climates, Attritions, Regions, Impassable, Roads, Trade Routes, Restrictions, Campaign Masks.
 
 ---
 

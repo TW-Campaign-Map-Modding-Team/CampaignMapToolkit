@@ -82,6 +82,7 @@ namespace CAIME
         private BridgesActionsControl           bridgesActionsControl;
         private BeachesActionsControl           beachesActionsControl;
         private TownSlotsActionsControl         townSlotsActionsControl;
+        private CampaignMasksActionsControl     campaignMasksActionsControl;
 
         private int[]                           gridColours;
         private bool                            isLayersStackRedrawScheduled;
@@ -114,6 +115,7 @@ namespace CAIME
             bridgesActionsControl                                           = new BridgesActionsControl();
             beachesActionsControl                                           = new BeachesActionsControl();
             townSlotsActionsControl                                         = new TownSlotsActionsControl();
+            campaignMasksActionsControl                                     = new CampaignMasksActionsControl();
 
             FloodFillLayersSource                                           = new ObservableCollection<string>();
 
@@ -137,6 +139,8 @@ namespace CAIME
 
             tradeRoutesActionControl.ViewModel.OnUpdateTradeRouteColour     += OnUpdateTradeRouteColour;
             tradeRoutesActionControl.ViewModel.OnTradeRouteColoursUpdated   += UpdateColours;
+
+            campaignMasksActionsControl.ViewModel.OnMaskShown               += OnCampaignMaskShown;
 
             _preferencesViewModel.OnPreferencesChanged                      += OnPreferencesChanged;
 
@@ -717,6 +721,7 @@ namespace CAIME
                 case LayerType.TownSlots:       return swatches.Find(s => ((TownSlotSwatch)s).SlotIndex == hex.TownSlotIndex);
                 case LayerType.TownSprawl:      return swatches.Find(s => ((TownSprawlSwatch)s).Value == hex.IsTownSprawl);
                 case LayerType.Restrictions:    return swatches.Find(s => ((RestrictionSwatch)s).RestrictionLevel == hex.RestrictionLvl);
+                case LayerType.CampaignMasks:   return swatches.Find(s => ((CampaignMaskSwatch)s).Matches(hex));
             }
 
             return null;
@@ -744,6 +749,13 @@ namespace CAIME
 
             // Update swatches set
             SidebarViewModel.SwatchesVM.UpdateSwatchesSet(ProjectManager.Project);
+
+            var campaignMaskLayer = SidebarViewModel.LayersVM.CampaignMaskLayer;
+            if (campaignMaskLayer != null)
+            {
+                SidebarViewModel.SwatchesVM.UpdateCampaignMaskSwatches(campaignMaskLayer);
+            }
+
             SidebarViewModel.SwatchesVM.SetActiveSwatches(LayerType.GroundTypes, 0);
         }
 
@@ -789,8 +801,10 @@ namespace CAIME
             bridgesActionsControl.ViewModel.Initialise(e.Project);
             beachesActionsControl.ViewModel.Initialise(e.Project);
             townSlotsActionsControl.ViewModel.Initialise(e.Project);
+            campaignMasksActionsControl.ViewModel.Initialise(e.Project);
 
             SidebarViewModel.LayersVM.Initialise(e.Project.Game, _preferencesViewModel.GetLayerOrder(e.Project.Game));
+            campaignMasksActionsControl.ViewModel.Attach(SidebarViewModel.LayersVM.CampaignMaskLayer);
 
             FloodFillLayersSource.Clear();
             foreach (var layer in SidebarViewModel.LayersVM.Layers)
@@ -846,6 +860,28 @@ namespace CAIME
                 cachedHexSpacing = _preferencesViewModel.HexSpacing;
                 ResetGrid();
             }
+        }
+
+        /// <summary>
+        /// Repaints the campaign masks layer and swaps its swatch once it shows another mask. Before
+        /// the map has loaded, the layers are coloured and the swatches built in PostLoadProject.
+        /// </summary>
+        private void OnCampaignMaskShown(object sender, EventArgs e)
+        {
+            if (isInit == false)
+            {
+                return;
+            }
+
+            var layer = SidebarViewModel.LayersVM.CampaignMaskLayer;
+
+            SidebarViewModel.SwatchesVM.UpdateCampaignMaskSwatches(layer);
+            if (SidebarViewModel.LayersVM.ActiveLayer == LayerType.CampaignMasks)
+            {
+                SidebarViewModel.SwatchesVM.SetActiveSwatches(LayerType.CampaignMasks, 0);
+            }
+
+            project.ColourTable.SetColours(layer, true);
         }
 
         private void OnMapHexLayerChanged(object sender, LayerChangedEventArgs e)
@@ -908,6 +944,9 @@ namespace CAIME
                     break;
                 case LayerType.TownSlots:
                     SidebarViewModel.ActionsVM.LayerControl = townSlotsActionsControl;
+                    break;
+                case LayerType.CampaignMasks:
+                    SidebarViewModel.ActionsVM.LayerControl = campaignMasksActionsControl;
                     break;
                 default:
                     SidebarViewModel.ActionsVM.LayerControl = null;
