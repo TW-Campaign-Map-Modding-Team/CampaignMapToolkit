@@ -82,7 +82,7 @@ namespace CAIME.Tests.Integration
             foreach (var folder in folders)
             {
                 var mapName  = Path.GetFileName(folder);
-                var contents = Wh3MapDataReader.Read(Path.Combine(folder, "map_data.esf"));
+                var contents = MapDataReader.Read(Path.Combine(folder, "map_data.esf"));
 
                 if (contents.HexAreaTypes.Any(type => type == MapDataAreaType.Sea || type == MapDataAreaType.Bridge) == false)
                 {

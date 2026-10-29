@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CAIME.Classes.Importers;
@@ -65,7 +66,7 @@ namespace CAIME.Tests.Unit
             contents.HexGroundTypes     = new sbyte[count];
             contents.HexClimates        = Enumerable.Repeat(MapDataContents.None, count).ToArray();
             contents.HexAttritions      = Enumerable.Repeat(MapDataContents.None, count).ToArray();
-            contents.HexAreasOfInterest = Enumerable.Repeat(MapDataContents.None, count).ToArray();
+            contents.HexAreaOfInterestBits = new byte[count];
             contents.HexRoadMasks       = new byte[count];
             contents.HexRiverMasks      = new byte[count];
 
@@ -126,7 +127,7 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void Import_RegionsListedSeaFirst_StillGetTheirOwnIds()
+        public void Import_RegionsListedSeaFirst_KeepTheirOrder()
         {
             var contents = BuildContents();
             var seaA = contents.Regions[2];
@@ -139,6 +140,9 @@ namespace CAIME.Tests.Unit
 
             var map = Import(contents);
 
+            // map.hex lists land regions first, so a sea region before a land one must be land.
+            CollectionAssert.AreEqual(new[] { "sea_a", "land_a", "mountains" }, map.LandRegions);
+            CollectionAssert.AreEqual(new[] { "lake" }, map.SeaRegions);
             Assert.AreEqual("sea_a",     map.GetRegionName(map.HexData[Index(3, 0)].RegionId));
             Assert.AreEqual("land_a",    map.GetRegionName(map.HexData[Index(0, 0)].RegionId));
             Assert.AreEqual("mountains", map.GetRegionName(map.HexData[Index(2, 0)].RegionId));
@@ -205,7 +209,7 @@ namespace CAIME.Tests.Unit
             int hex = Index(1, 2);
             contents.HexClimates[hex]           = 1;
             contents.HexAttritions[hex]         = 0;
-            contents.HexAreasOfInterest[hex]    = 0;
+            contents.HexAreaOfInterestBits[hex] = 0b10;     // Warhammer III: index + 1, above one unrelated bit
             contents.HexRoadMasks[hex]          = 0b010010;
             contents.HexRiverMasks[hex]         = 0b000100;
 
@@ -220,6 +224,46 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(0b000100,  imported.RiverEdgeMask);
             Assert.IsTrue(imported.IsRiver);
             Assert.IsNull(map.GetClimateName(map.HexData[Index(0, 0)].ClimateIndex));
+        }
+
+        [TestMethod]
+        public void Import_CliffAreas_AreCliffs()
+        {
+            var contents = BuildContents();
+            contents.HexAreaTypes[Index(0, 3)] = MapDataAreaType.Cliff;
+            contents.HexAreaTypes[Index(1, 3)] = MapDataAreaType.BridgeCliff;
+
+            var map = Import(contents);
+
+            Assert.IsTrue(map.HexData[Index(0, 3)].IsCliff);
+            Assert.IsTrue(map.HexData[Index(1, 3)].IsCliff);
+            Assert.IsFalse(map.HexData[Index(0, 2)].IsCliff);
+        }
+
+        [TestMethod]
+        public void Import_FootprintIsSprawl_AndOtherSlotsKeepTheirIndex()
+        {
+            var contents = BuildContents();
+            contents.Regions[0].SprawlHexes.AddRange(new[] { Index(0, 0), Index(0, 1), Index(1, 1), Index(0, 2) });
+            contents.Regions[0].OtherSlotHexes.Add(new List<int> { Index(1, 0) });
+            contents.Regions[0].OtherSlotHexes.Add(new List<int> { Index(0, 2) });
+
+            var hexes = Import(contents).HexData;
+
+            Assert.IsTrue(hexes[Index(0, 2)].IsTownSprawl);
+            Assert.AreEqual((sbyte)2, hexes[Index(1, 0)].TownSlotIndex);
+            Assert.AreEqual((sbyte)3, hexes[Index(0, 2)].TownSlotIndex);
+        }
+
+        [TestMethod]
+        public void Import_CampaignMasks_AreListedInTheMap()
+        {
+            var contents = BuildContents();
+            contents.MaskNames.AddRange(new[] { "", "8" });
+
+            var map = Import(contents);
+
+            CollectionAssert.AreEqual(new[] { "", "8" }, map.UnknownEntries.Select(mask => mask.Key).ToList());
         }
 
         [TestMethod]

@@ -384,14 +384,14 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Creates a project from a Warhammer III map_data.esf by rebuilding the map.hex it was
-        /// built from. The map is named after the folder the file is in, which for a file taken
-        /// from a pack's campaign_maps folder is the campaign map's name.
+        /// Creates a project from any game's map_data.esf by rebuilding the map.hex it was built
+        /// from. The map is named after the folder the file is in, which for a file taken from a
+        /// pack's campaign_maps folder is the campaign map's name. Several games share each of
+        /// the older layouts, so <paramref name="chooseGame"/> picks one of them, or returns null
+        /// to cancel; it is not asked when the file fits only one game.
         /// </summary>
-        public Project ImportMapData(string mapDataEsfPath)
+        public Project ImportMapData(string mapDataEsfPath, Func<GameTemplate[], GameTemplate?> chooseGame)
         {
-            const GameTemplate game = GameTemplate.Warhammer3;
-
             var mapName = StringHelper.NameFixup(Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(mapDataEsfPath))));
             if (string.IsNullOrEmpty(mapName))
             {
@@ -402,7 +402,13 @@ namespace CAIME
 
             try
             {
-                var contents = Wh3MapDataReader.Read(mapDataEsfPath);
+                var contents    = MapDataReader.Read(mapDataEsfPath);
+                var games       = MapDataReader.Games(contents);
+                var game        = games.Length == 1 ? games[0] : chooseGame(games);
+                if (game == null)
+                {
+                    return null;
+                }
 
                 var newProjectPath = CreateProjectDirectory(mapName);
                 if (newProjectPath == null)
@@ -410,7 +416,7 @@ namespace CAIME
                     return null;
                 }
 
-                var mapHexFile = MapHexFile.CreateMapHex(newProjectPath, "map", GetGameNameFromGame(game), mapName, contents.Width, contents.Height, GetMapHexVersion(game));
+                var mapHexFile = MapHexFile.CreateMapHex(newProjectPath, "map", GetGameNameFromGame(game.Value), mapName, contents.Width, contents.Height, GetMapHexVersion(game.Value));
                 MapDataImporter.Import(contents, mapHexFile);
                 mapHexFile.Save(newProjectPath, "map");
             }

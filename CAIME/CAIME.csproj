@@ -307,7 +307,7 @@
     <Compile Include="Classes\Importers\LayerImporter.cs" />
     <Compile Include="Classes\Importers\MapData\MapDataContents.cs" />
     <Compile Include="Classes\Importers\MapData\MapDataImporter.cs" />
-    <Compile Include="Classes\Importers\MapData\Wh3MapDataReader.cs" />
+    <Compile Include="Classes\Importers\MapData\MapDataReader.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.Climates.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.AreasOfInterest.cs" />
@@ -488,6 +488,7 @@
     <Compile Include="ViewModels\MapDataEditor\MapDataSettingsViewModel.cs" />
     <Compile Include="ViewModels\Windows\ImportLayerViewModel.cs" />
     <Compile Include="ViewModels\Windows\RenameCampaignMapViewModel.cs" />
+    <Compile Include="ViewModels\Windows\ChooseGameViewModel.cs" />
     <Compile Include="Views\Controls\ActionsControls\GroundTypeActionsControl.xaml.cs">
       <DependentUpon>GroundTypeActionsControl.xaml</DependentUpon>
     </Compile>
@@ -581,6 +582,9 @@
     </Compile>
     <Compile Include="Views\Windows\MapHexFile\RenameCampaignMapWindow.xaml.cs">
       <DependentUpon>RenameCampaignMapWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Windows\ChooseGameWindow.xaml.cs">
+      <DependentUpon>ChooseGameWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Windows\ResizeWindow.xaml.cs">
       <DependentUpon>ResizeWindow.xaml</DependentUpon>
@@ -814,6 +818,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\Windows\MapHexFile\RenameCampaignMapWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Windows\ChooseGameWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

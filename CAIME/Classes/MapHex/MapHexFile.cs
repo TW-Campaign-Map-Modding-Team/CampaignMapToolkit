@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using Force.Crc32;
@@ -1916,6 +1917,13 @@ namespace CAIME
                 var size = br.ReadInt32();
                 br.ReadBytes(size);
             }
+        }
+
+        /// <summary>Replaces the campaign masks with <paramref name="names"/>, each with an empty bitmap.</summary>
+        public void SetCampaignMasks(IEnumerable<string> names)
+        {
+            UnknownEntries              = names.Select(name => new KeyValuePair<string, uint>(name, 0)).ToList();
+            unknownTrailingBlockCount   = UnknownEntries.Count;
         }
 
         private void WriteUnknownEntries(BinaryWriter bw)

@@ -32,6 +32,7 @@ This guide explains every type of modification, tells you exactly which database
    - [Trade Route Changes](#trade-route-changes)
    - [Adding, Renaming, or Removing an Area of Interest](#areas-of-interest-changes)
    - [Resizing the Map](#resizing-the-map)
+   - [Starting from a map_data.esf](#starting-from-a-map_dataesf)
 4. [After Modifying: What to Re-Process](#4-after-modifying-what-to-re-process)
 5. [Running Validators Before Processing](#5-running-validators-before-processing)
 6. [Game-Specific Differences](#6-game-specific-differences)
@@ -486,6 +487,26 @@ You can grow or shrink the map canvas using **Edit → Resize** (Ctrl+Shift+R). 
 
 ---
 
+### Starting from a map_data.esf
+
+If you have a map's `map_data.esf` but not its `map.hex` — for example a map from another mod's pack — use **Tools → Import → map_data.esf** and pick the file. Every supported game's `map_data.esf` can be imported; when the file's layout is shared by several games, CAIME asks which one it is from. CAIME rebuilds the `map.hex` and opens it as a new project in `Projects\[MapName]\`. The map is named after the folder the file is in, so extract the file with its `campaign_maps\[MapName]\` folder, or rename the map afterwards with **Edit → Rename map**.
+
+The import recovers regions and their colours, ground types, climates, attritions, areas of interest (in the games that have them), roads, rivers, land and sea, beaches, cliffs, bridges, impassable hexes, town slots (every building slot, in the games that have more than a main and a port slot), town sprawl around settlements, and Warhammer's campaign masks. Region borders are recalculated. Processing **Map Data** from the imported map writes the same `map_data.esf` back, except on maps with cliffs away from the sea (Troy's): saving a map in CAIME makes every land hex that touches sea a cliff and every other hex not one, so those cliffs are lost, as they are when you save the game's own `map.hex`. Two things are not in `map_data.esf` and start empty:
+
+| Layer | After import |
+|---|---|
+| **Restrictions** | Empty. Repaint them before you process pathfinding data |
+| **Trade Routes** | Empty. Repaint them in the games that use them |
+
+Some things are inferred, because `map_data.esf` does not record them directly. None of them changes the `map_data.esf` you process from the map:
+
+- **Impassable coast.** Whether an impassable hex on the coast is a beach or a cliff is not stored. CAIME makes it a beach when it touches a passable beach hex, and a cliff otherwise. This matches CA's own maps on about 97–99% of such hexes.
+- **Land and sea regions.** `map.hex` lists land regions before sea regions, and `map_data.esf` keeps that order but not where the sea regions start. CAIME starts them after the last region that has a settlement or land ground. A sea region listed before that point is imported as a land region; move it in the region list if it matters to you.
+- **Town sprawl away from settlements.** Only the sprawl that belongs to a settlement is in `map_data.esf`; sprawl hexes no settlement reaches are not imported.
+- **Sea ground types.** `map_data.esf` keeps land and sea ground types in one list. CAIME tells them apart by the ground under passable sea. A map with no passable sea at all imports every ground type as land and says so in the log; **Tools → Validate → Ground types** then reports each ground type the database marks as sea.
+
+---
+
 ## 4. After Modifying: What to Re-Process
 
 After painting and saving your changes, you need to tell CAIME to re-generate the binary output files. Use the **Process** menu for each relevant step.
@@ -676,22 +697,6 @@ To view validator output, open the Logger panel with **Tools → Show Logger** (
 | Table | What to do |
 |---|---|
 | `campaign_map_areas_of_interest` | Add a row per new area of interest (`campaign_map` + `key`) |
-
-#### Starting from a map_data.esf
-
-If you have a Warhammer III map's `map_data.esf` but not its `map.hex` — for example a map from another mod's pack — use **Tools → Import → map_data.esf** and pick the file. CAIME rebuilds the `map.hex` and opens it as a new project in `Projects\[MapName]\`. The map is named after the folder the file is in, so extract the file with its `campaign_maps\[MapName]\` folder, or rename the map afterwards with **Edit → Rename map**.
-
-The import recovers regions and their colours, ground types, climates, attritions, areas of interest, roads, rivers, land and sea, beaches, cliffs, bridges, impassable hexes, town slots and town sprawl. Region borders are recalculated. Two things are not in `map_data.esf` and start empty:
-
-| Layer | After import |
-|---|---|
-| **Restrictions** | Empty. Repaint them before you process pathfinding data |
-| **Trade Routes** | Empty (not used by Warhammer III) |
-
-Two things are inferred, because `map_data.esf` does not record them directly:
-
-- **Impassable coast.** Whether an impassable hex on the coast is a beach or a cliff is not stored. CAIME makes it a beach when it touches a passable beach hex, and a cliff otherwise. This matches CA's own maps on about 97–99% of such hexes and does not change the `map_data.esf` you process from the map.
-- **Sea ground types.** `map_data.esf` keeps land and sea ground types in one list. CAIME tells them apart by the ground under passable sea. A map with no passable sea at all imports every ground type as land and says so in the log; **Tools → Validate → Ground types** then reports each ground type the database marks as sea.
 
 ---
 

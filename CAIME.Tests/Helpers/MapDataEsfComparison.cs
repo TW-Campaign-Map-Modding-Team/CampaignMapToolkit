@@ -27,6 +27,9 @@ namespace CAIME.Tests.Helpers
         public string                       OlderRecord         { get; set; }
         public Func<EsfNode, bool>          OlderRecordExtra    { get; set; } = node => false;
 
+        /// <summary>A record that is not compared at all, such as one holding a save time.</summary>
+        public string                       SkippedRecord       { get; set; }
+
         public List<string>                 Differences         { get; } = new List<string>();
 
         /// <summary>Finds a file by its path from the repository root, or marks the test inconclusive.</summary>
@@ -64,6 +67,11 @@ namespace CAIME.Tests.Helpers
             if (expected is ParentNode expectedParent && actual is ParentNode actualParent)
             {
                 path += "/" + expectedParent.Name;
+                if (expectedParent.Name == SkippedRecord && actualParent.Name == SkippedRecord)
+                {
+                    return;
+                }
+
                 bool older = expectedParent.Name == OlderRecord;
                 if (expectedParent.Name != actualParent.Name || (expectedParent.Version != actualParent.Version && older == false))
                 {

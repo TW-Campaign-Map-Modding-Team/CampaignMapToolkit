@@ -395,7 +395,7 @@ namespace CAIME
         {
             var dialog = new OpenFileDialog()
             {
-                Title  = "Import a Warhammer III map_data.esf",
+                Title  = "Import a map_data.esf",
                 Filter = "map_data.esf|map_data.esf"
             };
 
@@ -406,7 +406,10 @@ namespace CAIME
                     ProjectManager.CloseProject();
                 }
 
-                ProjectManager.ImportMapData(dialog.FileName);
+                ProjectManager.ImportMapData(dialog.FileName, games => ChooseGameWindow.Ask(
+                    Application.Current.MainWindow,
+                    $"{dialog.FileName} is laid out as these games lay out map_data.esf. Which game is it from?",
+                    games));
             }
         }
 

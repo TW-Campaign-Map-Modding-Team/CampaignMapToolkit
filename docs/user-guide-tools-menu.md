@@ -218,14 +218,15 @@ This tool lets you bring in a previously exported layer binary file (`.hex_layer
 
 ### 6. Import → map_data.esf
 
-> **Note:** Available whenever a project can be opened. Warhammer III only.
+> **Note:** Available whenever a project can be opened. Works with every supported game.
 
-Creates a new project from a Warhammer III `map_data.esf` by rebuilding the `map.hex` it was made from — useful when you have a map's `map_data.esf` but not its `map.hex`. The current project is closed first.
+Creates a new project from a `map_data.esf` by rebuilding the `map.hex` it was made from — useful when you have a map's `map_data.esf` but not its `map.hex`. The current project is closed first.
 
 **Steps:**
 
 1. Click **Tools** → **Import** → **map_data.esf**.
 2. Navigate to the `map_data.esf` file and click **Open**. The file picker only shows files named `map_data.esf`.
+   - Warhammer III and Three Kingdoms files are recognised on their own. The other games share file layouts (Rome II, Attila and Thrones of Britannia share one; Warhammer, Warhammer II, Troy and Pharaoh share another), so CAIME asks which game the file is from. Pick the right one: the game decides the `map.hex` version and how **Process → Map Data** writes the file.
 3. The new project opens. The map is named after the folder the file is in.
 
 See [Starting from a map_data.esf](user-guide-modifying-an-existing-map.md#starting-from-a-map_dataesf) for what the import recovers and what it leaves empty.

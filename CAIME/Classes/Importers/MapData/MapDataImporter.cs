@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace CAIME.Classes.Importers
 {
     /// <summary>
-    /// Fills a new, empty map of the same size from the contents of a map_data.esf. map_data.esf
-    /// keeps everything map.hex holds except trade routes and restriction levels, which are left
-    /// empty, and whether an impassable coast hex is beach or cliff, which is inferred.
+    /// Fills a new, empty map of the same size from the contents of any game's map_data.esf.
+    /// map_data.esf keeps everything map.hex holds except trade routes and restriction levels,
+    /// which are left empty, and a few things that are inferred: which regions and ground types
+    /// are sea, and what an impassable hex is underneath. However they are inferred, the map
+    /// writes the same map_data.esf back.
     /// </summary>
     public static class MapDataImporter
     {
@@ -23,13 +26,13 @@ namespace CAIME.Classes.Importers
             map.SeaGroundTypes.AddRange(contents.GroundTypes.GetRange(landGroundTypeCount, contents.GroundTypes.Count - landGroundTypeCount));
             map.Climates.AddRange(contents.Climates);
             map.Attritions.AddRange(contents.Attritions);
-            map.AreasOfInterest.AddRange(contents.AreasOfInterest);
+            map.AreasOfInterest?.AddRange(contents.AreasOfInterest); // null in the games without them
+            map.SetCampaignMasks(contents.MaskNames);
 
-            var regionIds = ImportRegions(contents, map);
-
-            ImportHexes(contents, map, regionIds);
+            ImportRegions(contents, map);
+            ImportHexes(contents, map);
             MarkImpassableBeaches(contents, map);
-            ImportTownSlots(contents, map);
+            ImportSettlements(contents, map);
 
             BordersExporter.GenerateRegionEdges(map);
             MapHexFile.RegionMasksNeedRecalculation = true;
@@ -68,70 +71,53 @@ namespace CAIME.Classes.Importers
         }
 
         /// <summary>
-        /// Splits the regions into map.hex's land and sea lists, keeping their order, and sets
-        /// their colours.
+        /// Splits the regions into map.hex's land and sea lists and sets their colours. map_data.esf
+        /// lists them in map.hex's order, land first, so they keep that order and only where the
+        /// sea regions start is worked out.
         /// </summary>
-        /// <returns>The map's region id for each map_data.esf region.</returns>
-        private static int[] ImportRegions(MapDataContents contents, MapHexFile map)
+        private static void ImportRegions(MapDataContents contents, MapHexFile map)
         {
-            var isSea           = ClassifySeaRegions(contents, map);
-            var regionIds       = new int[contents.Regions.Count];
-            var landColours     = new List<uint>();
-            var seaColours      = new List<uint>();
+            int landRegionCount = CountLandRegions(contents, map);
+            var regions         = contents.Regions;
 
-            for (int region = 0; region < contents.Regions.Count; ++region)
-            {
-                if (isSea[region] == false)
-                {
-                    regionIds[region] = map.LandRegions.Count;
-                    map.LandRegions.Add(contents.Regions[region].Key);
-                    landColours.Add(contents.Regions[region].Colour);
-                }
-            }
+            map.LandRegions.AddRange(regions.Take(landRegionCount).Select(region => region.Key));
+            map.SeaRegions.AddRange(regions.Skip(landRegionCount).Select(region => region.Key));
 
-            for (int region = 0; region < contents.Regions.Count; ++region)
-            {
-                if (isSea[region])
-                {
-                    regionIds[region] = map.LandRegions.Count + map.SeaRegions.Count;
-                    map.SeaRegions.Add(contents.Regions[region].Key);
-                    seaColours.Add(contents.Regions[region].Colour);
-                }
-            }
+            var landColours = regions.Take(landRegionCount).Select(region => region.Colour).ToList();
+            var seaColours  = regions.Skip(landRegionCount).Select(region => region.Colour).ToList();
 
             map.ColoursLand.SetColours(MergeColours(landColours, map.ColoursLand.Colours, count => MapHexFile.GenerateLandColours(count)));
             map.ColoursSea.SetColours(MergeColours(seaColours, map.ColoursSea.Colours, count => MapHexFile.GenerateSeaColours(count)));
-
-            return regionIds;
         }
 
         /// <summary>
-        /// The builder only flags sea regions that have passable sea. A region without the flag
-        /// whose hexes all have sea ground, such as an impassable lake, is a sea region too.
+        /// The land regions run up to the last one that looks like land: one with a settlement, or
+        /// with land ground and no sea flag. Only settlements depend on where the sea regions start,
+        /// so any split that keeps them on land writes the same map_data.esf.
         /// </summary>
-        private static bool[] ClassifySeaRegions(MapDataContents contents, MapHexFile map)
+        private static int CountLandRegions(MapDataContents contents, MapHexFile map)
         {
-            var hasHexes        = new bool[contents.Regions.Count];
-            var hasLandGround   = new bool[contents.Regions.Count];
+            var hasLandGround = new bool[contents.Regions.Count];
 
             for (int hexIndex = 0; hexIndex < contents.HexCount; ++hexIndex)
             {
-                int region = contents.HexRegions[hexIndex];
-
-                hasHexes[region] = true;
                 if (map.IsSeaGroundType(contents.HexGroundTypes[hexIndex]) == false)
                 {
-                    hasLandGround[region] = true;
+                    hasLandGround[contents.HexRegions[hexIndex]] = true;
                 }
             }
 
-            var isSea = new bool[contents.Regions.Count];
-            for (int region = 0; region < isSea.Length; ++region)
+            int landRegionCount = 0;
+            for (int region = 0; region < contents.Regions.Count; ++region)
             {
-                isSea[region] = contents.Regions[region].HasPassableSea || (hasHexes[region] && hasLandGround[region] == false);
+                var info = contents.Regions[region];
+                if (info.PrimarySlotHexes.Count > 0 || (hasLandGround[region] && info.HasPassableSea == false))
+                {
+                    landRegionCount = region + 1;
+                }
             }
 
-            return isSea;
+            return landRegionCount;
         }
 
         /// <summary>
@@ -157,29 +143,44 @@ namespace CAIME.Classes.Importers
             return colours.ToArray();
         }
 
-        private static void ImportHexes(MapDataContents contents, MapHexFile map, int[] regionIds)
+        /// <summary>
+        /// A passable hex's area type says whether it is sea, a bridge, beach or cliff. An impassable
+        /// hex's says none of that: it is sea when its ground is.
+        /// </summary>
+        private static void ImportHexes(MapDataContents contents, MapHexFile map)
         {
             for (int hexIndex = 0; hexIndex < contents.HexCount; ++hexIndex)
             {
                 var hex         = map.HexData[hexIndex];
                 var areaType    = contents.HexAreaTypes[hexIndex];
 
-                hex.RegionId        = regionIds[contents.HexRegions[hexIndex]];
+                hex.RegionId        = contents.HexRegions[hexIndex];
                 hex.GroundTypeIndex = contents.HexGroundTypes[hexIndex];
                 hex.ClimateIndex    = contents.HexClimates[hexIndex];
                 hex.AttritionIndex  = contents.HexAttritions[hexIndex];
-                hex.InterestIndex   = contents.HexAreasOfInterest[hexIndex];
+                hex.InterestIndex   = AreaOfInterest(contents, map, hexIndex);
 
                 hex.RoadEdgeMask    = contents.HexRoadMasks[hexIndex];
                 hex.IsRoad          = hex.RoadEdgeMask != 0;
                 hex.RiverEdgeMask   = contents.HexRiverMasks[hexIndex];
                 hex.IsRiver         = hex.RiverEdgeMask != 0;
 
-                hex.IsSea           = map.IsSeaGroundType(hex.GroundTypeIndex);
                 hex.IsPassable      = areaType != MapDataAreaType.Impassable;
+                hex.IsSea           = hex.IsPassable ? areaType == MapDataAreaType.Sea || areaType == MapDataAreaType.Bridge : map.IsSeaGroundType(hex.GroundTypeIndex);
                 hex.IsBridge        = areaType == MapDataAreaType.Bridge;
                 hex.IsBeach         = areaType == MapDataAreaType.Beach;
+                hex.IsCliff         = areaType == MapDataAreaType.Cliff || areaType == MapDataAreaType.BridgeCliff;
             }
+        }
+
+        /// <summary>
+        /// The builder copies bits 3-8 of map.hex's bytes 8-9, where the area of interest index + 1
+        /// starts at <see cref="MapHexFile.AreaOfInterestShift"/>.
+        /// </summary>
+        private static sbyte AreaOfInterest(MapDataContents contents, MapHexFile map, int hexIndex)
+        {
+            int index = ((contents.HexAreaOfInterestBits[hexIndex] << 3) >> map.AreaOfInterestShift) - 1;
+            return index >= 0 && index < contents.AreasOfInterest.Count ? (sbyte)index : MapDataContents.None;
         }
 
         /// <summary>
@@ -216,15 +217,25 @@ namespace CAIME.Classes.Importers
         }
 
         /// <summary>
-        /// The port slot block also lists the main slot's hexes, so the main slot is applied after
-        /// it. Every hex in a town slot is town sprawl.
+        /// A settlement's footprint is the town sprawl the builder filled. Some games' port slot
+        /// block also lists the main slot's hexes, so the main slot is applied after it.
         /// </summary>
-        private static void ImportTownSlots(MapDataContents contents, MapHexFile map)
+        private static void ImportSettlements(MapDataContents contents, MapHexFile map)
         {
             foreach (var region in contents.Regions)
             {
+                foreach (int hexIndex in region.SprawlHexes)
+                {
+                    map.HexData[hexIndex].IsTownSprawl = true;
+                }
+
                 SetTownSlot(map, region.PortSlotHexes, Hex.PORT_SLOT_INDEX);
                 SetTownSlot(map, region.PrimarySlotHexes, Hex.MAIN_SLOT_INDEX);
+
+                for (int slot = 0; slot < region.OtherSlotHexes.Count; ++slot)
+                {
+                    SetTownSlot(map, region.OtherSlotHexes[slot], (sbyte)(Hex.PORT_SLOT_INDEX + 1 + slot));
+                }
             }
         }
 

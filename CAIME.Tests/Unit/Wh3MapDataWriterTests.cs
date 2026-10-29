@@ -53,7 +53,7 @@ namespace CAIME.Tests.Unit
         {
             var path = Path.Combine(_dir, "map_data.esf");
             File.WriteAllBytes(path, Wh3MapDataWriter.Write(map, new MapDataTheatre { Index = "42", MaxX = 100f }, 0));
-            return Wh3MapDataReader.Read(path);
+            return MapDataReader.Read(path);
         }
 
         /// <summary>Left half land_a, right half land_b, the top row sea_a.</summary>
