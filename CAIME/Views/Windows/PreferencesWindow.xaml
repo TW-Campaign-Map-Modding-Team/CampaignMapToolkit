@@ -286,7 +286,7 @@
 
         </Grid>
 
-        <!-- Database source (Assembly Kit / RPFM) -->
+        <!-- RPFM, through which CAIME reads the database -->
         <Grid Grid.Row="10"
               Grid.Column="0"
               Grid.ColumnSpan="3">
@@ -301,8 +301,6 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Separator Grid.Row="0"
@@ -314,39 +312,13 @@
             <TextBlock Grid.Row="1"
                        Grid.Column="0"
                        Margin="0 0 10 0"
-                       Text="Database source:"
+                       Text="RPFM path:"
                        Foreground="White"
                        VerticalAlignment="Center" />
 
-            <ComboBox Grid.Row="1"
-                      Grid.Column="1"
-                      Grid.ColumnSpan="2"
-                      Style="{StaticResource DarkFlatComboBox}"
-                      ItemsSource="{Binding DatabaseSources}"
-                      SelectedItem="{Binding DatabaseSource, Mode=TwoWay}"
-                      ToolTip="Can be changed at any time, including while a project is open - it only takes effect the next time a project is opened." />
-
-            <TextBlock Grid.Row="2"
-                       Grid.Column="0"
-                       Grid.ColumnSpan="3"
-                       Margin="0 3 0 0"
-                       FontStyle="Italic"
-                       Foreground="Gray"
-                       TextWrapping="Wrap"
-                       Text="Takes effect the next time a project is opened - changing it does not affect a project that is already open." />
-
-            <TextBlock Grid.Row="3"
-                       Grid.Column="0"
-                       Margin="0 0 10 0"
-                       Text="RPFM path:"
-                       Foreground="White"
-                       VerticalAlignment="Center"
-                       Visibility="{Binding RpfmSettingsVisibility}" />
-
-            <Grid Grid.Row="3"
+            <Grid Grid.Row="1"
                   Grid.Column="1"
-                  Grid.ColumnSpan="2"
-                  Visibility="{Binding RpfmSettingsVisibility}">
+                  Grid.ColumnSpan="2">
 
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -368,15 +340,14 @@
 
             </Grid>
 
-            <TextBlock Grid.Row="4"
+            <TextBlock Grid.Row="2"
                        Grid.Column="0"
                        Grid.ColumnSpan="3"
                        Margin="0 3 0 0"
                        FontStyle="Italic"
                        Foreground="Gray"
                        TextWrapping="Wrap"
-                       Text="Vanilla tables are read from the game's own packs, found through the game folder set in RPFM's own settings. The campaign's mod is set per project, not here - use Settings &gt; RPFM Workflow (menu bar, while a project is open)."
-                       Visibility="{Binding RpfmSettingsVisibility}" />
+                       Text="CAIME reads the database through RPFM 5.3 or later: vanilla tables from the game's own packs, found through the game folder set in RPFM's own settings. The campaign's mod is set per project, not here - use Settings &gt; RPFM Workflow (menu bar, while a project is open)." />
         </Grid>
 
         <Separator Grid.Row="11"

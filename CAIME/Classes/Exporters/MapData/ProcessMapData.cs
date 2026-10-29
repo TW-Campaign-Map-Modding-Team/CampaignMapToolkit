@@ -7,15 +7,15 @@ namespace CAIME.Exporters
     {
         /// <summary>
         /// Writes the project's map_data.esf with its game's writer (<see cref="MapDataWriter"/>) to
-        /// the Assembly Kit's working_data, where the Assembly Kit's own builder used to put it. The
-        /// playable area comes from the project's RPFM database tables, never the Assembly Kit's.
+        /// the Assembly Kit's working_data. The playable area comes from the project's database
+        /// tables, read through RPFM.
         /// </summary>
         public static bool Process(Project project)
         {
             if (project.RpfmTables == null)
             {
-                LoggerViewModel.Log("map_data.esf is built from the database tables RPFM reads from the game's packs. " +
-                                    "Set Database source to RPFM in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log("map_data.esf was not processed: the project's database was not read through RPFM. " +
+                                    "Set the RPFM path in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
                 return false;
             }
 

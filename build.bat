@@ -8,8 +8,7 @@ xcopy /exclude:build_caime_exclude_list.txt CAIME\bin %out_build_dir%\CAIME\
 rem xcopy /e Projects %out_build_dir%\Projects\
 mkdir %out_build_dir%\Projects\
 
-rem Tools and Templates go inside the CAIME folder: CD packs only that folder into the installer
-xcopy /e /exclude:build_caime_exclude_list.txt CAIME\Tools %out_build_dir%\CAIME\Tools\
+rem Templates go inside the CAIME folder: CD packs only that folder into the installer
 xcopy /e /exclude:build_caime_templates_exclude_list.txt Templates %out_build_dir%\CAIME\Templates\
 
 rem Copy distribution text files (source of truth lives at repo root)

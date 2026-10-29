@@ -11,8 +11,8 @@ using System.Xml.Linq;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Converts between RPFM's TSV export format and the Assembly Kit's data XML format. Reusable and
-    /// self-contained: it takes explicit inputs (record element name, which columns are yes/no) rather
+    /// Converts RPFM's TSV export format into CAIME's in-memory database tables, laid out as the
+    /// Assembly Kit's data XML. Reusable and self-contained: it takes explicit inputs (record element name, which columns are yes/no) rather
     /// than reaching into any workflow state.
     ///
     /// RPFM TSV layout:
@@ -190,19 +190,6 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Converts one RPFM TSV file into an Assembly Kit data XML file.
-        /// </summary>
-        /// <param name="tsvPath">Source .tsv file.</param>
-        /// <param name="recordElementName">Element name for each record (the Assembly Kit table name, e.g. "campaign_ground_types").</param>
-        /// <param name="booleanColumns">Columns to translate from true/false to 1/0.</param>
-        /// <param name="outputXmlPath">Destination .xml file.</param>
-        public static void TsvToXml(string tsvPath, string recordElementName, ISet<string> booleanColumns, string outputXmlPath)
-        {
-            var document = MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
-            WriteAssemblyKitXml(document, outputXmlPath);
-        }
-
-        /// <summary>
         /// Merges the records of several TSV fragments of the same table into a single Assembly Kit
         /// data XML document. A table can be split across multiple fragment files both within one pack
         /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
@@ -280,30 +267,6 @@ namespace CAIME.Rpfm
 
             var root = new XElement("dataroot", records);
             return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
-        }
-
-        /// <summary>
-        /// Writes an Assembly Kit data XML file the way the Assembly Kit's own tools can read it: UTF-8
-        /// without a byte order mark. Their XML reader does not skip one - it faults on the leading
-        /// bytes and takes the whole ToolDataBuilder DLL down with an access violation, which surfaces
-        /// as MapDataBuilder.exe crashing rather than as a parse error. Every XML file the Assembly Kit
-        /// ships is BOM-less, and XDocument.Save(path) writes one, so the writer's encoding has to be
-        /// set explicitly (same reason XmlToTsv uses a BOM-less UTF8Encoding).
-        /// </summary>
-        public static void WriteAssemblyKitXml(XDocument document, string path)
-        {
-            var writerSettings = new XmlWriterSettings
-            {
-                Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                Indent   = true,
-            };
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-
-            using (var writer = XmlWriter.Create(path, writerSettings))
-            {
-                document.Save(writer);
-            }
         }
 
         private static List<(string Key, XElement Record)> TsvToKeyedRecords(
@@ -440,7 +403,7 @@ namespace CAIME.Rpfm
                 }
                 else
                 {
-                    // No schema available (the single-file TsvToXml path) - fall back to TSV column
+                    // No schema available (a table with no schema fields given) - fall back to TSV column
                     // order.
                     for (int i = 0; i < header.Length; ++i)
                     {
@@ -486,50 +449,6 @@ namespace CAIME.Rpfm
             }
 
             return results;
-        }
-
-        /// <summary>
-        /// Converts an Assembly Kit data XML file back into an RPFM TSV file. Provided for
-        /// completeness and reuse; the RPFM preparation pipeline itself only needs TSV -&gt; XML.
-        /// </summary>
-        public static void XmlToTsv(
-            string xmlPath,
-            string recordElementName,
-            IReadOnlyList<string> columnOrder,
-            ISet<string> booleanColumns,
-            string tableFolderName,
-            int version,
-            string outputTsvPath)
-        {
-            var document = XDocument.Load(xmlPath);
-
-            var sb = new StringBuilder();
-            sb.Append(string.Join("\t", columnOrder)).Append('\n');
-            sb.Append('#').Append(tableFolderName).Append(';').Append(version).Append(';')
-              .Append("db/").Append(tableFolderName).Append('/').Append(recordElementName)
-              .Append(new string('\t', Math.Max(0, columnOrder.Count - 1))).Append('\n');
-
-            foreach (var record in document.Root.Elements(recordElementName))
-            {
-                var values = new List<string>(columnOrder.Count);
-                foreach (var column in columnOrder)
-                {
-                    var element = record.Element(column);
-                    var value   = element?.Value ?? string.Empty;
-
-                    if (booleanColumns != null && booleanColumns.Contains(column))
-                    {
-                        value = ToTsvBoolean(value);
-                    }
-
-                    values.Add(EscapeTsv(value));
-                }
-
-                sb.Append(string.Join("\t", values)).Append('\n');
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(outputTsvPath));
-            File.WriteAllText(outputTsvPath, sb.ToString(), new UTF8Encoding(false));
         }
 
         // XML element names must be NCNames: start with a letter/underscore, no spaces. RPFM column
@@ -592,21 +511,6 @@ namespace CAIME.Rpfm
             return field.DefaultValue is IFormattable formattable
                 ? formattable.ToString(null, CultureInfo.InvariantCulture)
                 : field.DefaultValue?.ToString() ?? string.Empty;
-        }
-
-        private static string ToTsvBoolean(string value)
-        {
-            return value == "1" ? "true" : "false";
-        }
-
-        private static string EscapeTsv(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return string.Empty;
-            }
-
-            return value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ");
         }
     }
 

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -64,19 +65,15 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void TsvToXml_ProducesAssemblyKitXml_WithBooleansAsOneAndZero()
+        public void MergeTsv_WritesBooleansAsOneAndZero()
         {
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
             var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
-            var xmlPath    = Path.Combine(_dir, "test_table.xml");
 
             File.WriteAllText(schemaPath, TwadSchema);
             File.WriteAllText(tsvPath, Tsv);
 
-            var booleans = DatabaseTableConverter.GetBooleanColumns(schemaPath);
-            DatabaseTableConverter.TsvToXml(tsvPath, "test_table", booleans, xmlPath);
-
-            var doc     = XDocument.Load(xmlPath);
+            var doc     = MergeWithoutSchemaFields(tsvPath, "test_table", schemaPath);
             var records = doc.Root.Elements("test_table").ToList();
 
             Assert.AreEqual("dataroot", doc.Root.Name.LocalName, "Root element must be dataroot.");
@@ -95,7 +92,7 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void TsvToXml_ExpandsRpfmColourColumnIntoRgb_AndSkipsUnmappableNames()
+        public void MergeTsv_ExpandsRpfmColourColumnIntoRgb_AndSkipsUnmappableNames()
         {
             // Mirrors the real RPFM "regions" table: a colour packed into a single hex column whose
             // header is not a valid XML name. Row 2 has an empty colour (must not emit r/g/b).
@@ -107,7 +104,6 @@ namespace CAIME.Tests.Unit
 
             var schemaPath = Path.Combine(_dir, "TWaD_regions.xml");
             var tsvPath    = Path.Combine(_dir, "rom_regions.tsv");
-            var xmlPath    = Path.Combine(_dir, "regions.xml");
 
             // Minimal regions schema: key (text pk), is_sea (yesno), r/g/b (integer).
             File.WriteAllText(schemaPath,
@@ -123,10 +119,7 @@ namespace CAIME.Tests.Unit
 </root>");
             File.WriteAllText(tsvPath, tsv);
 
-            var booleans = DatabaseTableConverter.GetBooleanColumns(schemaPath);
-            DatabaseTableConverter.TsvToXml(tsvPath, "regions", booleans, xmlPath);
-
-            var records = XDocument.Load(xmlPath).Root.Elements("regions").ToList();
+            var records = MergeWithoutSchemaFields(tsvPath, "regions", schemaPath).Root.Elements("regions").ToList();
             Assert.AreEqual(2, records.Count);
 
             // B66216 -> r=182 (0xB6), g=98 (0x62), b=22 (0x16).
@@ -233,18 +226,6 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void WriteAssemblyKitXml_WritesNoBom_AndCreatesTheFolder()
-        {
-            var xmlPath  = Path.Combine(_dir, "not_yet_created", "regions.xml");
-            var document = new XDocument(new XElement("dataroot", new XElement("regions", new XElement("key", "reg_a"))));
-
-            DatabaseTableConverter.WriteAssemblyKitXml(document, xmlPath);
-
-            Assert.AreNotEqual(0xEF, File.ReadAllBytes(xmlPath)[0], "The Assembly Kit's reader crashes on a UTF-8 BOM.");
-            Assert.AreEqual("reg_a", XDocument.Load(xmlPath).Root.Element("regions").Element("key").Value);
-        }
-
-        [TestMethod]
         public void ReadTsvRows_ReturnsDataRowsByColumnName_SkippingTheMetadataLine()
         {
             var tsvPath = Path.Combine(_dir, "campaign_map_regions.tsv");
@@ -261,28 +242,11 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual("reg_b", rows[1]["region"]);
         }
 
-        [TestMethod]
-        public void XmlToTsv_RoundTripsBackToTrueFalse()
+        // One fragment, in its TSV's own column order, with the schema giving only its yes/no columns.
+        private static XDocument MergeWithoutSchemaFields(string tsvPath, string recordElementName, string schemaPath)
         {
-            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
-            var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
-            var xmlPath    = Path.Combine(_dir, "test_table.xml");
-            var roundTrip  = Path.Combine(_dir, "roundtrip.tsv");
-
-            File.WriteAllText(schemaPath, TwadSchema);
-            File.WriteAllText(tsvPath, Tsv);
-
-            var booleans = DatabaseTableConverter.GetBooleanColumns(schemaPath);
-            DatabaseTableConverter.TsvToXml(tsvPath, "test_table", booleans, xmlPath);
-
-            var columns = new[] { "type", "movement_cost", "can_ambush", "is_sea" };
-            DatabaseTableConverter.XmlToTsv(xmlPath, "test_table", columns, booleans, "test_table_tables", 7, roundTrip);
-
-            var lines = File.ReadAllLines(roundTrip);
-            Assert.AreEqual("type\tmovement_cost\tcan_ambush\tis_sea", lines[0]);
-            Assert.IsTrue(lines[1].StartsWith("#test_table_tables;7;"), "Second line should be the metadata comment.");
-            Assert.AreEqual("brownlands\t80\ttrue\tfalse", lines[2], "Booleans must round-trip back to true/false.");
-            Assert.AreEqual("deep_sea\t1800\tfalse\ttrue", lines[3]);
+            return DatabaseTableConverter.MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName,
+                DatabaseTableConverter.GetBooleanColumns(schemaPath), Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
         }
     }
 }

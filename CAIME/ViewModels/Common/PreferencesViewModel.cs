@@ -118,19 +118,6 @@ namespace CAIME
             }
         }
 
-        private DatabaseSource databaseSource;
-        public DatabaseSource DatabaseSource
-        {
-            get => databaseSource;
-            set
-            {
-                databaseSource = value;
-                OnPropertyChanged(nameof(DatabaseSource));
-                OnPropertyChanged(nameof(IsRpfmSource));
-                OnPropertyChanged(nameof(RpfmSettingsVisibility));
-            }
-        }
-
         private string rpfmPath;
         public string RpfmPath
         {
@@ -141,10 +128,6 @@ namespace CAIME
                 OnPropertyChanged(nameof(RpfmPath));
             }
         }
-
-        public bool IsRpfmSource => DatabaseSource == DatabaseSource.RPFM;
-
-        public Visibility RpfmSettingsVisibility => IsRpfmSource ? Visibility.Visible : Visibility.Collapsed;
 
         #endregion
 
@@ -157,12 +140,6 @@ namespace CAIME
         // re-applies that override every time the window opens while a project is still open, so an
         // open project always wins over whatever was last browsed to manually.
         public int SelectedGameIndex { get; set; }
-
-        public DatabaseSource[] DatabaseSources { get; } =
-        {
-            DatabaseSource.AssemblyKit,
-            DatabaseSource.RPFM,
-        };
         #endregion
 
         public event RoutedEventHandler OnPreferencesChanged;
@@ -195,27 +172,23 @@ namespace CAIME
                 return false;
             }
 
-            if (DatabaseSource == DatabaseSource.RPFM)
+            if (string.IsNullOrWhiteSpace(RpfmPath))
             {
-                if (string.IsNullOrWhiteSpace(RpfmPath))
-                {
-                    var msg = "The database source is set to RPFM, but no RPFM installation path is provided. " +
-                              "Please provide one, or switch the database source back to Assembly Kit.";
-                    LoggerViewModel.Log(msg, LogLevel.Warning);
-                    MessageBox.Show(msg, "Missing RPFM path");
-                    return false;
-                }
+                var msg = "Please, provide a path to the RPFM folder! CAIME reads the database through RPFM.";
+                LoggerViewModel.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Missing RPFM path");
+                return false;
+            }
 
-                // Never store an invalid RPFM installation path.
-                if (!RpfmService.ValidateInstallation(RpfmPath, out var rpfmError))
-                {
-                    RpfmPath = null;
-                    var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}\n\n" +
-                              "Point it at an RPFM 5.3 or later folder, or switch the database source back to Assembly Kit.";
-                    LoggerViewModel.Log(msg, LogLevel.Warning);
-                    MessageBox.Show(msg, "Invalid RPFM path");
-                    return false;
-                }
+            // Never store an invalid RPFM installation path.
+            if (!RpfmService.ValidateInstallation(RpfmPath, out var rpfmError))
+            {
+                RpfmPath = null;
+                var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}\n\n" +
+                          "Point it at an RPFM 5.3 or later folder.";
+                LoggerViewModel.Log(msg, LogLevel.Warning);
+                MessageBox.Show(msg, "Invalid RPFM path");
+                return false;
             }
 
             Save();
@@ -247,7 +220,6 @@ namespace CAIME
             json[nameof(IsAutoBackup)] = IsAutoBackup;
             json[nameof(AutoBackupsToKeep)] = AutoBackupsToKeep;
             json[nameof(IsMapDataConfigPostProcessEnabled)] = IsMapDataConfigPostProcessEnabled;
-            json[nameof(DatabaseSource)] = DatabaseSource.ToString();
             json[nameof(RpfmPath)] = RpfmPath ?? "";
             json[nameof(SelectedGameIndex)] = SelectedGameIndex;
 
@@ -318,12 +290,6 @@ namespace CAIME
                 if (json.TryGetValue(nameof(IsMapDataConfigPostProcessEnabled), out var postProcessToken) && bool.TryParse(postProcessToken.ToString(), out bool postProcess))
                 {
                     IsMapDataConfigPostProcessEnabled = postProcess;
-                }
-
-                if (json.TryGetValue(nameof(DatabaseSource), out var dbSourceToken) &&
-                    Enum.TryParse(dbSourceToken.ToString(), out DatabaseSource dbSource))
-                {
-                    DatabaseSource = dbSource;
                 }
 
                 if (json.TryGetValue(nameof(RpfmPath), out var rpfmPathToken))
@@ -414,7 +380,6 @@ namespace CAIME
             IsAutoSave                          = true;
             IsAutoBackup                        = true;
             IsMapDataConfigPostProcessEnabled   = false;
-            DatabaseSource                      = DatabaseSource.AssemblyKit;
             RpfmPath                            = null;
         }
     }

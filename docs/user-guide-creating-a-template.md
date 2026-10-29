@@ -113,7 +113,7 @@ your_custom_template\
 └── dynamic_resources.png    ← RECOMMENDED — resource icon positions
 ```
 
-A PNG image whose purpose is not yet fully understood but it is closely linked to campaign map farms. Used by `MapDataBuilder` when you run **Process → Dynamic Resources**.
+A PNG image painting where farmland tiles appear on the campaign map as a region's buildings level up: each colour is one building level from `dynamic_resources_database.xml`. Used when you run **Process → Dynamic Resources**.
 
 > **Not needed for Three Kingdoms maps:** Three Kingdoms handles dynamic resources differently and does not use this file.
 

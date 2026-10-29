@@ -103,8 +103,7 @@ namespace CAIME
         public DatabaseViewModel    Database        { get; private set; }
         public ColourTable          ColourTable     { get; private set; }
 
-        // The database tables read through RPFM, as Assembly Kit data XML by table name, when that is
-        // the project's database source; null when it is the Assembly Kit.
+        // The database tables read through RPFM, as Assembly Kit data XML by table name.
         public IReadOnlyDictionary<string, XDocument> RpfmTables { get; set; }
 
         public string MapName
@@ -199,7 +198,7 @@ namespace CAIME
                 catch (Exception ex)
                 {
                     LoggerViewModel.Log(
-                        $"Could not load database tables for {Game} from the configured Assembly Kit ({ex.Message}). " +
+                        $"Could not load database tables for {Game} ({ex.Message}). " +
                         "Opening the map read-only for this session.",
                         LogLevel.Warning);
                     Database.ShutDown();
@@ -296,7 +295,6 @@ namespace CAIME
         public string   RootPath        { get; private set; }
         public string   ProjectsDir     { get; private set; }
         public string   TemplatesPath   { get; private set; }
-        public string   ToolsPath       { get; private set; }
         public Project  Project         { get; private set; }
 
         public bool     IsProjectOpen   => Project != null;
@@ -306,7 +304,6 @@ namespace CAIME
             RootPath        = GetRootPath();
             ProjectsDir     = $@"{RootPath}Projects\";
             TemplatesPath   = GetTemplatesPath();
-            ToolsPath       = GetToolsPath();
 
             LoggerViewModel.Log($"App root path is {RootPath}", LogLevel.Info);
         }
@@ -330,14 +327,6 @@ namespace CAIME
         public static string GetTemplatesPath()
         {
             return GetBundledFolderPath("Templates", @"..\Templates\");
-        }
-
-        /// <summary>
-        /// Folder containing the native tools (MapDataBuilder), split into Debug and Release subfolders.
-        /// </summary>
-        public static string GetToolsPath()
-        {
-            return GetBundledFolderPath("Tools", @"Tools\");
         }
 
         /// <summary>
@@ -381,7 +370,7 @@ namespace CAIME
             if (template == TEMPLATE_NONE)
             {
                 var project = Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
-                if (project.Open($"{newProjectPath}map.hex", g => PrepareRpfmDatabaseIfNeeded(project, g)))
+                if (project.Open($"{newProjectPath}map.hex", g => PrepareRpfmDatabase(project, g)))
                 {
                     return project;
                 }
@@ -457,7 +446,7 @@ namespace CAIME
             try
             {
                 project = new Project();
-                if (project.Open(filename, g => PrepareRpfmDatabaseIfNeeded(project, g)) == false)
+                if (project.Open(filename, g => PrepareRpfmDatabase(project, g)) == false)
                 {
                     return null;
                 }
@@ -523,41 +512,31 @@ namespace CAIME
         }
 
         /// <summary>
-        /// When the active database source is RPFM, reads the required database tables from the
-        /// game's own packs, layering the project's mod over them when one is recorded, into
-        /// <see cref="Project.RpfmTables"/>. Returns false to abort opening. For the Assembly Kit
-        /// source this is a no-op returning true.
+        /// Reads the required database tables through RPFM from the game's own packs, layering the
+        /// project's mod over them when one is recorded, into <see cref="Project.RpfmTables"/>.
+        /// Returns false to abort opening. Without an Assembly Kit, whose schemas the tables need,
+        /// nothing is read and <see cref="Project.Open"/> opens the map read-only.
         /// </summary>
-        private bool PrepareRpfmDatabaseIfNeeded(Project project, GameTemplate game)
+        private bool PrepareRpfmDatabase(Project project, GameTemplate game)
         {
-            // Every RPFM failure ends with the way out: the Assembly Kit source needs none of it.
-            const string UseAssemblyKitInstead =
-                "To open the project from the Assembly Kit's database instead, set Database source to Assembly Kit in Settings > Preferences.";
-
             var prefs = PreferencesViewModel.Instance;
-            if (prefs.DatabaseSource != DatabaseSource.RPFM)
+
+            var assemblyKitPath = prefs.GetAssKitPath(game);
+            if (string.IsNullOrEmpty(assemblyKitPath) || Directory.Exists(assemblyKitPath) == false)
             {
                 return true;
             }
 
             if (!Rpfm.GameMappingProvider.IsSupported(game))
             {
-                LoggerViewModel.Log($"The RPFM database source workflow does not support {game}. {UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            var assemblyKitPath = prefs.GetAssKitPath(game);
-            if (string.IsNullOrEmpty(assemblyKitPath))
-            {
-                LoggerViewModel.Log($"No assembly kit path is configured for {game}. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"CAIME cannot read {game}'s database through RPFM.", LogLevel.ErrorMessageBox);
                 return false;
             }
 
             var rpfmFolder = prefs.RpfmPath;
             if (string.IsNullOrEmpty(rpfmFolder))
             {
-                LoggerViewModel.Log("The database source is set to RPFM but no RPFM installation path is configured. Set it in Settings > Preferences. " +
-                    UseAssemblyKitInstead, LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log("No RPFM installation path is configured. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
                 return false;
             }
 
@@ -577,7 +556,7 @@ namespace CAIME
             }
             catch (Exception ex)
             {
-                LoggerViewModel.Log($"Reading the database through RPFM failed: {ex.Message}\n\n{UseAssemblyKitInstead}", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"Reading the database through RPFM failed: {ex.Message}", LogLevel.ErrorMessageBox);
                 return false;
             }
         }
@@ -724,7 +703,7 @@ namespace CAIME
                 return false;
             }
 
-            return ProcessDynamicResources.Process(Project, ToolsPath);
+            return ProcessDynamicResources.Process(Project);
         }
 
         public bool GenerateLookupImage()

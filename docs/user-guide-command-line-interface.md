@@ -45,7 +45,7 @@ The CLI relies on settings you configure **once** in the graphical editor. Make 
    ```
    {Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\map.hex
    ```
-   `--dynamic-resources` also requires the Assembly Kit application (Tweak.AssemblyKit) to be **closed**, and `--map-data` requires RPFM as the Database source. The other tasks (pathfinding, borders, trade routes, lookup) can process a `.hex` file from any location.
+   `--map-data` also needs the project's database, read through RPFM. The other tasks (pathfinding, borders, trade routes, lookup) can process a `.hex` file from any location.
 
 ---
 

@@ -3,9 +3,8 @@ using System.Collections.Generic;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Single source of truth for which database tables a given game requires. Both the existing
-    /// Assembly Kit loading path (<see cref="DatabaseViewModel.LoadTables"/>) and the RPFM
-    /// preparation pipeline read the same list from here, so the two workflows can never drift.
+    /// Single source of truth for which database tables a given game requires: the RPFM workflow
+    /// reads these, and <see cref="DatabaseViewModel"/> loads them.
     /// </summary>
     public static class DatabaseTableProvider
     {

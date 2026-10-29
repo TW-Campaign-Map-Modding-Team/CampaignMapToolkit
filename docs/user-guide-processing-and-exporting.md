@@ -123,9 +123,9 @@ Without a valid Assembly Kit path, CAIME cannot load a project or run any proces
 
 ### What CAIME Reads from the Assembly Kit
 
-When you open a project, CAIME automatically reads these files from `{Assembly Kit path}\raw_data\db\`:
+When you open a project, CAIME reads these tables through RPFM from the game's packs and your mod (see the Settings and Preferences guide). From `{Assembly Kit path}\raw_data\db\` it takes only their schemas, plus the few fields no pack carries:
 
-| File in Assembly Kit | What it provides to CAIME |
+| Table | What it provides to CAIME |
 |---|---|
 | `regions.xml` | The list of all region names and their map colours |
 | `campaign_map_regions.xml` | Which regions belong to your campaign map |
@@ -137,9 +137,7 @@ When you open a project, CAIME automatically reads these files from `{Assembly K
 | `region_to_province_junctions.xml` | Which province each region belongs to |
 | `campaign_map_areas_of_interest.xml` | *(Three Kingdoms and Warhammer 3 only)* Areas of interest |
 
-> **With RPFM as the Database source** (see the Settings and Preferences guide), CAIME reads these tables from the game's packs and your mod instead, and takes only their schemas — plus the few fields no pack carries — from these files.
-
-> **The region order matters.** CAIME loads land regions first, then sea regions, in the order they appear in `regions.xml`. Your painted region colours must correspond to the regions in that exact order. If you add or remove regions in the Assembly Kit database, you must reload your project so CAIME can re-synchronise.
+> **The region order matters.** CAIME loads land regions first, then sea regions, in the order they appear in `regions`. Your painted region colours must correspond to the regions in that exact order. If you add or remove regions in your mod, you must reload your project so CAIME can re-synchronise.
 
 ---
 
@@ -179,7 +177,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 > ```
 > If your file is saved anywhere else, the process will be blocked and you will see an error in the Logger.
 >
-> **Map Data needs RPFM as the Database source** (**Settings > Preferences**). Your map's row in `campaign_map_playable_areas` is read from your mod or the game's packs, never from the Assembly Kit's database.
+> **Map Data needs your map's row in `campaign_map_playable_areas`**, read through RPFM from your mod or the game's packs.
 
 **How to use it:**
 
@@ -281,9 +279,9 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.4 Dynamic Resources
 
-**What it does:** Generates the `dynamic_resources.esf` file, which defines the resource icons and positions that appear on the campaign map (things like food, wood, stone, and trade goods shown on the map overlay).
+**What it does:** Generates the `dynamic_resources.esf` file: the farmland tiles that appear on the campaign map as a region's buildings level up. CAIME writes the file itself; the Assembly Kit's own tools are not run.
 
-**Special requirements:** As for Map Data, your project must be saved inside the Assembly Kit folder. The Assembly Kit application must also be closed.
+**Special requirements:** As for Map Data, your project must be saved inside the Assembly Kit folder.
 
 **How to use it:**
 
@@ -292,13 +290,11 @@ Access all processing features from the **Process** menu in the top menu bar:
    {Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\map.hex
    ```
 
-2. Close the Assembly Kit application if it is open.
+2. Go to **Process > Dynamic resources**.
 
-3. Go to **Process > Dynamic resources**.
+3. Look for the message `Processed dynamic resources file was exported to` in the Logger to confirm success.
 
-4. The Logger will show progress. Processing completes automatically.
-
-**What it reads:** Assembly Kit database tables + painted map layers.
+**What it reads:** Your saved `map.hex`, and `dynamic_resources.png` and `dynamic_resources_database.xml` from the project folder.
 
 **Output file:** `{Assembly Kit path}\working_data\campaign_maps\{your map name}\dynamic_resources.esf`
 
@@ -653,7 +649,7 @@ These tools save visual representations of your map layers as image files. They 
 │                                                                             │
 │  Borders Data              Regions                     borders.pbd          │
 │                                                                             │
-│  Dynamic Resources         All layers + AKit DB        dynamic_resources.esf│
+│  Dynamic Resources         map.hex + dynamic_resources dynamic_resources.esf│
 │                                                                             │
 │  Trade Routes              Trade Routes, Regions       trade_routes.ptd     │
 │                                                                             │
@@ -682,13 +678,10 @@ These tools save visual representations of your map layers as image files. They 
 The validators under **Tools > Validate** are fast and reveal problems early. A broken bridge or a region count mismatch will silently corrupt your exported files if not caught first. Make it a habit to run **Regions**, **Town Slots**, **Roads**, and **Bridges** before each export session.
 
 **"Map Data Process denied" — what it means and how to fix it.**
-If you see this message in the Logger, it means your project file is saved in the wrong location. For **Map Data** and **Dynamic Resources** to work, your project file must be named exactly `map.hex` and saved inside your Assembly Kit folder at `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`. The file must also be saved (no unsaved changes), and for **Dynamic Resources** the Assembly Kit application must be closed. Move the file there using **File > Save as...** and try again.
+If you see this message in the Logger, it means your project file is saved in the wrong location. For **Map Data** and **Dynamic Resources** to work, your project file must be named exactly `map.hex` and saved inside your Assembly Kit folder at `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`. The file must also be saved (no unsaved changes). Move the file there using **File > Save as...** and try again.
 
 **"Mismatch between database regions and map.hex regions" — what it means.**
 This error means the number of regions you have painted on the map does not match the number of regions defined in your Assembly Kit database files. This can happen if you add a new region in your database but forget to paint it on the map (or vice versa). Open your Assembly Kit's `regions.xml` and `campaign_map_regions.xml` and count how many regions belong to your campaign map. The count must exactly match the number of distinct region colours you have painted in CAIME. The order of land regions and sea regions must also match — land regions are indexed first, sea regions second.
-
-**The Assembly Kit application (Tweak.AssemblyKit) must be closed before running Dynamic Resources.**
-This processing step uses a background tool that accesses the same database files as the Assembly Kit editor. Running both at the same time causes a file conflict and the process will be blocked. Close the Assembly Kit completely, then run the process from CAIME.
 
 **Sea regions that touch too many land regions cause campaign AI slowdowns.**
 If the Regions validator warns that a sea region has more than 5 adjacent land regions, it is worth taking seriously. More than 9 adjacent land regions will noticeably slow down the campaign AI. Split large sea regions into two or more smaller sea regions to keep adjacency counts manageable.

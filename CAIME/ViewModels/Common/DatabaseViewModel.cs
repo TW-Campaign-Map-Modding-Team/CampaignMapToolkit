@@ -47,11 +47,10 @@ namespace CAIME
         }
 
         /// <param name="preparedTables">
-        /// Table data to load in place of the Assembly Kit's own files, as Assembly Kit data XML keyed
-        /// by table name - the RPFM database source's. The Assembly Kit still supplies every table's
-        /// schema.
+        /// The tables read through RPFM, as Assembly Kit data XML keyed by table name. The Assembly
+        /// Kit supplies every table's schema.
         /// </param>
-        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile, IReadOnlyDictionary<string, XDocument> preparedTables = null)
+        public bool Initialise(GameTemplate game, string projectPath, MapHexFile mapHexFile, IReadOnlyDictionary<string, XDocument> preparedTables)
         {
             ShutDown();
 
@@ -101,12 +100,12 @@ namespace CAIME
         {
             var table       = new DelayedDataTable(tableName);
             var schema_path = $@"{_asskitPath}\raw_data\db\TWaD_{tableName}.xml";
-            var table_path  = $@"{_asskitPath}\raw_data\db\{tableName}.xml";
 
             var schema_doc  = XDocument.Load(schema_path);
-            var table_doc   = _preparedTables != null && _preparedTables.TryGetValue(tableName, out var prepared)
-                ? prepared
-                : XDocument.Load(table_path);
+            if (_preparedTables.TryGetValue(tableName, out var table_doc) == false)
+            {
+                throw new InvalidOperationException($"The {tableName} table was not read through RPFM.");
+            }
 
             var schema = new XmlSchema();
             schema.Load(schema_doc);
@@ -180,7 +179,7 @@ namespace CAIME
         {
             var tables = new Dictionary<string, DataTable>();
 
-            // The required-table set is centralised so the Assembly Kit and RPFM workflows stay in sync.
+            // The same set the RPFM workflow reads.
             foreach (var tableName in Rpfm.DatabaseTableProvider.GetRequiredTables(game))
             {
                 tables[tableName] = LoadTable(tableName);

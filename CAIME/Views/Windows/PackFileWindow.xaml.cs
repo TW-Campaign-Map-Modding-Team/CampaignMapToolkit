@@ -6,7 +6,7 @@ using Microsoft.Win32;
 namespace CAIME.Windows
 {
     /// <summary>
-    /// Lets the user view and change the project-specific mod the RPFM database source reads this
+    /// Lets the user view and change the project-specific mod the RPFM workflow reads this
     /// campaign's own data from - distinct from the RPFM path, which is a setting in Preferences, not
     /// per-project. The mod is kept by .pack file name only; RPFM finds it, and the mods it depends
     /// on, when the project opens. Persisted into caime_metadata.json beside the project's map.hex via

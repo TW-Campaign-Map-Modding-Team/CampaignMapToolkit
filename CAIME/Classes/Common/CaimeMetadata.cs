@@ -25,7 +25,7 @@ namespace CAIME
         [JsonProperty("campaign_map_name")]
         public string CampaignMapName { get; set; }
 
-        // File name of the mod .pack the RPFM database source workflow reads this campaign from, or
+        // File name of the mod .pack the RPFM workflow reads this campaign from, or
         // null for none. A name, not a path: RPFM finds it in the game's data folder or its Steam
         // Workshop folder, and loads the mods it depends on along with it, so one name is all a
         // project needs. Independent of the map_data config fields above - do not overwrite one when

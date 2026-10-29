@@ -283,7 +283,6 @@
     <Compile Include="Classes\Common\AutoSavesManager.cs" />
     <Compile Include="Classes\Common\HexGridUtility.cs" />
     <Compile Include="Classes\Common\CaimeMetadata.cs" />
-    <Compile Include="Classes\Common\Rpfm\DatabaseSource.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableConverter.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableProvider.cs" />
     <Compile Include="Classes\Common\Rpfm\GameMappingProvider.cs" />
@@ -968,8 +967,5 @@
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\CommunityToolkit.Mvvm.8.3.2\build\CommunityToolkit.Mvvm.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CommunityToolkit.Mvvm.8.3.2\build\CommunityToolkit.Mvvm.targets'))" />
-  </Target>
-  <Target Name="BuildMapDataBuilderWin32" AfterTargets="Build">
-    <MSBuild Projects="$(MSBuildThisFileDirectory)..\MapDataBuilder\MapDataBuilder.vcxproj" Properties="Configuration=$(Configuration);Platform=Win32" Targets="Build" />
   </Target>
 </Project>

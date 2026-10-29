@@ -1,194 +1,59 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Windows;
 
 namespace CAIME.Exporters
 {
-    internal class ProcessDynamicResources
+    internal static class ProcessDynamicResources
     {
-        private const string EXPORTER_NAME = "MapDataBuilder";
+        private const string IMAGE_FILE_NAME    = "dynamic_resources.png";
+        private const string DATABASE_FILE_NAME = "dynamic_resources_database.xml";
 
-        // MapDataBuilder drives the Assembly Kit's BOB pipeline, which can take minutes on a large
-        // map. The bound only exists so a wedged child cannot hang the app forever.
-        private const int PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
-
-        public static bool Process(Project project, string toolsDir)
+        /// <summary>
+        /// Writes the project's dynamic_resources.esf (<see cref="DynamicResourcesWriter"/>) from its
+        /// saved map.hex, dynamic_resources.png and dynamic_resources_database.xml to the Assembly
+        /// Kit's working_data, next to map_data.esf.
+        /// </summary>
+        public static bool Process(Project project)
         {
-            var startInfo = new System.Diagnostics.ProcessStartInfo();
+            var imagePath       = Path.Combine(project.ProjectPath, IMAGE_FILE_NAME);
+            var databasePath    = Path.Combine(project.ProjectPath, DATABASE_FILE_NAME);
 
-            if (project.Game == GameTemplate.Troy              ||
-                project.Game == GameTemplate.Pharaoh           ||
-                project.Game == GameTemplate.Pharaoh_Dynasties ||
-                project.Game == GameTemplate.Warhammer         ||
-                project.Game == GameTemplate.Warhammer2        ||
-                project.Game == GameTemplate.Warhammer3        ||
-                project.Game == GameTemplate.Three_Kingdoms)
+            foreach (var input in new[] { imagePath, databasePath })
             {
-#if DEBUG
-                startInfo.FileName = $@"{toolsDir}Debug\{EXPORTER_NAME}.x64.exe";
-#else                                                   
-                startInfo.FileName = $@"{toolsDir}Release\{EXPORTER_NAME}.x64.exe";
-#endif                                     
-            }                              
-            else                           
-            {
-#if DEBUG
-                startInfo.FileName = $@"{toolsDir}Debug\{EXPORTER_NAME}.exe";
-#else
-                startInfo.FileName = $@"{toolsDir}Release\{EXPORTER_NAME}.exe";
-#endif
+                if (File.Exists(input) == false)
+                {
+                    LoggerViewModel.Log($"dynamic_resources.esf was not processed: {input} was not found.", LogLevel.ErrorMessageBox);
+                    return false;
+                }
             }
 
-            if (File.Exists(startInfo.FileName) == false)
+            // The saved map.hex, not the one open in the editor: saving can reorder its regions.
+            var map = new MapHexFile();
+            if (map.Load(project.FileName) == false)
             {
-                LoggerViewModel.Log($"{EXPORTER_NAME} not found at {startInfo.FileName}. The CAIME installation is incomplete; please reinstall.", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"dynamic_resources.esf was not processed: {project.FileName} could not be read.", LogLevel.ErrorMessageBox);
                 return false;
             }
 
             var asskitPath      = PreferencesViewModel.Instance.GetAssKitPath(project.Game).Replace('\\', '/');
-            var gameName        = ProjectManager.GetGameNameFromGame(project.Game);
-            var campaignMapName = project.MapName;
-            var binariesPath    = $"{asskitPath}/binaries";
-            var workingDataPath = $"{asskitPath}/working_data";
-                                
-            var outputFilePath  = $"{workingDataPath}/campaign_maps/{campaignMapName}/dynamic_resources.esf";
+            var outputFilePath  = $"{asskitPath}/working_data/campaign_maps/{project.MapName}/dynamic_resources.esf";
 
-            if (System.Diagnostics.Process.GetProcessesByName("Tweak.AssemblyKit").Length > 0)
+            try
             {
-                LoggerViewModel.Log("Please close Tweak.AssemblyKit before processing the map data.", LogLevel.ErrorMessageBox);
+                var regions = DynamicResourceRegions.Find(map, DynamicResourcesImage.Load(imagePath), DynamicResourceType.LoadDatabase(databasePath), project.Game);
+                var bytes   = DynamicResourcesWriter.Write(regions, DateTime.UtcNow, project.Game);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
+                File.WriteAllBytes(outputFilePath, bytes);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException)
+            {
+                LoggerViewModel.Log($"dynamic_resources.esf was not processed: {ex.Message}", LogLevel.ErrorMessageBox);
                 return false;
             }
 
-            if (File.Exists(outputFilePath))
-            {
-                LoggerViewModel.Log($"Deleted existing dynamic_resources.esf file.", LogLevel.Info);
-                File.Delete(outputFilePath);
-            }
-
-            LoggerViewModel.Log($"Starting {startInfo.FileName}", LogLevel.Info);
-            LoggerViewModel.Log($"Binaries path: {binariesPath}", LogLevel.Info);
-
-            startInfo.Arguments = $"game={gameName} akit_path=\"{asskitPath}\" campaign_map={campaignMapName} process=dyn_res";
-
-            var run = ChildProcess.Run(startInfo, PROCESS_TIMEOUT_MS);
-
-            var bobStandardOutput = run.StandardOutput;
-            var bobErrorOutput = run.StandardError;
-
-            if (run.TimedOut)
-            {
-                LoggerViewModel.Log($"{EXPORTER_NAME} did not finish within {PROCESS_TIMEOUT_MS / 60000} minutes and was terminated.", LogLevel.Error);
-            }
-
-            var exitCode = run.ExitCode;
-            LoggerViewModel.Log($"{EXPORTER_NAME} exited with code {exitCode} ({DescribeExitCode(exitCode)}).", exitCode == 0 ? LogLevel.Info : LogLevel.Error);
-
-            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var bobConsoleSpoolsPath = Path.Combine(appDataPath, $"The Creative Assembly\\{gameName}\\console_spools\\");
-
-            if (Directory.Exists(bobConsoleSpoolsPath))
-            {
-                var commandFileNamePattern = "Command.txt";
-                var errorsFileNamePattern = "Errors and assertions (in order).txt";
-
-                var commandLines = ReadBobSpoolLines(bobConsoleSpoolsPath, commandFileNamePattern);
-                var errorsLines = ReadBobSpoolLines(bobConsoleSpoolsPath, errorsFileNamePattern);
-
-                var existsCommandLines = commandLines != null && commandLines.Length > 0;
-                var existsErrorLines = errorsLines != null && errorsLines.Length > 0;
-
-                if (existsCommandLines)
-                {
-                    foreach (var line in commandLines)
-                    {
-                        LoggerViewModel.Log($"BOB command output: {line}", LogLevel.Info);
-                    }
-                }
-
-                if (existsErrorLines)
-                {
-                    foreach (var line in errorsLines)
-                    {
-                        LoggerViewModel.Log($"BOB errors and assertions output: {line}", LogLevel.Warning);
-                    }
-                }
-            }
-
-            foreach (var outputLine in bobStandardOutput)
-            {
-                LoggerViewModel.Log(outputLine, LogLevel.Info);
-            }
-
-            foreach (var outputLine in bobErrorOutput)
-            {
-                LoggerViewModel.Log(outputLine, LogLevel.Warning);
-            }
-
-            if (exitCode != 0)
-            {
-                LoggerViewModel.Log($"Skipping dynamic resources file validation because {EXPORTER_NAME} reported a failure.", LogLevel.Error);
-                return false;
-            }
-
-            var dynamicResourcesExist = File.Exists(outputFilePath);
-
-            if (dynamicResourcesExist)
-            {
-                LoggerViewModel.Log($"Processed dynamic resources file was exported to {outputFilePath}", LogLevel.Info);
-            }
-            else
-            {
-                LoggerViewModel.Log($"Failed to export dynamic resources file. See console output for details.", LogLevel.Error);
-                return false;
-            }
-
+            LoggerViewModel.Log($"Processed dynamic resources file was exported to {outputFilePath}", LogLevel.Info);
             return true;
-        }
-
-        // Mirrors the ReturnCodes flags enum in MapDataBuilder/main.cpp. MapDataBuilder can run
-        // map_data and dyn_res processing independently in one invocation, so the exit code is a
-        // bitwise-OR of whichever flags applied - decode every bit rather than switching on the
-        // exact value.
-        private static string DescribeExitCode(int exitCode)
-        {
-            if (exitCode == 0)
-            {
-                return "Success";
-            }
-
-            var descriptions = new List<string>();
-
-            if ((exitCode & 1) != 0) descriptions.Add("Missing process name or arguments passed to MapDataBuilder");
-            if ((exitCode & 2) != 0) descriptions.Add("Failed to load the game's ToolDataBuilder DLL - check the Assembly Kit path and that its binaries folder contains the DLL");
-            if ((exitCode & 4) != 0) descriptions.Add("Map data export function not found in the ToolDataBuilder DLL");
-            if ((exitCode & 8) != 0) descriptions.Add("Process trees function not found in the ToolDataBuilder DLL");
-            if ((exitCode & 16) != 0) descriptions.Add("Dynamic resources export function not found in the ToolDataBuilder DLL");
-            if ((exitCode & 32) != 0) descriptions.Add("The Assembly Kit's map data export function reported failure - check map.hex and the campaign map's region data");
-            if ((exitCode & 64) != 0) descriptions.Add("The Assembly Kit's dynamic resources export function reported failure");
-            if ((exitCode & 128) != 0) descriptions.Add("Failed to free the ToolDataBuilder DLL");
-
-            return descriptions.Count > 0 ? string.Join("; ", descriptions) : "Unknown error";
-        }
-
-        private static string[] ReadBobSpoolLines(string path, string fileNamePattern)
-        {
-            var matchingFiles = Directory.GetFiles(path, $"*{fileNamePattern}*", SearchOption.TopDirectoryOnly);
-            if (matchingFiles.Length > 0)
-            {
-                try
-                {
-                    var latestFile = matchingFiles.OrderByDescending(File.GetLastWriteTime).First();
-                    return File.ReadAllLines(latestFile);
-                }
-                catch (Exception ex)
-                {
-                    LoggerViewModel.Log($"Error reading BOB spool file: {ex.Message}", LogLevel.Error);
-                }
-            }
-
-            return null;
         }
     }
 }
