@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Runtime.Serialization;
+using CAIME.Painters;
 using CAIME.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -101,6 +103,60 @@ namespace CAIME.Tests.Unit
 
             layer.MaskSwatch.Apply(hex);
             Assert.AreEqual(ColourTable.MaskedHex, layer.ColourAfterApplying(layer.MaskSwatch, hex.Index));
+        }
+
+        [TestMethod]
+        public void UnnamedMask_IsShownButHasNothingToPaintOrEraseWith()
+        {
+            var map      = Map();
+            var unnamed  = new CampaignMask("");
+            var masked   = HexAt(map, 6, 3);
+            unnamed.SetMasked(6, 3, WIDTH, HEIGHT, true);
+            var layer    = new CampaignMaskLayer();
+
+            layer.ShowMask(map, unnamed);
+
+            Assert.IsFalse(layer.IsPaintable);
+            Assert.IsNull(layer.MaskSwatch);
+            Assert.IsNull(EraserToolCommand.ClearSwatchFor(layer));
+            Assert.IsTrue(layer.IsMasked(masked), "A loaded map's hexes in the unnamed mask still show.");
+            Assert.AreEqual(ColourTable.MaskedHex, layer.ColourAfterApplying(null, masked.Index));
+        }
+
+        [TestMethod]
+        public void NoMasks_LeaveTheLayerWithNothingToPaintOrEraseWith()
+        {
+            var map   = Map();
+            var layer = new CampaignMaskLayer();
+
+            layer.ShowMask(map, null);
+
+            Assert.IsFalse(layer.IsPaintable);
+            Assert.IsNull(layer.MaskSwatch);
+            Assert.IsNull(EraserToolCommand.ClearSwatchFor(layer));
+            Assert.IsFalse(layer.IsMasked(HexAt(map, 0, 0)));
+        }
+
+        [TestMethod]
+        public void Painting_WithoutASwatch_RecordsAndChangesNothing()
+        {
+            var map     = Map();
+            var project = new Project();
+            MapHexHarness.SetProperty(project, nameof(Project.MapHexFile), map);
+
+            var painter = (BrushPainter)FormatterServices.GetUninitializedObject(typeof(BrushPainter));
+            MapHexHarness.SetPrivateField(painter, "project", project);
+            MapHexHarness.SetPrivateField(painter, "paintingState", PaintState.Painting);
+
+            var layer = new CampaignMaskLayer();
+            layer.ShowMask(map, new CampaignMask(""));
+            layer.SetVisible(true);
+
+            var hex = HexAt(map, 2, 2);
+            painter.Paint(new PaintData { Layer = layer, Swatch = null, HitHex = hex, HitHexIndex = hex.Index, BrushSize = 1 });
+
+            Assert.IsNull(MapHexHarness.GetPrivateField(painter, "newState"), "No undo record is started for a stroke that paints nothing.");
+            Assert.AreEqual(0, layer.Mask.Bitmap.Length);
         }
 
         [TestMethod]

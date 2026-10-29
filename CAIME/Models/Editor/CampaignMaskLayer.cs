@@ -3,6 +3,12 @@ namespace CAIME
     /// <summary>
     /// The campaign masks layer. It shows one of the map's masks at a time, and painting it masks or
     /// unmasks that mask's hexes. <see cref="Mask"/> is null when the map has no masks.
+    ///
+    /// <para>
+    /// The unnamed mask is shown but cannot be painted, so it has no swatches. It is the mask of every
+    /// campaign that names none, so masking its hexes would take them away from all of those
+    /// campaigns, which is what the Impassable layer is for.
+    /// </para>
     /// </summary>
     public class CampaignMaskLayer : Layer
     {
@@ -20,9 +26,11 @@ namespace CAIME
         {
             this.mapHexFile = mapHexFile;
             Mask            = mask;
-            MaskSwatch      = mask == null ? null : new CampaignMaskSwatch(mapHexFile, mask, isMasked: true);
-            UnmaskSwatch    = mask == null ? null : new CampaignMaskSwatch(mapHexFile, mask, isMasked: false);
+            MaskSwatch      = IsPaintable ? new CampaignMaskSwatch(mapHexFile, mask, isMasked: true) : null;
+            UnmaskSwatch    = IsPaintable ? new CampaignMaskSwatch(mapHexFile, mask, isMasked: false) : null;
         }
+
+        public bool IsPaintable => Mask != null && Mask.Name.Length > 0;
 
         public bool IsMasked(Hex hex)
         {

@@ -190,15 +190,16 @@ These five layers have no layer-specific painting shortcut, so their Actions pan
 
 ### Campaign Masks — Choose & Add Masks
 
-A campaign mask is a set of hexes taken away from some campaigns on the map: CAIME writes the regions into `map_data.esf` once for each mask, with that mask's hexes impassable. A campaign uses the mask its row in the `campaigns` table names, or the unnamed mask when it names none. Maps usually have only the unnamed mask, with no hexes masked.
+A campaign mask is a set of hexes taken away from some campaigns on the map: CAIME writes the regions into `map_data.esf` once for each mask, with that mask's hexes impassable. A campaign uses the mask its row in the `campaigns` table names. A campaign that names none uses the map's unnamed mask entry, listed as **(no mask)**. Maps usually have only that entry, with no hexes masked.
 
 When the **Campaign Masks** layer is active, the Actions panel shows:
 
 ```
-[ (unnamed)        ▼ ]  [ Add mask ]
+[ (no mask)        ▼ ]  [ Add mask ]
+     Add a mask to paint one.
 ```
 
-**What it does:** The dropdown picks which mask the layer shows. Painting, erasing, the Line tool and Flood Fill all work on the mask shown there: paint with the **Masked** swatch to mask hexes, erase to unmask them. **Add mask** asks for a name and adds a mask that masks no hexes yet, then shows it. The name is what the `campaigns` table's mask column refers to; it must be ASCII and not already used by another mask.
+**What it does:** The dropdown picks which mask the layer shows. Painting, erasing, the Line tool and Flood Fill all work on the mask shown there: paint with the **Masked** swatch to mask hexes, erase to unmask them. **(no mask)** cannot be painted, and the line under the dropdown says so while it is shown. Its hexes are taken away from every campaign that names no mask, which is what the Impassable layer is for. The layer still shows any hexes a loaded map already has in it. **Add mask** asks for a name and adds a mask that masks no hexes yet, then shows it. The name is what the `campaigns` table's mask column refers to; it must be ASCII and not already used by another mask.
 
 Undo and redo change the mask a stroke was painted on, even if the dropdown shows another mask by then. Masks cannot be renamed or removed in CAIME.
 

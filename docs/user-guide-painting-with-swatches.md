@@ -134,7 +134,7 @@ The **Swatches** section is near the top of the right-hand Sidebar.
 | **Town Slots** | Main Settlement, Port, Slot 2, Slot 3… |
 | **Trade Routes** | Trade route markers |
 | **Restrictions** | Restriction level values |
-| **Campaign Masks** | Masked — paint (mask) or Erase (unmask) hexes of the mask chosen in the Actions panel |
+| **Campaign Masks** | Masked — paint (mask) or Erase (unmask) hexes of the mask chosen in the Actions panel. **(no mask)** has no swatch and cannot be painted. |
 
 ---
 

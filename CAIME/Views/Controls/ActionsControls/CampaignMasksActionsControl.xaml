@@ -9,6 +9,10 @@
              d:DesignHeight="80"
              d:DesignWidth="250">
 
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </UserControl.Resources>
+
     <StackPanel>
         <Grid VerticalAlignment="Center"
               HorizontalAlignment="Center">
@@ -24,7 +28,7 @@
                       Style="{StaticResource DarkFlatComboBox}"
                       ItemsSource="{Binding MaskNames}"
                       SelectedIndex="{Binding SelectedMaskIndex, Mode=TwoWay}"
-                      ToolTip="The mask the layer shows and paints. A campaign uses the mask its campaigns row names, or the unnamed mask when it names none." />
+                      ToolTip="The mask the layer shows and paints. A campaign uses the mask its campaigns row names, or no mask when it names none." />
 
             <Button Grid.Column="1"
                     Content="Add mask"
@@ -34,5 +38,12 @@
                     Click="AddMask_Click"
                     Style="{StaticResource DarkButton}" />
         </Grid>
+
+        <TextBlock Margin="2 4 2 0"
+                   HorizontalAlignment="Center"
+                   Foreground="Gray"
+                   Text="Add a mask to paint one."
+                   Visibility="{Binding IsShownMaskReadOnly,
+                                        Converter={StaticResource BooleanToVisibilityConverter}}" />
     </StackPanel>
 </UserControl>

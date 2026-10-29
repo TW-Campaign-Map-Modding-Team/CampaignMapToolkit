@@ -121,6 +121,13 @@ namespace CAIME.Painters
                 return false;
             }
 
+            // A layer can have nothing to paint with, such as the campaign masks layer showing the
+            // unnamed mask or a map with no masks.
+            if (data.Swatch == null)
+            {
+                return false;
+            }
+
             if (paintingState == PaintState.NotPainting)
             {
                 delayedPaintData = data;

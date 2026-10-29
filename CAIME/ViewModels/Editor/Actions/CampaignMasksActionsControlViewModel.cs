@@ -10,7 +10,7 @@ namespace CAIME.Controls
     /// </summary>
     public class CampaignMasksActionsControlViewModel : ActionsControlViewModel
     {
-        private const string UNNAMED_MASK_DISPLAY_NAME = "(unnamed)";
+        private const string UNNAMED_MASK_DISPLAY_NAME = "(no mask)";
 
         private CampaignMaskLayer _layer;
 
@@ -51,6 +51,8 @@ namespace CAIME.Controls
                 OnPropertyChanged(nameof(NewMaskName));
             }
         }
+
+        public bool IsShownMaskReadOnly => _layer != null && _layer.IsPaintable == false;
 
         /// <summary>Raised when the layer starts showing another mask, so it can be recoloured.</summary>
         public event EventHandler OnMaskShown;
@@ -109,15 +111,15 @@ namespace CAIME.Controls
 
         private void ShowSelectedMask()
         {
-            if (_layer == null)
+            if (_layer != null)
             {
-                return;
+                var masks = _project.MapHexFile.CampaignMasks;
+                var mask  = selectedMaskIndex >= 0 && selectedMaskIndex < masks.Count ? masks[selectedMaskIndex] : null;
+
+                _layer.ShowMask(_project.MapHexFile, mask);
             }
 
-            var masks = _project.MapHexFile.CampaignMasks;
-            var mask  = selectedMaskIndex >= 0 && selectedMaskIndex < masks.Count ? masks[selectedMaskIndex] : null;
-
-            _layer.ShowMask(_project.MapHexFile, mask);
+            OnPropertyChanged(nameof(IsShownMaskReadOnly));
         }
 
         private static string DisplayName(CampaignMask mask)
