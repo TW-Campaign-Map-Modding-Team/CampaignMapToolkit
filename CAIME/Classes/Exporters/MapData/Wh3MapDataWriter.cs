@@ -52,8 +52,11 @@ namespace CAIME.Exporters
 
         internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, Layout layout)
         {
-            var model       = new MapDataModel(map, theatre);
-            var settlements = MapDataSettlement.FindAll(model);
+            var maskedModels = MapDataMask.ForEachMask(map)
+                .Select(mask => new MapDataModel(map, theatre, MapDataRadiusRounding.TwoThirdsPerColumn, mask))
+                .Select(maskedModel => (Model: maskedModel, Settlements: MapDataSettlement.FindAll(maskedModel)))
+                .ToList();
+            var model       = maskedModels[0].Model;
 
             var esf = new EsfWriter(layout.Format);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
@@ -66,11 +69,11 @@ namespace CAIME.Exporters
             esf.WriteUInt64(layout.ValidatesMapHex ? map.Timestamp : 0);
             esf.EndRecord();
 
-            MapDataEsfParts.WriteTheatreForUi(esf, model, SettlementPositions(model, settlements));
+            MapDataEsfParts.WriteTheatreForUi(esf, model, maskedModels.SelectMany(masked => SettlementPositions(masked.Model, masked.Settlements)));
             MapDataEsfParts.WriteTheatres(esf, model, HEX_MAP_DATA_VERSION, HexBytes(map));
 
             esf.BeginRecord("REGIONS_DATA", 0);
-            WriteMaskedRegions(esf, model, settlements, layout);
+            WriteMaskedRegions(esf, maskedModels, layout);
             MapDataEsfParts.WriteNameLists(esf, map);
             esf.WriteUInt32Array(model.RegionColours());
             esf.WriteAsciiArray(map.AreasOfInterest);
@@ -124,35 +127,41 @@ namespace CAIME.Exporters
             return bytes;
         }
 
-        private static void WriteMaskedRegions(EsfWriter esf, MapDataModel model, MapDataSettlement[] settlements, Layout layout)
+        /// <summary>One entry for each campaign mask, with that mask's copy of the regions.</summary>
+        private static void WriteMaskedRegions(EsfWriter esf, IEnumerable<(MapDataModel Model, MapDataSettlement[] Settlements)> maskedModels, Layout layout)
         {
             esf.BeginBlock("MASKED_REGIONS_DATA", 0);
-            esf.BeginBlockEntry();
-            esf.WriteAscii(string.Empty);
-            esf.WriteUInt16Array(Array.Empty<ushort>());
-            esf.WriteCoordinates(0f, 0f);
-            esf.WriteCoordinates(model.Geometry.MaxX, model.Geometry.MaxY);
 
-            esf.BeginBlock("REGIONS_BLOCK", 0);
-            for (int region = 0; region < model.RegionCount; ++region)
+            foreach (var (model, settlements) in maskedModels)
             {
                 esf.BeginBlockEntry();
-                WriteRegion(esf, model, settlements[region], region, layout);
+                esf.WriteAscii(model.Mask.Name);
+                esf.WriteUInt16Array(model.Mask.Runs);
+                esf.WriteCoordinates(0f, 0f);
+                esf.WriteCoordinates(model.Geometry.MaxX, model.Geometry.MaxY);
+
+                esf.BeginBlock("REGIONS_BLOCK", 0);
+                for (int region = 0; region < model.RegionCount; ++region)
+                {
+                    esf.BeginBlockEntry();
+                    WriteRegion(esf, model, settlements[region], region, layout);
+                    esf.EndBlockEntry();
+                }
+
+                esf.EndBlock();
+
+                if (layout.RunsAsArray)
+                {
+                    esf.WriteUInt16Array(HexAreaRunsArray(model.Areas));
+                }
+                else
+                {
+                    WriteHexAreaRuns(esf, model.Areas);
+                }
+
                 esf.EndBlockEntry();
             }
 
-            esf.EndBlock();
-
-            if (layout.RunsAsArray)
-            {
-                esf.WriteUInt16Array(HexAreaRunsArray(model.Areas));
-            }
-            else
-            {
-                WriteHexAreaRuns(esf, model.Areas);
-            }
-
-            esf.EndBlockEntry();
             esf.EndBlock();
         }
 

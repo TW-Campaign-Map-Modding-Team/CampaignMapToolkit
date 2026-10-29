@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace CAIME.Exporters
 {
     /// <summary>
@@ -9,15 +7,15 @@ namespace CAIME.Exporters
     /// Pharaoh and Warhammer III do, not as Attila does.
     ///
     /// <para>
-    /// Neither map has a campaign mask besides the unnamed one, so writing a region list for each
-    /// mask, as Warhammer does, is assumed rather than seen.
+    /// Neither map has a campaign mask besides the unnamed one. The builder's output for the vortex
+    /// map with a mask painted in matches this writer's node for node (<see cref="MapDataMask"/>).
     /// </para>
     /// </summary>
     public static class Wh2MapDataWriter
     {
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            return PharaohMapDataWriter.Write(map, theatre, timestamp, map.UnknownEntries.Select(mask => mask.Key).ToList(), MapDataRadiusRounding.TwoThirdsPerColumn);
+            return PharaohMapDataWriter.Write(map, theatre, timestamp, MapDataRadiusRounding.TwoThirdsPerColumn);
         }
     }
 }

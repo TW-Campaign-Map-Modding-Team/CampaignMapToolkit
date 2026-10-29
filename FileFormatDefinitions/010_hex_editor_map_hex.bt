@@ -42,12 +42,21 @@ typedef struct
     }
 } STRING_ARRAY;
 
+// Campaign masks, named by campaigns.mask. Value is 0 in every vanilla map; its meaning is unknown.
 typedef struct
 {
-    uint32 Unknown1;
-    uint32 Unknown2;
-    uint32 Unknown3;
-} UNKNOWN_WARHAMMER_STRUCT;
+    ASCII_STRING Name;
+    uint32 Value;
+} CAMPAIGN_MASK_NAME;
+
+typedef struct
+{
+    uint32 Count;
+    for (i = 0; i < Count; ++i)
+    {
+        CAMPAIGN_MASK_NAME Mask;
+    }
+} CAMPAIGN_MASK_NAMES;
 
 typedef struct
 {
@@ -115,12 +124,22 @@ typedef struct
     }
 } HEX_DATA_16;
 
+// One bitmap per campaign mask, in the same order: (width + 7) / 8 bytes a row, bit column % 8
+// set for a hex the mask takes away.
 typedef struct
 {
-    uint32 Unknown1;
-    uint32 UnknownArraySize;
-    byte UnknownArrayData[UnknownArraySize];
-} UNKNOWN_WARHAMMER_STRUCT_2;
+    uint32 Size;
+    ubyte Bits[Size];
+} CAMPAIGN_MASK_BITMAP;
+
+typedef struct
+{
+    uint32 Count;
+    for (i = 0; i < Count; ++i)
+    {
+        CAMPAIGN_MASK_BITMAP Bitmap;
+    }
+} CAMPAIGN_MASK_BITMAPS;
 
 typedef struct
 {
@@ -179,7 +198,7 @@ if (Header.MinorVersion == 0x13 || Header.MinorVersion == 0x14)
 
 if (Header.MinorVersion == 0x12 || Header.MinorVersion == 0x14)
 {
-    UNKNOWN_WARHAMMER_STRUCT Unknown1;
+    CAMPAIGN_MASK_NAMES CampaignMasks;
 }
 
 COLOUR_POOL LandColours;
@@ -196,7 +215,7 @@ else
 
 if (Header.MinorVersion == 0x12 || Header.MinorVersion == 0x14)
 {
-    UNKNOWN_WARHAMMER_STRUCT_2 Unknown2;
+    CAMPAIGN_MASK_BITMAPS CampaignMaskBitmaps;
 }
 
 CRC32_CHECKSUM Checksum;

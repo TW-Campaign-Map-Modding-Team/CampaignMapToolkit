@@ -50,7 +50,7 @@ namespace CAIME.Classes.Importers
             {
                 var regionAreaTypes = ReadRegions(Child(regionsData, "REGIONS_BLOCK"), contents);
                 ReadAttilaHexRegions(hexBytes, regionAreaTypes, contents);
-                contents.MaskNames.Add(string.Empty);
+                contents.Masks.Add(new MapDataMaskInfo { Name = string.Empty });
             }
             else
             {
@@ -62,7 +62,7 @@ namespace CAIME.Classes.Importers
                 var runBlock = unmasked.Children.FirstOrDefault(child => child.Name == "REGION_AREA_INDEX_OVERRIDE");
                 ReadHexRegions(runBlock != null ? RunsFromBlock(runBlock) : RunsFromArray(unmasked), regionAreaTypes, contents);
 
-                contents.MaskNames.AddRange(maskedRegions.Children.Select(entry => ((EsfValueNode<string>)entry.Values[0]).Value));
+                contents.Masks.AddRange(maskedRegions.Children.Select(ReadMask));
             }
 
             ReadColours(regionsData, contents);
@@ -307,6 +307,16 @@ namespace CAIME.Classes.Importers
         }
 
         /// <summary>Pharaoh's layout and Three Kingdoms: pairs of area &lt;&lt; 9 | region and a length.</summary>
+        /// <summary>An entry's mask: its name, then its runs, the entry's first u16 array.</summary>
+        private static MapDataMaskInfo ReadMask(ParentNode maskedEntry)
+        {
+            return new MapDataMaskInfo
+            {
+                Name = ((EsfValueNode<string>)maskedEntry.Values[0]).Value,
+                Runs = maskedEntry.Values.OfType<EsfValueNode<ushort[]>>().First().Value,
+            };
+        }
+
         private static IEnumerable<(int Region, int Area, int Length)> RunsFromArray(ParentNode maskedEntry)
         {
             var runs = maskedEntry.Values.OfType<EsfValueNode<ushort[]>>().Last().Value;

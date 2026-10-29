@@ -22,7 +22,7 @@ The WH3 builder is `tooldatabuilderdll.modder.x64.dll`; it fills empireutility's
 - **A region's sea flag** is the kind of its first non-impassable area in row-major order.
   Settlements are only built for regions whose flag is 0.
 - **Hex types** and the bridge-cliff rule (the east neighbour is never checked) match
-  `MapDataAreas`. A mask bitmap's set bit makes that hex Impassable for that mask's entry.
+  `MapDataAreas`. Masks are described in their own section below.
 - **The logical-position sort** (tooldatabuilder 0x1a88e0, calling `std::sort` at 0x1b94b0)
   orders the main slot hexes followed by the port slot hexes by |dc| + |dr| from the centre,
   then takes the first plain land hex. The list holds 7 or 19 entries, under `std::sort`'s
@@ -105,10 +105,90 @@ Warhammer II and Thrones as Attila.
   `find_all_slot_connections_and_unlock_paths`). Unlike Attila it also reads
   `campaign_map_slots` (`slot_id`, `slot_type`).
 
+## Answered from the Warhammer game (2026-10-29)
+
+Read from `Warhammer.exe` with `campaign_tools/exe_tools/exe_query.py --exe`.
+
+- **The game loads one `MASKED_REGIONS_DATA` entry: the running campaign's mask.** The
+  map_data loader (0x10d9160, called by 0xf725c0, which opens `/map_data.esf`) walks the
+  entries and reads only one whose name equals the mask it is given, or the unnamed entry
+  when it is given none (0x10da49c-0x10da55f). It parses that entry's `REGIONS_BLOCK` into the
+  campaign's regions (`REGION_DATA` parser 0x10dd2e0) and applies its hex area runs to them
+  (0x110d9c0). Every other entry is skipped unread.
+- **The mask is the `campaigns` row's `mask`**, a key of `campaign_map_masks`. A new campaign
+  takes it from its `campaigns_table` record (0x1402a00, looked up by campaign key in
+  0xafde50, passed through 0xa99e40, 0xfd8a30 and 0xee6970). A loaded save stores the mask
+  name and looks it up again in `campaign_map_masks` (0xfd6e4c-0xfd6ecc). In the Assembly
+  Kit's `campaigns.xml`, `main_warhammer` has none, `wh_dlc03_beastmen` has `8` and
+  `wh_dlc05_wood_elves` has `32`. The packs ship no `campaigns` table, only
+  `campaign_map_masks` (`32`, `8`, `placeholder`).
+- So a mask's entry reaches the game only in a campaign whose `campaigns.mask` names that
+  mask. `campaign_map_masks_to_excluded_regions` is applied by the game and is not part of
+  map_data.esf.
+
+## Answered from Warhammer III's game and Assembly Kit (2026-10-29)
+
+- **map.hex** v0x14 (every vanilla WH3 map) has the mask list and bitmaps. The prologue, chaos
+  4 and combi 7 maps list only the unnamed mask.
+- **The game** (`Warhammer3.exe`) reads every `MASKED_REGIONS_DATA` entry (0x1479c0c), then
+  keeps the one named by the campaign's mask, or the unnamed one, when it builds the campaign
+  map data (0x2928000, the same rule as Warhammer). It copies that entry's u16 triples, bounds
+  and regions.
+- **What a mask changes**, from the Assembly Kit's builder run on prologue with a mask painted in
+  (a 10-column wall through every row, and rows 10-20's last 10 columns): masked hexes are
+  impassable before the regions are split into areas, as in the older builders below. The masked
+  entry's areas differ from the unmasked entry's (masked land joins the impassable areas beside
+  it, and the areas and groups after it are renumbered), and so do its hex area runs, links and
+  everything else worked out from the areas. The UI's region list repeats for each mask. Our
+  writer's output matches the builder's node for node.
+  - Reading the builder's code had suggested the opposite: `apply_mask` (empireutility
+    0x32efb0, a set bit makes a hex type 7) is called through the import table only by the area
+    link builder (tooldatabuilderdll 0x1a2ce0 / 0x1a2bc0). Where the masked types reach the area
+    assignment was not found; the build settles it.
+  - `generate_mask_data` (0x32f000) writes the entry's u16 array: one (row, first column, end
+    column) triple per run of set bits in a row. The end is the first clear column, or, for a run
+    reaching the end of the row, the row's byte count (not its width): a CA bug, which the build
+    confirms.
+- Since a masked entry's areas are numbered differently from the unmasked entry's, and
+  hlp_data.esf and spd_data.esf refer to (region, area) indices and exist once per map folder,
+  they can match only one mask's entry.
+
+## Masks in the older builders (2026-10-29)
+
+- map.hex v0x12 (Warhammer, Warhammer II, Troy, Pharaoh) stores masks; v0x13 (Three Kingdoms)
+  and the older versions do not.
+- Warhammer II's builder (tooldatabuilderdll, `REGIONS_DATA_FOR_PROCESSING::apply_mask`
+  0x5d660, which calls empireutility's `apply_mask` with a mask index) applies the mask in its
+  area flood fill (0x5c4e0: a hex joins an area only when its masked type is the area's type)
+  and in its area links (0x59760). So **its masked entries split masked hexes off into
+  impassable areas**, and their areas can be numbered differently from the unmasked entry's.
+  The builder run on wh2_main_great_vortex_map_7 with the same kind of mask painted in matches
+  our writer's output node for node. Its `generate_mask_data` is Warhammer III's. The other builders' wrappers
+  are called from the same places:
+  - Warhammer (0x1083e0): flood fill 0x11ae5e, links 0xfdeaf and 0xfe440, sea flag 0x113af0.
+  - Warhammer II: also the sea flag (0x5c740, beside the first-area rule at 0x5c761).
+  - Pharaoh (0x24ebb0, through the thunk 0x37597): flood fill 0x2698a7, links 0x24c3ea; its
+    sea flag reads the (masked) areas' types instead.
+  - Three Kingdoms (0x727e0): flood fill 0x717b6, links 0x6fb1f and 0x6fa10, sea flag 0x71940.
+  Troy has no Assembly Kit and is taken to be Warhammer II.
+- Three Kingdoms' map.hex loader (empireutility `HEX_MAP_DATA_FILE_DATA::load` 0x146c90)
+  reads a mask list only for map.hex versions 0x0E, 0x10 and 0x12 (0x147764-0x14776f). For any
+  other version, 0x13 included, it makes one unnamed mask with an empty bitmap (0x147865). So
+  every Three Kingdoms map has exactly one mask, and its map_data.esf one unnamed entry with no
+  runs; the builder's mask code never applies to a Three Kingdoms map.
+
+Our map_data writers do the same for every game (`MapDataMask`): one model per mask, with its
+masked hexes impassable. `MapHexFile` keeps the bitmaps (`CampaignMasks`), and the importer
+rebuilds them from the entries' runs. Every vanilla map writes the same file as before.
+
 ## To investigate
 
 ### Our map_data writer
-- [ ] RPFM's TSV export prints floats with four decimals, so a `maxx` stored with more
-      precision is read a unit in the last place off (the shipped Pharaoh file implies
-      756.83997, which prints as 756.8400). `table.rows` returns floats as JSON numbers.
-- [ ] Apply map.hex mask bitmaps per mask entry. CAIME's map.hex reader (`MapHexFile`) discards them, so the writer never sees them.
+- [ ] Masked builds of a Warhammer and a Pharaoh map. Only Warhammer II's and Warhammer III's
+      builders were run on a masked map (Warhammer's pops a console window). Three Kingdoms'
+      maps cannot hold masks.
+- [ ] What the game does with an entry's run triples (whether it closes those hexes in the
+      campaign pathfinder), and whether a run's end column is exclusive.
+- [ ] What the Warhammer game does when a campaign's mask names no entry in its
+      map_data.esf. The loader then reads no regions at all; whether it fails or runs with
+      an empty map was not traced.

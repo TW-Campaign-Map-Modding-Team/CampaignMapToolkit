@@ -9,20 +9,22 @@ namespace CAIME.Tests.Unit
 {
     /// <summary>
     /// The block between the name lists and the colour tables, and the block after the hex data,
-    /// are two lists sharing a count (see <see cref="MapHexFile.UnknownEntries"/>). Every vanilla
-    /// map carries a single empty entry, which a fixed-size read happened to fit; the Warhammer 1
-    /// mini-campaign maps (wh_dlc05_wood_elves_map_1, wh_dlc03_beastmen_map_1) carry a second one
-    /// and loaded as "20 x 0 hexes" or threw an array-size exception.
+    /// are the campaign masks' names and bitmaps (see <see cref="MapHexFile.CampaignMasks"/>). Every
+    /// vanilla map carries a single empty entry, which a fixed-size read happened to fit; the
+    /// Warhammer 1 mini-campaign maps (wh_dlc05_wood_elves_map_1, wh_dlc03_beastmen_map_1) carry a
+    /// second one and loaded as "20 x 0 hexes" or threw an array-size exception.
     ///
     /// <para>
-    /// The tests craft such a file from a blank map - a second entry ("32", 0) and a second
-    /// trailing blob, the way the game's own files lay them out - and check that it loads at its
+    /// The tests craft such a file from a blank map - a second entry ("32", 0) and a second bitmap
+    /// with hexes set, the way the game's own files lay them out - and check that it loads at its
     /// real size and is written back byte for byte (timestamp and CRC aside).
     /// </para>
     /// </summary>
     [TestClass]
     public class MapHexEntryListTests
     {
+        private const int MASKED_COLUMN = 5, MASKED_ROW = 3;
+
         private string _dir;
 
         [TestInitialize]
@@ -55,11 +57,13 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(W, file.MapWidth,  "Width must be read after the entry list, not inside it.");
             Assert.AreEqual(H, file.MapHeight, "Height must be read after the entry list, not inside it.");
 
-            Assert.AreEqual(2,    file.UnknownEntries.Count, "Both entries must be kept.");
-            Assert.AreEqual("",   file.UnknownEntries[0].Key);
-            Assert.AreEqual(0u,   file.UnknownEntries[0].Value);
-            Assert.AreEqual("32", file.UnknownEntries[1].Key);
-            Assert.AreEqual(0u,   file.UnknownEntries[1].Value);
+            Assert.AreEqual(2,    file.CampaignMasks.Count, "Both entries must be kept.");
+            Assert.AreEqual("",   file.CampaignMasks[0].Name);
+            Assert.AreEqual(0u,   file.CampaignMasks[0].Value);
+            Assert.AreEqual("32", file.CampaignMasks[1].Name);
+            Assert.AreEqual(0u,   file.CampaignMasks[1].Value);
+            Assert.IsFalse(file.CampaignMasks[0].IsMasked(MASKED_COLUMN, MASKED_ROW, W));
+            Assert.IsTrue(file.CampaignMasks[1].IsMasked(MASKED_COLUMN, MASKED_ROW, W), "The second bitmap's hex must be masked.");
 
             Assert.IsTrue(file.Save(_dir, "rewritten"), "Save returned false.");
             var rewritten = File.ReadAllBytes(Path.Combine(_dir, "rewritten.hex"));
@@ -147,12 +151,15 @@ namespace CAIME.Tests.Unit
 
         /// <summary>
         /// Rewrites a one-entry map as a two-entry map the way wh_dlc05_wood_elves_map_1 is laid
-        /// out: entries ("", 0) and ("32", 0) up front, two zero blobs at the end, fresh CRC.
+        /// out: entries ("", 0) and ("32", 0) up front, an empty bitmap and one with
+        /// (<see cref="MASKED_COLUMN"/>, <see cref="MASKED_ROW"/>) set at the end, fresh CRC.
         /// </summary>
         private static byte[] WithSecondEntry(byte[] original, uint width, uint height)
         {
             var layout   = Parse(original);
             int blobSize = (int)(((width + 7) / 8) * height);
+            var bitmap   = new byte[blobSize];
+            bitmap[MASKED_ROW * ((width + 7) / 8) + MASKED_COLUMN / 8] = 1 << (MASKED_COLUMN % 8);
 
             using (var ms = new MemoryStream())
             using (var bw = new BinaryWriter(ms))
@@ -168,11 +175,10 @@ namespace CAIME.Tests.Unit
                 bw.Write(original, layout.EntryListEnd, layout.TrailingStart - layout.EntryListEnd);
 
                 bw.Write(2);
-                for (int i = 0; i < 2; ++i)
-                {
-                    bw.Write(blobSize);
-                    bw.Write(new byte[blobSize]);
-                }
+                bw.Write(blobSize);
+                bw.Write(new byte[blobSize]);
+                bw.Write(blobSize);
+                bw.Write(bitmap);
 
                 bw.Flush();
                 var body = ms.ToArray();

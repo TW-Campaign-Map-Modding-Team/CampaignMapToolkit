@@ -491,7 +491,7 @@ You can grow or shrink the map canvas using **Edit → Resize** (Ctrl+Shift+R). 
 
 If you have a map's `map_data.esf` but not its `map.hex` — for example a map from another mod's pack — use **Tools → Import → map_data.esf** and pick the file. Every supported game's `map_data.esf` can be imported; when the file's layout is shared by several games, CAIME asks which one it is from. CAIME rebuilds the `map.hex` and opens it as a new project in `Projects\[MapName]\`. The map is named after the folder the file is in, so extract the file with its `campaign_maps\[MapName]\` folder, or rename the map afterwards with **Edit → Rename map**.
 
-The import recovers regions and their colours, ground types, climates, attritions, areas of interest (in the games that have them), roads, rivers, land and sea, beaches, cliffs, bridges, impassable hexes, town slots (every building slot, in the games that have more than a main and a port slot), town sprawl around settlements, and Warhammer's campaign masks. Region borders are recalculated. Processing **Map Data** from the imported map writes the same `map_data.esf` back. Two things are not in `map_data.esf` and start empty:
+The import recovers regions and their colours, ground types, climates, attritions, areas of interest (in the games that have them), roads, rivers, land and sea, beaches, cliffs, bridges, impassable hexes, town slots (every building slot, in the games that have more than a main and a port slot), town sprawl around settlements, and campaign masks with the hexes each one masks. Region borders are recalculated. Processing **Map Data** from the imported map writes the same `map_data.esf` back. Two things are not in `map_data.esf` and start empty:
 
 | Layer | After import |
 |---|---|

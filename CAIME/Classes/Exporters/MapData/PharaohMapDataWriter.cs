@@ -32,22 +32,23 @@ namespace CAIME.Exporters
         private const int  BYTES_PER_HEX        = 5;
         private const int  MAX_RUN_LENGTH       = ushort.MaxValue;
 
-        private static readonly string[] NO_MASKS = { string.Empty };
-
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            return Write(map, theatre, timestamp, NO_MASKS, MapDataRadiusRounding.TwoThirdsPerColumn);
+            return Write(map, theatre, timestamp, MapDataRadiusRounding.TwoThirdsPerColumn);
         }
 
         /// <summary>
-        /// Writes the regions once for each of <paramref name="maskNames"/>: the UI's region list
-        /// repeats, and each mask gets its own MASKED_REGIONS_DATA entry (Warhammer).
+        /// Writes the regions once for each of the map's campaign masks, with that mask's hexes
+        /// impassable (<see cref="MapDataMask"/>): the UI's region list repeats, and each
+        /// mask gets its own MASKED_REGIONS_DATA entry.
         /// </summary>
-        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, IReadOnlyList<string> maskNames, MapDataRadiusRounding rounding)
+        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, MapDataRadiusRounding rounding)
         {
-            var model       = new MapDataModel(map, theatre, rounding);
-            var settlements = MapDataSlotSettlement.FindAll(model);
-            MapDataSlotPositions.PlacePharaoh(model, settlements);
+            var maskedModels = MapDataMask.ForEachMask(map)
+                .Select(mask => new MapDataModel(map, theatre, rounding, mask))
+                .Select(maskedModel => (Model: maskedModel, Settlements: PlacedSettlements(maskedModel)))
+                .ToList();
+            var model = maskedModels[0].Model;
 
             var esf = new EsfWriter(EsfFormat.Abca);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
@@ -56,18 +57,24 @@ namespace CAIME.Exporters
             esf.WriteUInt16(0);
             esf.EndRecord();
 
-            var positions = SettlementPositions(model, settlements).ToList();
-            MapDataEsfParts.WriteTheatreForUi(esf, model, maskNames.SelectMany(_ => positions));
+            MapDataEsfParts.WriteTheatreForUi(esf, model, maskedModels.SelectMany(masked => SettlementPositions(masked.Model, masked.Settlements)));
             MapDataEsfParts.WriteTheatres(esf, model, HEX_MAP_DATA_VERSION, HexBytes(map));
 
             esf.BeginRecord("REGIONS_DATA", 0);
-            WriteMaskedRegions(esf, model, settlements, maskNames);
+            WriteMaskedRegions(esf, maskedModels);
             MapDataEsfParts.WriteNameLists(esf, map);
             esf.WriteUInt32Array(model.RegionColours());
             esf.EndRecord();
 
             esf.EndRecord();
             return esf.ToArray(timestamp);
+        }
+
+        private static MapDataSlotSettlement[] PlacedSettlements(MapDataModel model)
+        {
+            var settlements = MapDataSlotSettlement.FindAll(model);
+            MapDataSlotPositions.PlacePharaoh(model, settlements);
+            return settlements;
         }
 
         private static IEnumerable<(int, float, float)> SettlementPositions(MapDataModel model, MapDataSlotSettlement[] settlements)
@@ -103,16 +110,14 @@ namespace CAIME.Exporters
             return bytes;
         }
 
-        private static void WriteMaskedRegions(EsfWriter esf, MapDataModel model, MapDataSlotSettlement[] settlements, IReadOnlyList<string> maskNames)
+        private static void WriteMaskedRegions(EsfWriter esf, IEnumerable<(MapDataModel Model, MapDataSlotSettlement[] Settlements)> maskedModels)
         {
-            var runs = HexAreaRuns(model.Areas);
-
             esf.BeginBlock("MASKED_REGIONS_DATA", 0);
-            foreach (var maskName in maskNames)
+            foreach (var (model, settlements) in maskedModels)
             {
                 esf.BeginBlockEntry();
-                esf.WriteAscii(maskName);
-                esf.WriteUInt16Array(Array.Empty<ushort>());
+                esf.WriteAscii(model.Mask.Name);
+                esf.WriteUInt16Array(model.Mask.Runs);
                 esf.WriteCoordinates(0f, 0f);
                 esf.WriteCoordinates(model.Geometry.MaxX, model.Geometry.MaxY);
 
@@ -126,7 +131,7 @@ namespace CAIME.Exporters
 
                 esf.EndBlock();
 
-                esf.WriteUInt16Array(runs);
+                esf.WriteUInt16Array(HexAreaRuns(model.Areas));
                 esf.EndBlockEntry();
             }
 

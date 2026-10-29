@@ -313,6 +313,7 @@
     <Compile Include="Classes\MapHex\MapHexEditor.AreasOfInterest.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.GroundTypes.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.Regions.cs" />
+    <Compile Include="Classes\MapHex\CampaignMask.cs" />
     <Compile Include="Classes\MapHex\MapHexFile.cs" />
     <Compile Include="Classes\Common\UndoRedoManager.cs" />
     <Compile Include="Classes\Common\HotkeyManager.cs" />
@@ -329,6 +330,7 @@
     <Compile Include="Classes\Exporters\MapData\MapDataGeometry.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataEsfParts.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataGrid.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataMask.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataModel.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataRegionLinks.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataSettlement.cs" />

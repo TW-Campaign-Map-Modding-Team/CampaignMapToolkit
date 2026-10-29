@@ -281,14 +281,21 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void Import_CampaignMasks_AreListedInTheMap()
+        public void Import_CampaignMasks_AreListedInTheMapWithTheirHexes()
         {
+            // Row 1, columns 2-3; row 2 from column 4 to the end of the row, which the builder
+            // writes with the row's byte count (1 on a 6-hex row) as the end.
             var contents = BuildContents();
-            contents.MaskNames.AddRange(new[] { "", "8" });
+            contents.Masks.Add(new MapDataMaskInfo { Name = "" });
+            contents.Masks.Add(new MapDataMaskInfo { Name = "8", Runs = new ushort[] { 1, 2, 4, 2, 4, 1 } });
 
             var map = Import(contents);
 
-            CollectionAssert.AreEqual(new[] { "", "8" }, map.UnknownEntries.Select(mask => mask.Key).ToList());
+            CollectionAssert.AreEqual(new[] { "", "8" }, map.CampaignMasks.Select(mask => mask.Name).ToList());
+            Assert.AreEqual(0, map.CampaignMasks[0].Bitmap.Length, "The unnamed mask masks nothing.");
+
+            var masked = Enumerable.Range(0, (int)(W * H)).Where(hex => map.CampaignMasks[1].IsMasked(hex % (int)W, hex / (int)W, W)).ToArray();
+            CollectionAssert.AreEqual(new[] { Index(2, 1), Index(3, 1), Index(4, 2), Index(5, 2) }, masked);
         }
 
         [TestMethod]

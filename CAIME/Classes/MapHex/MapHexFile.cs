@@ -135,14 +135,8 @@ namespace CAIME
 
         private Dictionary<int, int>        RegionIndexRemapTable;
 
-        public List<KeyValuePair<string, uint>> UnknownEntries { get; private set; } = DefaultUnknownEntries();
-
-        private int                         unknownTrailingBlockCount = 1;
-
-        private static List<KeyValuePair<string, uint>> DefaultUnknownEntries()
-        {
-            return new List<KeyValuePair<string, uint>> { new KeyValuePair<string, uint>("", 0) };
-        }
+        /// <summary>The campaign masks, the unnamed one first. Only map.hex versions 0x12 and 0x14 store them.</summary>
+        public List<CampaignMask>           CampaignMasks           { get; private set; } = new List<CampaignMask> { new CampaignMask(string.Empty) };
 
         public LayerChangedEventHandler     OnLayerChanged;
 
@@ -246,7 +240,7 @@ namespace CAIME
 
                 if (MinorFileVersion == 0x12 || MinorFileVersion == 0x14 || MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                 {
-                    this.ReadUnknownEntries(br);
+                    this.ReadCampaignMaskNames(br);
                 }
 
                 var landColours         = this.ReadIntArray(br);
@@ -259,7 +253,7 @@ namespace CAIME
 
                 if (MinorFileVersion == 0x12 || MinorFileVersion == 0x14 || MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                 {
-                    this.ReadUnknownTrailingBlocks(br);
+                    this.ReadCampaignMaskBitmaps(br);
                 }
             }
 
@@ -317,7 +311,7 @@ namespace CAIME
 
                     if (MinorFileVersion == 0x12 || MinorFileVersion == 0x14 || MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                     {
-                        this.WriteUnknownEntries(bw);
+                        this.WriteCampaignMaskNames(bw);
                     }
 
                     this.WriteIntArray(bw, ColoursLand.Colours);
@@ -332,7 +326,7 @@ namespace CAIME
 
                     if (MinorFileVersion == 0x12 || MinorFileVersion == 0x14 || MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                     {
-                        this.WriteUnknownTrailingBlocks(bw, MapWidth, MapHeight);
+                        this.WriteCampaignMaskBitmaps(bw, MapWidth, MapHeight);
                     }
                 }
 
@@ -366,6 +360,7 @@ namespace CAIME
         public bool ResizeMapHex(uint newWidth, uint newHeight, int newPadRight, int newPadLeft, int newPadTop, int newPadBottom)
         {
             var resizedHexData = CreateEmptyHexData(newWidth, newHeight);
+            var sourceHexes    = new int[newWidth * newHeight];
 
             for (int row = 0; row < newHeight; row++)
             {
@@ -407,9 +402,11 @@ namespace CAIME
                     hex.R = row;
                     hex.Index = (int)(row * newWidth + col);
                     resizedHexData[row * newWidth + col] = hex;
+                    sourceHexes[row * newWidth + col] = (int)(originalRow * this.MapWidth + originalCol);
                 }
             }
 
+            this.CampaignMasks = this.CampaignMasks.Select(mask => mask.Resampled(sourceHexes, this.MapWidth, newWidth, newHeight)).ToList();
             this.MapWidth = newWidth;
             this.MapHeight = newHeight;
             this.Capacity = newWidth * newHeight;
@@ -1185,7 +1182,7 @@ namespace CAIME
 
                 if (file.MinorFileVersion == 0x12 || file.MinorFileVersion == 0x14 || file.MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                 {
-                    file.WriteUnknownEntries(bw);
+                    file.WriteCampaignMaskNames(bw);
                 }
 
                 file.ColoursLand        = new ColoursContainer(GenerateLandColours());
@@ -1203,7 +1200,7 @@ namespace CAIME
 
                 if (file.MinorFileVersion == 0x12 || file.MinorFileVersion == 0x14 || file.MinorFileVersion == FAKE_DYNASTIES_MINOR_VER)
                 {
-                    file.WriteUnknownTrailingBlocks(bw, file.MapWidth, file.MapHeight);
+                    file.WriteCampaignMaskBitmaps(bw, file.MapWidth, file.MapHeight);
                 }
             }
 
@@ -1891,62 +1888,66 @@ namespace CAIME
             }
         }
 
-        private void ReadUnknownEntries(BinaryReader br)
+        // The masks' names come before the colour tables, their bitmaps after the hex data, each
+        // list with its own count.
+        private void ReadCampaignMaskNames(BinaryReader br)
         {
             int count       = br.ReadInt32();
-            UnknownEntries  = new List<KeyValuePair<string, uint>>(count);
+            CampaignMasks   = new List<CampaignMask>(count);
 
             for (int i = 0; i < count; ++i)
             {
                 var name    = this.ReadAsciiString(br);
                 var value   = br.ReadUInt32();
-                UnknownEntries.Add(new KeyValuePair<string, uint>(name, value));
+                CampaignMasks.Add(new CampaignMask(name, value));
             }
         }
 
-        // One hex bitmap per campaign mask in UnknownEntries: (width + 7) / 8 bytes a row, bit
-        // column % 8. The map_data builder writes the regions once per mask, and a set bit makes
-        // that hex impassable in its mask's copy (empireutility HEX_MAP_MASK_DATA::apply_mask in
-        // Warhammer III's Assembly Kit). Every vanilla bitmap is empty, and CAIME discards them.
-        private void ReadUnknownTrailingBlocks(BinaryReader br)
+        private void ReadCampaignMaskBitmaps(BinaryReader br)
         {
-            unknownTrailingBlockCount = br.ReadInt32();
-
-            for (int i = 0; i < unknownTrailingBlockCount; ++i)
+            int count = br.ReadInt32();
+            if (count != CampaignMasks.Count)
             {
-                var size = br.ReadInt32();
-                br.ReadBytes(size);
+                LoggerViewModel.Log($"map.hex lists {CampaignMasks.Count} campaign masks but {count} mask bitmaps; " +
+                                    "a mask without one keeps no hexes masked.", LogLevel.Warning);
+            }
+
+            for (int i = 0; i < count; ++i)
+            {
+                var bitmap = br.ReadBytes(br.ReadInt32());
+                if (i < CampaignMasks.Count)
+                {
+                    CampaignMasks[i] = new CampaignMask(CampaignMasks[i].Name, CampaignMasks[i].Value, bitmap);
+                }
             }
         }
 
-        /// <summary>Replaces the campaign masks with <paramref name="names"/>, each with an empty bitmap.</summary>
-        public void SetCampaignMasks(IEnumerable<string> names)
+        public void SetCampaignMasks(IEnumerable<CampaignMask> masks)
         {
-            UnknownEntries              = names.Select(name => new KeyValuePair<string, uint>(name, 0)).ToList();
-            unknownTrailingBlockCount   = UnknownEntries.Count;
+            CampaignMasks = masks.ToList();
         }
 
-        private void WriteUnknownEntries(BinaryWriter bw)
+        private void WriteCampaignMaskNames(BinaryWriter bw)
         {
-            bw.Write(UnknownEntries.Count);
+            bw.Write(CampaignMasks.Count);
 
-            foreach (var entry in UnknownEntries)
+            foreach (var mask in CampaignMasks)
             {
-                this.WriteAsciiString(bw, entry.Key);
-                bw.Write(entry.Value);
+                this.WriteAsciiString(bw, mask.Name);
+                bw.Write(mask.Value);
             }
         }
 
-        private void WriteUnknownTrailingBlocks(BinaryWriter bw, uint width, uint height)
+        private void WriteCampaignMaskBitmaps(BinaryWriter bw, uint width, uint height)
         {
-            var blobSize = (int)(((width + 7) / 8) * height);
+            int size = CampaignMask.BitmapSize(width, height);
 
-            bw.Write(unknownTrailingBlockCount);
+            bw.Write(CampaignMasks.Count);
 
-            for (int i = 0; i < unknownTrailingBlockCount; ++i)
+            foreach (var mask in CampaignMasks)
             {
-                bw.Write(blobSize);
-                bw.Write(new byte[blobSize]);
+                bw.Write(size);
+                bw.Write(mask.Bitmap.Length == size ? mask.Bitmap : new byte[size]);
             }
         }
 

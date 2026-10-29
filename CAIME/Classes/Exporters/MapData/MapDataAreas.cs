@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CAIME.Classes.Importers;
 
 namespace CAIME.Exporters
@@ -46,11 +47,13 @@ namespace CAIME.Exporters
         /// <summary>Each region's areas, as global area indices.</summary>
         public List<int>[]          RegionAreas     { get; }
 
-        public MapDataAreas(MapHexFile map, MapDataGrid grid, MapDataGeometry geometry, int regionCount)
+        /// <param name="mask">The campaign mask whose copy of the regions these areas are for; null for none.</param>
+        public MapDataAreas(MapHexFile map, MapDataGrid grid, MapDataGeometry geometry, int regionCount, MapDataMask mask = null)
         {
-            HexTypes    = ClassifyHexes(map, grid);
-            HexAreas    = new int[grid.HexCount];
-            RegionAreas = new List<int>[regionCount];
+            var unmaskedTypes   = ClassifyHexes(map, grid);
+            HexTypes            = mask != null ? unmaskedTypes.Select((type, hexIndex) => mask.Apply(type, hexIndex)).ToArray() : unmaskedTypes;
+            HexAreas            = new int[grid.HexCount];
+            RegionAreas         = new List<int>[regionCount];
 
             for (int region = 0; region < regionCount; ++region)
             {

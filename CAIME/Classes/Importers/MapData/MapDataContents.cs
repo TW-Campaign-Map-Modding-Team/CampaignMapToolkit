@@ -57,6 +57,15 @@ namespace CAIME.Classes.Importers
     /// The contents of a map_data.esf that a map.hex can be rebuilt from, with every per-hex
     /// value in its own row-major array (index = row * width + column).
     /// </summary>
+    /// <summary>A MASKED_REGIONS_DATA entry's mask.</summary>
+    public sealed class MapDataMaskInfo
+    {
+        public string   Name    { get; set; }
+
+        /// <summary>The masked hexes: a (row, first column, end column) triple for each run of them in a row.</summary>
+        public ushort[] Runs    { get; set; } = new ushort[0];
+    }
+
     public sealed class MapDataContents
     {
         /// <summary>
@@ -80,7 +89,7 @@ namespace CAIME.Classes.Importers
         public float                    MaxY                    { get; set; }
 
         /// <summary>The campaign masks the regions are written for, the unnamed one first.</summary>
-        public List<string>             MaskNames               { get; } = new List<string>();
+        public List<MapDataMaskInfo>    Masks                   { get; } = new List<MapDataMaskInfo>();
 
         /// <summary>Land regions first, then sea regions, as map.hex lists them.</summary>
         public List<MapDataRegionInfo>  Regions                 { get; } = new List<MapDataRegionInfo>();

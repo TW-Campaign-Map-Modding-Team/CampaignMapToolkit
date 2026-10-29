@@ -27,7 +27,7 @@ namespace CAIME.Classes.Importers
             map.Climates.AddRange(contents.Climates);
             map.Attritions.AddRange(contents.Attritions);
             map.AreasOfInterest?.AddRange(contents.AreasOfInterest); // null in the games without them
-            map.SetCampaignMasks(contents.MaskNames);
+            map.SetCampaignMasks(contents.Masks.Select(mask => ImportMask(mask, map)));
 
             ImportRegions(contents, map);
             ImportHexes(contents, map);
@@ -38,6 +38,37 @@ namespace CAIME.Classes.Importers
             MapHexFile.RegionMasksNeedRecalculation = true;
 
             map.SetDirty();
+        }
+
+        /// <summary>
+        /// A mask's bitmap from its runs. The builder ends a run that reaches the end of its bitmap
+        /// row at the row's byte count instead of its width, so an end equal to the byte count, or not
+        /// past the start, is read as the end of the row. A run that really ends at that column is
+        /// read too long; no other reading tells them apart.
+        /// </summary>
+        private static CampaignMask ImportMask(MapDataMaskInfo info, MapHexFile map)
+        {
+            var mask        = new CampaignMask(info.Name);
+            int bytesPerRow = CampaignMask.BytesPerRow(map.MapWidth);
+
+            for (int i = 0; i + 2 < info.Runs.Length; i += 3)
+            {
+                int row     = info.Runs[i];
+                int start   = info.Runs[i + 1];
+                int end     = info.Runs[i + 2];
+
+                if (end == bytesPerRow || end <= start)
+                {
+                    end = (int)map.MapWidth;
+                }
+
+                for (int column = start; column < Math.Min(end, (int)map.MapWidth) && row < map.MapHeight; ++column)
+                {
+                    mask.SetMasked(column, row, map.MapWidth, map.MapHeight, true);
+                }
+            }
+
+            return mask;
         }
 
         /// <summary>

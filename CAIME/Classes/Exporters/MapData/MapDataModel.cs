@@ -48,19 +48,23 @@ namespace CAIME.Exporters
         public List<string>         RegionNames     { get; }
         public MapDataHexBounds[]   RegionBounds    { get; }
 
+        /// <summary>The campaign mask whose copy of the regions this is; null for a game without masks.</summary>
+        public MapDataMask          Mask            { get; }
+
         public int RegionCount => RegionNames.Count;
 
-        public MapDataModel(MapHexFile map, MapDataTheatre theatre, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn)
+        public MapDataModel(MapHexFile map, MapDataTheatre theatre, MapDataRadiusRounding rounding = MapDataRadiusRounding.TwoThirdsPerColumn, MapDataMask mask = null)
         {
             Map         = map;
             Theatre     = theatre;
+            Mask        = mask;
             RegionNames = map.LandRegions.Concat(map.SeaRegions).ToList();
 
             CheckEveryHexHasARegion();
 
             Grid            = new MapDataGrid((int)map.MapWidth, (int)map.MapHeight);
             Geometry        = new MapDataGeometry(theatre.MaxX, map.MapWidth, map.MapHeight, rounding, theatre.MaxY);
-            Areas           = new MapDataAreas(map, Grid, Geometry, RegionCount);
+            Areas           = new MapDataAreas(map, Grid, Geometry, RegionCount, mask);
             PassableSea     = FindPassableSea();
             Links           = new MapDataRegionLinks(map, Grid, Areas, PassableSea);
             RegionBounds    = FindRegionBounds();
