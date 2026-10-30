@@ -1,8 +1,8 @@
 # map_data.esf: open questions
 
 What is still unknown about how the Assembly Kit's builders make map_data.esf, and how to
-find out. Answers come from disassembling the builder DLLs (see `skills/tooldatabuilder-probe`
-and `campaign_tools/exe_tools/exe_query.py --exe <dll>`), never from running reference builds.
+find out. Answers come from disassembling the builder DLLs (with
+`campaign_tools/exe_tools/exe_query.py --exe <dll>`), never from running reference builds.
 `exe_query.py` only reads x64 DLLs; Rome II's and Attila's are 32-bit and need a capstone
 `CS_MODE_32` reader that finds string references as absolute addresses (image base + RVA).
 

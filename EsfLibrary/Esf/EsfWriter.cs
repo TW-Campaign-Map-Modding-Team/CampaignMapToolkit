@@ -17,25 +17,9 @@ namespace EsfLibrary
     }
 
     /// <summary>
-    /// Writes an ABCA or ABCB file node by node, byte for byte as the games' own writer does.
-    ///
-    /// <para>
-    /// The games write through a 1 MiB buffer. Every size - of a record, a block, a block entry or an
-    /// array - goes out as a five-byte placeholder that is filled in once the size is known: while
-    /// the placeholder is still in the buffer it shrinks to the size's shortest encoding, but once the
-    /// buffer has been flushed past it, the size keeps all five bytes, padded with 0x80. Where the
-    /// buffer flushes depends on how the data was cut into writes, so this writer makes the same
-    /// writes the games do. The layout is the one RPFM documents (rpfm_lib/src/files/esf/stream.rs),
-    /// apart from large writes; see <see cref="Write"/>.
-    /// </para>
-    ///
-    /// <para>
-    /// The string tables list each string once, by the id it was given on first use, in the order of
-    /// a hash map of the strings. Given its game's string hash, the writer lists them as Rome II's
-    /// and Attila's Assembly Kits do (<see cref="CaHashMapOrder"/>, <see cref="CaStringHash"/>).
-    /// The 64-bit games' map is not reproduced, and without a hash the writer lists them by id;
-    /// readers look strings up by id, so the order does not change what the file holds.
-    /// </para>
+    /// Writes an ABCA or ABCB file node by node, byte for byte as the games' own writer does:
+    /// where its sizes are padded, and, given the game's string hash, the string table's order.
+    /// See FileFormatDefinitions/esf.md.
     /// </summary>
     public sealed class EsfWriter
     {
