@@ -21,12 +21,15 @@ namespace CAIME.Tests.Integration
     /// </para>
     ///
     /// <para>
-    /// The file must match byte for byte, written with the reference's timestamp.
+    /// The file must match byte for byte, written with the reference's timestamp and format: older
+    /// builds of the game's files are ABCA. The prologue and chaos_map_4 are also in TestData
+    /// (<see cref="Unit.Wh3MapDataWriterTests"/>).
     /// </para>
     /// </summary>
     [TestClass]
     public class MapDataWriterIntegrationTests
     {
+        private const uint ABCA_MAGIC               = 0xABCA;
         private const int TIMESTAMP_OFFSET          = 8;
         private const int STRING_TABLES_OFFSET_AT   = 12;
 
@@ -60,7 +63,8 @@ namespace CAIME.Tests.Integration
                 var map = new MapHexFile();
                 Assert.IsTrue(map.Load(Path.Combine(folder, "map.hex")), $"{mapName}: map.hex did not load.");
 
-                var written = Wh3MapDataWriter.Write(map, ReadTheatre(referencePath), BitConverter.ToUInt32(reference, TIMESTAMP_OFFSET));
+                var layout  = new Wh3MapDataWriter.Layout { Format = BitConverter.ToUInt32(reference, 0) == ABCA_MAGIC ? EsfFormat.Abca : EsfFormat.Abcb };
+                var written = Wh3MapDataWriter.Write(map, ReadTheatre(referencePath), BitConverter.ToUInt32(reference, TIMESTAMP_OFFSET), layout);
                 Compare(mapName, reference, written, failures);
             }
 
