@@ -297,6 +297,8 @@
     <Compile Include="Classes\Editor\MapDataEditor\MapDataConfig.cs" />
     <Compile Include="Classes\Editor\Painters\LinePainter.cs" />
     <Compile Include="Classes\Editor\Painters\FloodFillPainter.cs" />
+    <Compile Include="Classes\Exporters\AssemblyKit\AssemblyKitBuilder.cs" />
+    <Compile Include="Classes\Exporters\AssemblyKit\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\BaselineTilemapExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGBordersExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGRoadExporter.cs" />
@@ -994,5 +996,8 @@
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\CommunityToolkit.Mvvm.8.3.2\build\CommunityToolkit.Mvvm.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\CommunityToolkit.Mvvm.8.3.2\build\CommunityToolkit.Mvvm.targets'))" />
+  </Target>
+  <Target Name="BuildMapDataBuilderWin32" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\MapDataBuilder\MapDataBuilder.vcxproj" Properties="Configuration=$(Configuration);Platform=Win32" Targets="Build" />
   </Target>
 </Project>
