@@ -48,9 +48,6 @@ The diagram below maps every control in the Preferences window to its purpose.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Hex spacing:   0.00  [────────●────────────────────────────]                │◄─ Visual gap between hex cells
 ├──────────────────────────────────────────────────────────────────────────────┤
-│  Base game:                  [ Rome 2                               ▼]       │◄─ Legacy: whose AK path is shown
-│  Assembly kit path:          [C:\...\assembly_kit          ] [Browse]        │◄─ Legacy: see Section 9
-├──────────────────────────────────────────────────────────────────────────────┤
 │  Log to file:                        ● Enabled   ○ Disabled                  │◄─ Save the log to a file on disk
 │  Auto-save:                          ● Enabled   ○ Disabled                  │◄─ Save your project automatically
 │  Auto-backup:                        ● Enabled   ○ Disabled                  │◄─ Keep automatic backup copies
@@ -60,6 +57,8 @@ The diagram below maps every control in the Preferences window to its purpose.
 │  RPFM path:                  [C:\...\rpfm                  ] [Browse]        │◄─ RPFM, which reads the database
 │  Output folder:              [C:\...\my_mod                ] [Browse]        │◄─ Where processed files go
 ├──────────────────────────────────────────────────────────────────────────────┤
+│  Base game:                  [ Rome 2                               ▼]       │◄─ Legacy: whose AK path is shown
+│  Assembly kit path:          [C:\...\assembly_kit          ] [Browse]        │◄─ Legacy: see Section 9
 │  Assembly Kit Integration:   ○ Enabled   ● Disabled                          │◄─ Legacy: see Section 9
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                              [  Save  ] [Cancel]             │

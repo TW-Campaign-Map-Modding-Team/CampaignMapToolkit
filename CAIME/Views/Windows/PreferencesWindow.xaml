@@ -32,9 +32,6 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -73,64 +70,12 @@
 
         <TextBlock Grid.Row="2"
                    Grid.Column="0"
-                   Text="Base game:"
-                   Foreground="White"
-                   VerticalAlignment="Center" />
-        
-        <ComboBox Grid.Row="2"
-                  Grid.Column="1"
-                  Grid.ColumnSpan="2"
-                  SelectionChanged="BaseGame_SelectionChanged"
-                  Style="{StaticResource DarkFlatComboBox}"
-                  ItemsSource="{Binding SupportedGamesList}"
-                  SelectedIndex="{Binding SelectedGameIndex,
-                                          Mode=TwoWay}" />
-
-        <TextBlock Grid.Row="3"
-                   Grid.Column="0"
-                   Margin="0 0 10 0"
-                   Text="Assembly kit path:"
-                   Foreground="White"
-                   VerticalAlignment="Center" />
-
-        <Grid Grid.Row="3"
-              Grid.Column="1"
-              Grid.ColumnSpan="2">
-            
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            
-            <TextBox x:Name="asskitPathBox"
-                     Grid.Column="0"
-                     Margin="0 5"
-                     Text="{Binding AssKitPath}"
-                     Style="{StaticResource DarkTextBox}" />
-
-            <Button Grid.Column="1"
-                    Content="Browse"
-                    Padding="5 0"
-                    Margin="0 5"
-                    Click="BrowseAssKit_Click"
-                    Style="{StaticResource DarkButton}" />
-
-        </Grid>
-
-        <Separator Grid.Row="4"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="3"
-                   Margin="0 10"
-                   Background="{StaticResource BackgroundDarkV3Brush}" />
-
-        <TextBlock Grid.Row="5"
-                   Grid.Column="0"
                    Margin="0 0 10 0"
                    Text="Log to file:"
                    Foreground="White"
                    VerticalAlignment="Center" />
         
-        <Grid Grid.Row="5"
+        <Grid Grid.Row="2"
               Grid.Column="1">
 
             <Grid.ColumnDefinitions>
@@ -156,14 +101,14 @@
 
         </Grid>
 
-        <TextBlock Grid.Row="6"
+        <TextBlock Grid.Row="3"
                    Grid.Column="0"
                    Margin="0 0 10 0"
                    Text="Auto-save:"
                    Foreground="White"
                    VerticalAlignment="Center" />
         
-        <Grid Grid.Row="6"
+        <Grid Grid.Row="3"
               Grid.Column="1">
 
             <Grid.ColumnDefinitions>
@@ -189,14 +134,14 @@
 
         </Grid>
 
-        <TextBlock Grid.Row="7"
+        <TextBlock Grid.Row="4"
                    Grid.Column="0"
                    Margin="0 0 10 0"
                    Text="Auto-backup:"
                    Foreground="White"
                    VerticalAlignment="Center" />
 
-        <Grid Grid.Row="7"
+        <Grid Grid.Row="4"
               Grid.Column="1">
 
             <Grid.ColumnDefinitions>
@@ -222,7 +167,7 @@
 
         </Grid>
 
-        <TextBlock Grid.Row="8"
+        <TextBlock Grid.Row="5"
                    Grid.Column="0"
                    Margin="0 0 10 0"
                    Text="Auto-backups to keep:"
@@ -237,7 +182,7 @@
             </TextBlock.ToolTip>
         </TextBlock>
 
-        <TextBox Grid.Row="8"
+        <TextBox Grid.Row="5"
                  Grid.Column="1"
                  Margin="5"
                  VerticalAlignment="Center"
@@ -245,7 +190,7 @@
                  ToolTip="0 keeps every backup."
                  Style="{StaticResource DarkTextBox}" />
 
-        <TextBlock Grid.Row="9"
+        <TextBlock Grid.Row="6"
                    Grid.Column="0"
                    Margin="0 0 10 0"
                    Text="Map data config auto-patch:"
@@ -260,7 +205,7 @@
             </TextBlock.ToolTip>
         </TextBlock>
 
-        <Grid Grid.Row="9"
+        <Grid Grid.Row="6"
               Grid.Column="1">
 
             <Grid.ColumnDefinitions>
@@ -286,8 +231,9 @@
 
         </Grid>
 
-        <!-- RPFM, through which CAIME reads the database, and where processed files go -->
-        <Grid Grid.Row="10"
+        <!-- RPFM, through which CAIME reads the database, and where processed files go; then the
+             legacy Assembly Kit settings -->
+        <Grid Grid.Row="7"
               Grid.Column="0"
               Grid.ColumnSpan="3">
 
@@ -298,6 +244,9 @@
             </Grid.ColumnDefinitions>
 
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -402,12 +351,67 @@
 
             <TextBlock Grid.Row="6"
                        Grid.Column="0"
+                       Grid.ColumnSpan="3"
+                       Margin="0 0 0 5"
+                       FontStyle="Italic"
+                       Foreground="Gray"
+                       TextWrapping="Wrap"
+                       Text="Legacy and optional: CAIME needs no Assembly Kit. Base game picks which game's Assembly Kit path is shown below." />
+
+            <TextBlock Grid.Row="7"
+                       Grid.Column="0"
+                       Text="Base game:"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+        
+            <ComboBox Grid.Row="7"
+                      Grid.Column="1"
+                      Grid.ColumnSpan="2"
+                      SelectionChanged="BaseGame_SelectionChanged"
+                      Style="{StaticResource DarkFlatComboBox}"
+                      ItemsSource="{Binding SupportedGamesList}"
+                      SelectedIndex="{Binding SelectedGameIndex,
+                                              Mode=TwoWay}" />
+
+            <TextBlock Grid.Row="8"
+                       Grid.Column="0"
+                       Margin="0 0 10 0"
+                       Text="Assembly kit path:"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+
+            <Grid Grid.Row="8"
+                  Grid.Column="1"
+                  Grid.ColumnSpan="2">
+            
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+            
+                <TextBox x:Name="asskitPathBox"
+                         Grid.Column="0"
+                         Margin="0 5"
+                         Text="{Binding AssKitPath}"
+                         Style="{StaticResource DarkTextBox}" />
+
+                <Button Grid.Column="1"
+                        Content="Browse"
+                        Padding="5 0"
+                        Margin="0 5"
+                        Click="BrowseAssKit_Click"
+                        Style="{StaticResource DarkButton}" />
+
+            </Grid>
+
+            <TextBlock Grid.Row="9"
+                       Grid.Column="0"
                        Margin="0 0 10 0"
                        Text="Assembly Kit Integration:"
                        Foreground="White"
                        VerticalAlignment="Center" />
 
-            <StackPanel Grid.Row="6"
+            <StackPanel Grid.Row="9"
                         Grid.Column="1"
                         Grid.ColumnSpan="2"
                         Orientation="Horizontal">
@@ -426,7 +430,7 @@
 
             </StackPanel>
 
-            <TextBlock Grid.Row="7"
+            <TextBlock Grid.Row="10"
                        Grid.Column="0"
                        Grid.ColumnSpan="3"
                        Margin="0 3 0 0"
@@ -436,13 +440,13 @@
                        Text="When enabled, Process &gt; Map Data and Process &gt; Dynamic Resources run the Assembly Kit's own builder instead of CAIME's, with the database read through RPFM. Needs the Assembly Kit path for the project's game." />
         </Grid>
 
-        <Separator Grid.Row="11"
+        <Separator Grid.Row="8"
                    Grid.Column="0"
                    Grid.ColumnSpan="3"
                    Margin="0 10"
                    Background="{StaticResource BackgroundDarkV3Brush}" />
 
-        <StackPanel Grid.Row="12"
+        <StackPanel Grid.Row="9"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Orientation="Horizontal"
