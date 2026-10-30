@@ -177,5 +177,14 @@ namespace CAIME.Tests.Unit
 
             Assert.ThrowsException<InvalidOperationException>(() => esf.ToArray(0));
         }
+
+        [TestMethod]
+        public void WriteAscii_WithANonAsciiCharacter_Throws()
+        {
+            var esf = new EsfWriter(EsfFormat.Abcb);
+            esf.BeginRecord("ROOT", 0);
+
+            Assert.ThrowsException<ArgumentException>(() => esf.WriteAscii("café"));
+        }
     }
 }

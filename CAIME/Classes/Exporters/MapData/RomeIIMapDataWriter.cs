@@ -19,7 +19,7 @@ namespace CAIME.Exporters
                 MaxY    = theatre.MaxY ?? (float)Math.Round(EstimateMaxY(theatre.MaxX, map.MapWidth, map.MapHeight), 2),
             };
 
-            return AttilaMapDataWriter.Write(map, withMaxY, timestamp, CaStringHash.RomeII);
+            return AttilaMapDataWriter.Write(map, withMaxY, timestamp, CaHashMap.RomeII);
         }
 
         /// <summary>

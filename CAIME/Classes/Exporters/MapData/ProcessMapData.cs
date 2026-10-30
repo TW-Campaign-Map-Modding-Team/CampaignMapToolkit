@@ -36,7 +36,7 @@ namespace CAIME.Exporters
                 var theatre = MapDataWriter.ReadTheatre(project.Game, project.MapName, project.RpfmTables[Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS]);
                 mapData     = MapDataWriter.Write(project.Game, map, theatre, (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
-            // ArgumentException: a game with no writer, or a map too small to build.
+            // ArgumentException: a game with no writer, a map too small to build, or a name that is not ASCII.
             catch (Exception ex) when (ex is InvalidOperationException || ex is ArgumentException)
             {
                 LoggerViewModel.Log($"map_data.esf was not processed: {ex.Message}", LogLevel.ErrorMessageBox);
