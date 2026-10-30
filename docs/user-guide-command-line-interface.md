@@ -37,11 +37,13 @@ When you launch CAIME with arguments, it runs the requested processing in a cons
 
 The CLI relies on settings you configure **once** in the graphical editor. Make sure both of the following are true before running it:
 
-1. **An output folder, or the Assembly Kit path for the game you are processing, must already be set.**
-   The CLI writes where the editor does: the **Output folder** saved under **Settings > Preferences**, or the game's Assembly Kit `working_data` when none is set. If neither is configured, processing stops with a clear error. See [Settings & Preferences](user-guide-settings-and-preferences.md).
+1. **The RPFM path must be set.**
+   The CLI reads the project's database through RPFM, exactly as the editor does, and waits for it before running anything. These tasks need it, as their menu items do in the editor: `--map-data`, `--pathfinding` and `--lookup`, and the `--regions`, `--attritions`, `--climates` and `--ground-types` validators. If the database can't be read, a run that asks for any of them stops before running anything, and names them. See [Settings & Preferences](user-guide-settings-and-preferences.md#3-database-rpfm-and-output-folder).
 
-2. **For `--map-data`, the RPFM path must be set.**
-   `--map-data` needs the project's database, read through RPFM, exactly as in the editor. With **Assembly Kit Integration** enabled in Preferences, `--map-data` and `--dynamic-resources` run the Assembly Kit's own builder, as in the editor.
+2. **For `process`, an output folder must be set.**
+   The CLI writes where the editor does: the **Output folder** saved under **Settings > Preferences**. If none is configured, processing stops with a clear error.
+
+> **Assembly Kit (legacy):** with no Output folder set, the CLI writes to the game's Assembly Kit `working_data` instead, and with **Assembly Kit Integration** enabled, `--map-data` and `--dynamic-resources` run the Assembly Kit's own builder, as in the editor. See [Annex: The Assembly Kit](user-guide-assembly-kit.md).
 
 ---
 
@@ -168,13 +170,13 @@ All outputs are written to the same place as the editor:
 ```
 {output folder}\campaign_maps\{your map name}\
 ```
-or `{Assembly Kit path}\working_data\campaign_maps\{your map name}\` with no output folder set.
+or, with no output folder set, `{Assembly Kit path}\working_data\campaign_maps\{your map name}\` (see [Annex: The Assembly Kit](user-guide-assembly-kit.md#3-output-fallback-working_data)).
 
 ---
 
 ## Validating a Map
 
-The `validate` command checks a `.hex` map for layer-specific issues without writing any output files. It takes the same `--map`/`-m` option and the same `--all` / individual-flag choice as `process`, but no Assembly Kit path is required — validation only reads the map itself.
+The `validate` command checks a `.hex` map for layer-specific issues without writing any output files. It takes the same `--map`/`-m` option and the same `--all` / individual-flag choice as `process`, but needs no output folder. The `--regions`, `--attritions`, `--climates` and `--ground-types` validators check the map against its database, read through RPFM; the rest only read the map itself.
 
 ```
 CAIME.exe validate --map "C:\maps\my_map\map.hex" --all
@@ -249,7 +251,7 @@ The CLI sets a process exit code so scripts can detect success or failure:
 |---|---|
 | `0` | Success — all requested tasks completed. |
 | `1` | Invalid arguments — the command was rejected before any processing ran. |
-| `2` | Processing failure — the map could not be loaded, or one or more tasks failed. |
+| `2` | Processing failure — the map could not be loaded, the database a requested task needs could not be read, or one or more tasks failed. |
 
 In PowerShell the code is available as `$LASTEXITCODE`; in Command Prompt as `%ERRORLEVEL%`.
 
@@ -258,7 +260,10 @@ In PowerShell the code is available as `$LASTEXITCODE`; in Command Prompt as `%E
 ## Troubleshooting
 
 **"No output folder, and no assembly kit path for *\<game\>*, is configured."**
-The CLI writes to the output folder you saved in the editor, or the game's Assembly Kit `working_data`. Open CAIME normally, go to **Settings > Preferences**, set an **Output folder** (or the game's Assembly Kit path), and click **Save**. Then re-run the CLI. See [Settings & Preferences](user-guide-settings-and-preferences.md).
+The CLI writes to the output folder you saved in the editor. Open CAIME normally, go to **Settings > Preferences**, set an **Output folder**, and click **Save**. Then re-run the CLI. See [Settings & Preferences](user-guide-settings-and-preferences.md).
+
+**"The map's database was not read through RPFM, and these tasks need it: ..."**
+The tasks named need the project's database, and it couldn't be read; the messages above it say why. Check the **RPFM path** in **Settings > Preferences**, fix what the messages report, and re-run the CLI. Tasks that don't need the database still run on their own.
 
 **"Map file not found" / "The map file must be a .hex file."**
 Check the path after `--map`. It must point to an existing file ending in `.hex`. Wrap paths containing spaces in double quotes.
@@ -267,7 +272,7 @@ Check the path after `--map`. It must point to an existing file ending in `.hex`
 The CLI validates every argument and refuses to run anything it does not recognise — this prevents a typo from silently doing the wrong thing. Run `CAIME.exe --help` to see the exact, supported spelling of every command, option, and task.
 
 **`--map-data` or `--dynamic-resources` reports a failure.**
-These two tasks have the same requirements as in the editor: the project must have no unsaved changes, and `--map-data` needs the project's database, read through RPFM. See [Processing & Exporting](user-guide-processing-and-exporting.md) for details.
+These two tasks have the same requirements as in the editor: the project must have no unsaved changes, and `--map-data` needs your map's row in `campaign_map_playable_areas`. See [Processing & Exporting](user-guide-processing-and-exporting.md) for details.
 
 **The editor window opened instead of running the CLI.**
 The graphical editor only opens when CAIME is launched **with no arguments**. If a window appeared, the arguments did not reach the program — double-check that you typed a command (`process` or `--help`) after the executable name.
