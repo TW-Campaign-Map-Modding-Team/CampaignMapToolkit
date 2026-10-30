@@ -81,7 +81,7 @@ Without `map.hex`, the template cannot be opened and will produce an error.
 ```
 your_custom_template\
 ├── map.hex
-└── trees.png    ← RECOMMENDED — needed for Map Data processing
+└── trees.png    ← RECOMMENDED — tree placement, used outside CAIME
 ```
 
 This is a PNG image that defines **where trees are placed** on the campaign map. It is used by the Assembly Kit's internal `BOB` tool when you run process terrain / tilemap or trees directly. Without it, the campaign map will appear visually with no trees (if its a new map).
@@ -153,7 +153,7 @@ your_custom_template\
 
 **Step 1 — Obtain your map.hex**
 
-The `map.hex` file in a template is almost always sourced directly from the Assembly Kit — it is the raw campaign map file that Creative Assembly produced during the game's development. There are two common origins:
+The `map.hex` file in a template is almost always sourced directly from the Assembly Kit — it is the raw campaign map file that Creative Assembly produced during the game's development. This is one of the few places CAIME's workflow still touches the Assembly Kit, and only to copy files out of it (see [Annex: The Assembly Kit](user-guide-assembly-kit.md)). There are two common origins:
 
 - **From the Assembly Kit:** Navigate to the Assembly Kit's `raw_data` folder and locate the `map.hex` file for the campaign map you want to use as a base (see Step 2 for the exact path). This is the primary and recommended source — it is the authoritative, unmodified file for that map.
 
@@ -257,7 +257,7 @@ Once your template folder is in place, you do not need to restart CAIME — the 
    └────────────────────────────────────────────────────────────────────┘
    ```
 
-2. In the **Campaign map name** field, type the internal name for your new map. This name must match your Assembly Kit database entries exactly (see the [Creating a New Map](user-guide-creating-a-new-map.md) guide for database setup details).
+2. In the **Campaign map name** field, type the internal name for your new map. This name must match your map's rows in the database exactly (see the [Creating a New Map](user-guide-creating-a-new-map.md) guide for database setup details).
 
 3. Click the **Template** dropdown and select your template from the list.
 
@@ -294,7 +294,7 @@ Once your template folder is in place, you do not need to restart CAIME — the 
    - Create a new project folder at `Projects\[YourMapName]\`
    - Copy every file from your template folder into that project folder
    - Rename none of the files — they are copied as-is
-   - Open the copied `map.hex` and connect to your Assembly Kit database
+   - Open the copied `map.hex` and read its database through RPFM
 
    Your new project will open with all of the template's layer data already visible and ready to edit.
 
@@ -335,10 +335,10 @@ CAIME installation template sharing workflow:
   Check that your template folder is directly inside the `Templates` folder — not inside another subfolder within it. The path should be `Templates\your_template_name\map.hex`, not `Templates\some_other_folder\your_template_name\map.hex`. Also check the folder name: avoid spaces and special characters.
 
 - **I created a project from my template but the Swatches panel is empty.**
-  The Swatches panel is populated from your Assembly Kit database, not from the template files. A template does not carry database entries with it — only the painted layer data from `map.hex`. The recipient must have the correct Assembly Kit installed and set up in **Settings → Preferences** (Ctrl+P), and the required database entries (regions, ground types, climates, etc.) must exist in that Assembly Kit before opening the project. Refer to the [Creating a New Map](user-guide-creating-a-new-map.md) guide for the database setup steps.
+  The Swatches panel is populated from the database, read through RPFM, not from the template files. A template does not carry database entries with it — only the painted layer data from `map.hex`. The recipient must have RPFM set up in **Settings → Preferences** (Ctrl+P), and the map's rows (regions, campaign, roads, etc.) must be in the game's packs or in a mod set for the project under **Settings → RPFM Workflow**. Refer to the [Creating a New Map](user-guide-creating-a-new-map.md) guide for the database setup steps.
 
-- **Process → Map Data or Process → Dynamic Resources fails after I used the template.**
-  This usually means `trees.png`, `tree_database.xml`, `dynamic_resources.png`, or `dynamic_resources_database.xml` is missing from the project folder (and therefore was not in the template). Check that all five files are present in your template folder, then delete the project, re-create it from the template, and run the process again. You can also copy the missing files directly into the project folder at `Projects\[MapName]\` without re-creating the project from scratch.
+- **Process → Dynamic Resources fails after I used the template.**
+  This usually means `dynamic_resources.png` or `dynamic_resources_database.xml` is missing from the project folder (and therefore was not in the template). Check that both files are present in your template folder, then delete the project, re-create it from the template, and run the process again. You can also copy the missing files directly into the project folder at `Projects\[MapName]\` without re-creating the project from scratch.
 
 - **Do not include `caime_metadata.json` in your template.**
   If you have used the Map Data Editor on your map before making it a template, CAIME will have created a `caime_metadata.json` file in your project folder. This file stores an absolute path to a `map_data_config.xml` file on your own machine. If you include it in your template and another user creates a project from it, CAIME will try to read the config file from a path that does not exist on their machine, and Map Data auto-patching will silently fail. Always check your template folder and remove `caime_metadata.json` before distributing.

@@ -5,20 +5,22 @@
 ## Overview
 
 Creating a brand-new campaign map in CAIME is a two-part process, similar to starting a new painting project.  
-**Part 1 — In Dave (your Assembly Kit database editor):** You register your new map in the game's database tables so that CAIME (and eventually the game itself) knows which regions, terrain types, climates, and other game data belong to it.  
-**Part 2 — Inside CAIME:** You create an empty canvas — the **map file** — and give it a name, a target game, and a size. CAIME reads the database the moment the map opens, so by doing Part 1 first, your Swatches panel will be fully populated and ready to paint straight away.
+**Part 1 — In RPFM, in your mod's pack:** You add your new map's rows to the database tables, so that CAIME (and eventually the game itself) knows which regions, roads, and other game data belong to it.  
+**Part 2 — Inside CAIME:** You create an empty canvas — the **map file** — and give it a name, a target game, and a size, and tell CAIME which mod holds its rows. CAIME reads the database through RPFM each time the map opens, from the game's own packs with your mod layered over them, and fills your Swatches panel from it.
+
+> **Using Dave?** CAIME doesn't read the Assembly Kit's database, so rows made in Dave only reach CAIME once they are in your mod's pack. See [Annex: The Assembly Kit](user-guide-assembly-kit.md#5-dave-and-the-assembly-kits-database).
 
 ---
 
 ## Table of Contents
 
-1. [Before You Begin: Configuring Assembly Kit Paths](#1-before-you-begin-configuring-assembly-kit-paths)
-2. [Setting Up the Database in Dave](#2-setting-up-the-database-in-dave)
-   - [campaign_maps](#campaign_maps)
+1. [Before You Begin: Configuring RPFM and the Output Folder](#1-before-you-begin-configuring-rpfm-and-the-output-folder)
+2. [Setting Up the Database in Your Mod](#2-setting-up-the-database-in-your-mod)
    - [regions](#regions)
    - [campaign_map_regions](#campaign_map_regions)
    - [campaigns](#campaigns)
    - [campaign_map_roads](#campaign_map_roads)
+   - [campaign_map_playable_areas](#campaign_map_playable_areas)
    - [campaign_map_areas_of_interest (Three Kingdoms & Warhammer III only)](#campaign_map_areas_of_interest-three-kingdoms--warhammer-iii-only)
 3. [Opening the Create New Map Dialog](#3-opening-the-create-new-map-dialog)
 4. [Filling In the Map Details](#4-filling-in-the-map-details)
@@ -27,6 +29,7 @@ Creating a brand-new campaign map in CAIME is a two-part process, similar to sta
    - [Game](#game)
    - [Map Size](#map-size)
 5. [What CAIME Creates for You](#5-what-caime-creates-for-you)
+   - [Pointing the Project at Your Mod](#pointing-the-project-at-your-mod)
 6. [Game-Specific Differences](#6-game-specific-differences)
    - [Rome II](#rome-ii)
    - [Attila & Thrones of Britannia](#attila--thrones-of-britannia)
@@ -39,13 +42,14 @@ Creating a brand-new campaign map in CAIME is a two-part process, similar to sta
 
 ---
 
-## 1. Before You Begin: Configuring Assembly Kit Paths
+## 1. Before You Begin: Configuring RPFM and the Output Folder
 
-CAIME reads your game's database directly from your Assembly Kit installation. Before you create any map, you must tell CAIME where each game's Assembly Kit is installed on your computer. You only need to do this once per game.
+CAIME reads your game's database through **RPFM** (version 5.3 or later), and writes processed files to an **Output folder**. Before you create any map, set both. You only need to do this once.
 
 **Steps:**
 
-1. In CAIME, go to **Settings → Preferences** (or press **Ctrl+P**).
+1. In RPFM, set the game's folder in RPFM's own settings, if you haven't already. RPFM finds the game's packs, and your mod, through it.
+2. In CAIME, go to **Settings → Preferences** (or press **Ctrl+P**).
 
    The **Preferences** window will appear:
 
@@ -55,52 +59,44 @@ CAIME reads your game's database directly from your Assembly Kit installation. B
    │  Hex spacing:  [ ──●────────────────────── ] 0.00               │
    │  ─────────────────────────────────────────────────────────────   │
    │  Base game:          [ Rome2                              ▼ ]    │
-   │  Assembly kit path:  [ C:\assembly_kit\...           ] [Browse]  │
+   │  Assembly kit path:  [                               ] [Browse]  │
    │  ─────────────────────────────────────────────────────────────   │
    │  Log to file:         ● Enabled    ○ Disabled                    │
-   │  Auto-save:           ● Enabled    ○ Disabled                    │
-   │  Auto-backup:         ● Enabled    ○ Disabled                    │
-   │  Map data config auto-patch: ○ Enabled  ● Disabled               │
+   │  ...                                                             │
+   │  ─────────────────────────────────────────────────────────────   │
+   │  RPFM path:          [ C:\...\rpfm                   ] [Browse]  │
+   │  Output folder:      [ C:\...\my_mod                 ] [Browse]  │
    │  ─────────────────────────────────────────────────────────────   │
    │                                              [ Save ] [ Cancel ] │
    └───────────────────────────────────────────────────────────────────┘
    ```
 
-2. In the **Base game** dropdown, select the game you want to configure.
-3. Click **Browse** next to **Assembly kit path** and navigate to the root folder of that game's Assembly Kit installation (the folder that contains `raw_data` and `working_data` sub-folders).
-4. Click **Save**.
-5. Repeat steps 2–4 for every game you plan to work with.
+3. Click **Browse** next to **RPFM path** and select the folder that contains `rpfm_server.exe`.
+4. Click **Browse** next to **Output folder** and select the folder processed files should go to. It can be your mod's own folder: files are laid out as in a pack.
+5. Click **Save**. CAIME checks the RPFM folder before it saves.
 
-> **Important:** Each game has its own separate Assembly Kit installation and its own path entry. You must configure the correct path for the game you choose when creating your map, or CAIME will fail to open the map.
+> **Base game** and **Assembly kit path** are legacy settings; you can leave them alone. See [Annex: The Assembly Kit](user-guide-assembly-kit.md).
 
 ---
 
-## 2. Setting Up the Database in Dave
+## 2. Setting Up the Database in Your Mod
 
-Before creating the map file in CAIME, open **Dave** — the official database editor bundled with the Assembly Kit, specifically designed for editing these tables. The entries must use **exactly the same map name** you will type in the CAIME dialog in the next step.
+CAIME reads each table from the game's own packs, with your mod's rows merged over them (see [Settings & Preferences](user-guide-settings-and-preferences.md#3-database-rpfm-and-output-folder)). So for a new map you only add the rows that are **specific to your campaign map**, to your mod's pack, in RPFM. Other tables (such as `campaign_ground_types` and `climates`) are global to the game and already contain all the data CAIME needs — no new rows are required in those.
 
-The tables you need to open and edit in Dave are the ones that hold records **specific to your campaign map name**. Other tables (such as `campaign_ground_types` and `climates`) are global to the game and already contain all the data CAIME needs — no new rows are required in those.
+Every row must use **exactly the same map name** you will type in the CAIME dialog in the next step. Save the pack in RPFM when you are done: CAIME reads the pack from disk.
 
-The tables to edit for a new map are:
+The tables to add rows to for a new map are:
 
 | Table | Why it needs editing |
 |---|---|
-| `campaign_maps` | Registers your map so the game and CAIME know it exists |
 | `regions` | Defines any new regions your map introduces, with their RGB colours |
 | `campaign_map_regions` | Links your map name to each of its regions |
 | `campaigns` | Links your campaign name to your map name (needed for road filtering) |
 | `campaign_map_roads` | Road cost entries that reference campaigns using your map |
+| `campaign_map_playable_areas` | Your map's playable area, which **Process → Map Data** builds `map_data.esf` from |
 | `campaign_map_areas_of_interest` | **Three Kingdoms & Warhammer III only** — registers Areas of Interest for your map |
 
 Each table is described in detail below.
-
----
-
-### campaign_maps
-
-**What it is:** The master registry of campaign maps. The game and CAIME both use this to know that your map exists.
-
-**What to add:** One new record with your map's name. Each game's schema is slightly different, but at minimum you need a field pointing to your map name (often called `campaign_map` or similar) and a field pointing to the campaign it belongs to.
 
 ---
 
@@ -131,7 +127,7 @@ Each table is described in detail below.
 | `campaign_map` | The exact name of your map (must match what you will type in CAIME) |
 | `region` | The `key` of the region from the `regions` table |
 
-> **Pharaoh & Pharaoh Dynasties only:** This table has an extra `index` field. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties) below for details.
+> **Pharaoh Dynasties only:** CAIME reads this table's `index` field. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties) below for details.
 
 ---
 
@@ -160,9 +156,17 @@ CAIME reads this table to figure out which campaigns use your map. This informat
 
 ---
 
+### campaign_map_playable_areas
+
+**What it is:** The area of each campaign map that is playable. **Process → Map Data** builds `map_data.esf` from your map's first row here, and stops with an error if there is none.
+
+**What to add:** One record for your map. Its `index` and `maxx` go into the map data; the game also reads the row itself, so fill in its other columns as the game expects.
+
+---
+
 ## 3. Opening the Create New Map Dialog
 
-Once the database is set up in Dave, switch to CAIME and create the map file.
+Once your mod has your map's rows, switch to CAIME and create the map file.
 
 **Go to File → Create new map** in the menu bar, or press **Ctrl+N**.
 
@@ -204,11 +208,11 @@ The **Create new project** dialog will appear.
 
 Type the internal name of your map in the **Campaign map name** field. This name:
 
-- Must match **exactly** the name you used in the Dave database tables in [Section 2](#2-setting-up-the-database-in-dave) above.
+- Must match **exactly** the name you used in your mod's tables in [Section 2](#2-setting-up-the-database-in-your-mod) above.
 - Will become the name of the project folder created on disk (`Projects\YourMapName\`).
 - Cannot be empty — CAIME will show an error and stop if you try to proceed without one.
 
-> **Tip:** Use only letters, numbers, and underscores (e.g., `my_custom_map`). Avoid spaces or special characters to prevent issues with the Assembly Kit.
+> **Tip:** Use only letters, numbers, and underscores (e.g., `my_custom_map`). Avoid spaces or special characters, which the game's tables and file names may not accept.
 
 When you click somewhere else after typing, CAIME will automatically clean up any disallowed characters in the name.
 
@@ -267,7 +271,7 @@ Once you have filled in all fields, click **Create**.
 
 ## 5. What CAIME Creates for You
 
-After you click **Create**, CAIME automatically does the following:
+After you click **Create**, CAIME creates the map file and opens it:
 
 ```
 CAIME creates on your disk:
@@ -277,17 +281,9 @@ CAIME creates on your disk:
      └── YourMapName\
          └── map.hex          ◄── Your new (empty) map file
 ─────────────────────────────────────────────────────────────────────────
-
-CAIME also creates (if they don't exist already) output folders in your
-Assembly Kit, ready for when you process the map later:
-
- [Your Assembly Kit path]\
- └── working_data\
-     └── campaign_maps\
-         └── YourMapName\     ◄── Where processed files will be exported
-             └── debug\       ◄── Where debug images will go
-─────────────────────────────────────────────────────────────────────────
 ```
+
+Processed files go to `campaign_maps\YourMapName\` in your **Output folder**, created when you first process the map.
 
 The map file (`map.hex`) is completely empty at this stage. Every hex on the grid has:
 - No region assigned
@@ -296,7 +292,18 @@ The map file (`map.hex`) is completely empty at this stage. Every hex on the gri
 - No attrition assigned
 - No roads, bridges, rivers, or other features
 
-CAIME immediately reads the Assembly Kit database after creating the file. Because you already set up the database entries in Dave, the Swatches panel will populate with your regions and terrain types and you can begin painting straight away.
+CAIME reads the database through RPFM in the background as soon as the map opens; the log says when it is done. Until then the map can't be saved or processed.
+
+### Pointing the Project at Your Mod
+
+A new project has no mod set, so at first CAIME reads only the game's own packs, which don't have your map's rows. To add your mod:
+
+1. Go to **Settings → RPFM Workflow** (only enabled while a project is open).
+2. Type your mod's `.pack` file name, or click **Browse...** and pick the `.pack`.
+3. Click **Save**.
+4. Reload the map with **File → Reload** (Ctrl+R). CAIME reads the database again, with your mod's rows, and the Swatches panel fills with your regions.
+
+CAIME remembers the mod for this project, in `caime_metadata.json` next to `map.hex`.
 
 ---
 
@@ -328,7 +335,7 @@ The four layers below are **not universally available** — check the table to s
 | **Layers not available** | Restrictions, Region Borders, Areas of Interest |
 | **Special DB requirement** | None |
 
-Rome II has the simplest format. It is the only game that includes **Trade Routes** but lacks both **Restrictions** and **Region Borders**. No database tables beyond the standard set in [Section 2](#2-setting-up-the-database-in-dave) are required.
+Rome II has the simplest format. It is the only game that includes **Trade Routes** but lacks both **Restrictions** and **Region Borders**. No database tables beyond the standard set in [Section 2](#2-setting-up-the-database-in-your-mod) are required.
 
 ---
 
@@ -364,7 +371,7 @@ These three games share the same map format version. **Trade Routes** is not ava
 | **Layers not available** | None — all layers are available |
 | **Special DB requirement** | `campaign_map_areas_of_interest` |
 
-Three Kingdoms is the only game that supports every layer simultaneously, including both **Trade Routes** and **Areas of Interest**. Because Areas of Interest is active, you must populate one extra table in Dave before opening the map:
+Three Kingdoms is the only game that supports every layer simultaneously, including both **Trade Routes** and **Areas of Interest**. Because Areas of Interest is active, you must add rows to one extra table in your mod:
 
 #### campaign_map_areas_of_interest
 
@@ -389,28 +396,28 @@ Without entries in this table, the **Areas of Interest** layer in CAIME will be 
 | **Layers not available** | Trade Routes |
 | **Special DB requirement** | `campaign_map_areas_of_interest` |
 
-Warhammer III supports **Areas of Interest** but not **Trade Routes**. As with Three Kingdoms, you must add entries to `campaign_map_areas_of_interest` in Dave before opening the map (same table structure described in the Three Kingdoms section above).
+Warhammer III supports **Areas of Interest** but not **Trade Routes**. As with Three Kingdoms, you must add rows to `campaign_map_areas_of_interest` in your mod (same table structure described in the Three Kingdoms section above).
 
 ---
 
 ### Pharaoh & Pharaoh Dynasties
 
-> Pharaoh Dynasties shares the same map format as Pharaoh and behaves identically in CAIME. Select whichever matches your map in the Game dropdown — **Pharaoh** or **Pharaoh_Dynasties**.
+> Select whichever matches your map in the Game dropdown — **Pharaoh** or **Pharaoh_Dynasties**. They differ in how the map file stores regions.
 
-| Detail | Value |
-|---|---|
-| **Map format version** | 18 (same as Warhammer group) |
-| **Layers not available** | Trade Routes, Areas of Interest |
-| **Special DB requirement** | Extra `index` field in `campaign_map_regions` |
-| **Special region handling** | Combined land+sea index (see below) |
+| Detail | Pharaoh | Pharaoh Dynasties |
+|---|---|---|
+| **Map format version** | 18 (same as Warhammer group) | 20 |
+| **Layers not available** | Trade Routes, Areas of Interest | Trade Routes, Areas of Interest |
+| **Special DB requirement** | None | CAIME reads `index` in `campaign_map_regions` |
+| **Special region handling** | None | Combined land+sea index (see below) |
 
-Pharaoh uses a unique system for storing regions in the binary map file. Instead of land regions and sea regions being stored separately (as in all other games), **all regions are stored together in a single combined list**, sorted by a numeric index.
+Pharaoh Dynasties uses a unique system for storing regions in the binary map file. Instead of land regions and sea regions being stored separately (as in all other games), **all regions are stored together in a single combined list**, sorted by a numeric index.
 
 This has two consequences:
 
-**1. The `campaign_map_regions` table for Pharaoh has an extra `index` field.**
+**1. CAIME reads each region's `index` from `campaign_map_regions`.**
 
-When adding your regions in Dave, each entry needs an `index` value — a whole number starting from 1. The index values **must be correct before you open the map in CAIME**, because CAIME reads them on load and will refuse to open the map if the index values do not match the order stored in the binary file. The convention is: **land regions first, then sea regions**, each numbered sequentially with no gaps.
+When adding your regions to your mod, each row needs an `index` value — a whole number starting from 1. CAIME checks them against the order stored in the binary file every time the map opens. If they don't match, the map still opens, but its database isn't loaded: it can't be saved or processed, and the Swatches panel stays empty. The convention is: **land regions first, then sea regions**, each numbered sequentially with no gaps.
 
 | Example | Region type | index |
 |---|---|---|
@@ -420,23 +427,23 @@ When adding your regions in Dave, each entry needs an `index` value — a whole 
 | `my_map_region_redcoast` | sea | 4 |
 | `my_map_region_medsea` | sea | 5 |
 
-**2. CAIME only reads these index values — it never writes back to Dave.**
+**2. CAIME only reads these index values — it never writes to the database.**
 
-If you add, remove, or reorder regions after initial setup, you must update the `index` values in Dave first, then reload the map in CAIME. CAIME will not correct or repair mismatched indices on its own.
+When it saves the map, CAIME writes the regions in the order of their `index` values. If you add, remove, or reorder regions after initial setup, update the `index` values in your mod first, then reload the map in CAIME. CAIME will not correct or repair mismatched indices on its own.
 
 ```
-How Pharaoh region order works in CAIME:
+How Pharaoh Dynasties region order works in CAIME:
 ──────────────────────────────────────────────────────────────────
 
-  campaign_map_regions (Dave)           map.hex binary file
-  ───────────────────────────           ────────────────────
+  campaign_map_regions (your mod)       map.hex binary file
+  ───────────────────────────────       ────────────────────
   my_map    egypt    index=1            Slot 0: egypt
   my_map    nubia    index=2     ─────► Slot 1: nubia
   my_map    nile     index=3            Slot 2: nile
   my_map    redcoast index=4            Slot 3: redcoast
   my_map    medsea   index=5            Slot 4: medsea
 
-  CAIME reads these indices on load. Dave is the source of truth.
+  CAIME reads these indices on load. The database is the source of truth.
 ```
 
 ---
@@ -446,37 +453,45 @@ How Pharaoh region order works in CAIME:
 Here is the complete recommended sequence for creating a brand new map from scratch:
 
 ```
-STEP 1: In CAIME
+STEP 1: In RPFM and CAIME (first time only)
 ─────────────────────────────────────────────────────────
-Settings → Preferences
-  └─ For each game: set Assembly kit path → Save
+RPFM: set the game's folder in RPFM's settings
+CAIME: Settings → Preferences
+  └─ Set RPFM path and Output folder → Save
 
 
-STEP 2: In Dave (Assembly Kit database editor)
+STEP 2: In RPFM, in your mod's pack
 ─────────────────────────────────────────────────────────
-Add your map name to these tables:
-  ├── campaign_maps              (register the map)
+Add your map's rows to these tables:
   ├── campaigns                  (link map to campaign)
   ├── regions                    (define each new region + RGB colour)
   ├── campaign_map_regions       (link regions to your map)
   ├── campaign_map_roads         (road costs per campaign)
+  ├── campaign_map_playable_areas (needed to process Map Data)
   │
   └── IF Three Kingdoms or Warhammer III:
       └── campaign_map_areas_of_interest
+Save the pack.
 
 
 STEP 3: In CAIME
 ─────────────────────────────────────────────────────────
 File → Create new map (Ctrl+N)
-  ├── Type your Campaign map name  (MUST match the Dave entries)
+  ├── Type your Campaign map name  (MUST match your mod's rows)
   ├── Choose Template: None
   ├── Choose your Game
   ├── Set Map size
   └── Click Create
        │
        ▼
-  CAIME creates Projects\YourMapName\map.hex
-  CAIME reads the Assembly Kit database
+  CAIME creates Projects\YourMapName\map.hex and opens it
+
+Settings → RPFM Workflow
+  └─ Set your mod's .pack → Save
+File → Reload (Ctrl+R)
+       │
+       ▼
+  CAIME reads the database through RPFM
   Swatches panel populates with your regions, terrain types, etc.
 
 
@@ -491,19 +506,19 @@ Select a Swatch → Paint on the map canvas
 ## 8. Pro-Tips & Troubleshooting
 
 - **The Swatches panel is empty after creating my map.**
-  This means CAIME could not find any entries for your map in the Assembly Kit database. Open Dave and confirm that your map name in the `campaign_map` column of `campaign_map_regions` exactly matches what you typed in the CAIME dialog (case-sensitive). Then reload the map with **File → Reload** (Ctrl+R).
+  Either the database hasn't been read yet, or it has no rows for your map. Check that your mod is set under **Settings → RPFM Workflow**, that you saved the pack in RPFM, and that the `campaign_map` column of your `campaign_map_regions` rows exactly matches what you typed in the CAIME dialog (case-sensitive). Then reload the map with **File → Reload** (Ctrl+R).
 
-- **Processing stays greyed out after opening the new map.**
-  The database is read in the background after the map opens, so give it a moment. If it stays greyed out, the log says why — usually one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both, then reload the map with **File → Reload** (Ctrl+R).
+- **Processing stays greyed out, or the map can't be saved, after opening the new map.**
+  The database is read in the background after the map opens, so give it a moment. If it stays unavailable, the log says why — usually one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both, then reload the map with **File → Reload** (Ctrl+R).
 
 - **I typed an odd number for the map width and got an error.**
   Map widths must be even numbers (e.g., 512, 1016, 1024). This is a technical requirement of the hex grid layout. Simply increase or decrease your width by 1 to make it even.
 
-- **CAIME says my Pharaoh map's region indices don't match, and processing stays unavailable.**
-  The `index` values in `campaign_map_regions` in Dave no longer match the order stored in the `map.hex` binary file. Open Dave, correct the `index` values so that land regions are numbered first and sea regions follow, with no gaps, then reload the map in CAIME. If you are unsure what order the binary file expects, restore your last working `map.hex` from the auto-backup folder (`Projects\YourMapName\`) and compare.
+- **CAIME says my Pharaoh Dynasties map's region indices don't match, and saving and processing stay unavailable.**
+  The `index` values in your mod's `campaign_map_regions` no longer match the order stored in the `map.hex` binary file. In RPFM, correct the `index` values so that land regions are numbered first and sea regions follow, with no gaps, then reload the map in CAIME. If you are unsure what order the binary file expects, restore your last working `map.hex` from the auto-backup folder (`Projects\YourMapName\`) and compare.
 
 - **I added or removed regions — how do I make CAIME reflect the change?**
-  Always make region changes in Dave first: add or remove the rows in `regions` and `campaign_map_regions`, then switch to CAIME and reload the map with **File → Reload** (Ctrl+R). CAIME reads the database on load and will pick up whatever is currently in Dave. It never writes back to the database, so changes made only inside CAIME's interface will be lost on the next reload.
+  Always make region changes in your mod first: add or remove the rows in `regions` and `campaign_map_regions` in RPFM, save the pack, then switch to CAIME and reload the map with **File → Reload** (Ctrl+R). CAIME reads the database on load and will pick up whatever is in the saved pack. It never writes to the database, so changes made only inside CAIME's interface will be lost on the next reload.
 
 - **I see a warning about exceeding 731,520 hexes.**
   This is a performance advisory, not a hard limit. If your map is very large you may notice slower painting and longer processing times. For most custom campaigns, the default 1016 × 720 canvas is more than enough.

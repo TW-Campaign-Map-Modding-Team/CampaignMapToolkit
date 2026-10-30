@@ -2,7 +2,7 @@
 
 ## Overview
 
-Processing is the step that turns your painted hex map into the actual binary files that Total War games read at runtime. Think of it like a film developing process — you spend time painting and crafting your map in CAIME, then "develop" it into the final formats the game engine can use. Each process type reads specific painted layers from your map and outputs a different game file. Before any processing can happen, CAIME needs to know where your game's Assembly Kit is installed, because it reads game data directly from that folder.
+Processing is the step that turns your painted hex map into the actual binary files that Total War games read at runtime. Think of it like a film developing process — you spend time painting and crafting your map in CAIME, then "develop" it into the final formats the game engine can use. Each process type reads specific painted layers from your map and outputs a different game file. Before any processing can happen, CAIME needs the RPFM path, because it reads the game's database through RPFM, and an Output folder to write to.
 
 Supported games: **Rome 2, Attila, Thrones of Britannia, Warhammer, Warhammer 2, Warhammer 3, Three Kingdoms, Troy, Pharaoh, Pharaoh Dynasties**.
 
@@ -12,10 +12,9 @@ Supported games: **Rome 2, Attila, Thrones of Britannia, Warhammer, Warhammer 2,
 
 ## Table of Contents
 
-- [Part 1 — First-Time Setup: Connecting to Your Game's Assembly Kit](#part-1--first-time-setup-connecting-to-your-games-assembly-kit)
-  - [What Is the Assembly Kit and Why Does CAIME Need It?](#what-is-the-assembly-kit-and-why-does-caime-need-it)
-  - [How to Set the Assembly Kit Path](#how-to-set-the-assembly-kit-path)
-  - [What CAIME Reads from the Assembly Kit](#what-caime-reads-from-the-assembly-kit)
+- [Part 1 — First-Time Setup: RPFM and the Output Folder](#part-1--first-time-setup-rpfm-and-the-output-folder)
+  - [What CAIME Needs, and Why](#what-caime-needs-and-why)
+  - [What CAIME Reads from the Database](#what-caime-reads-from-the-database)
 - [Part 2 — The Process Menu: Generating Game Files](#part-2--the-process-menu-generating-game-files)
   - [Map Data](#21-map-data)
   - [Pathfinding Data](#22-pathfinding-data)
@@ -44,13 +43,16 @@ Supported games: **Rome 2, Attila, Thrones of Britannia, Warhammer, Warhammer 2,
 
 ---
 
-## Part 1 — First-Time Setup: Connecting to Your Game's Assembly Kit
+## Part 1 — First-Time Setup: RPFM and the Output Folder
 
-### What Is the Assembly Kit and Why Does CAIME Need It?
+### What CAIME Needs, and Why
 
-The **Assembly Kit** (also called the Assembly Kit or "AKit") is Creative Assembly's official modding tool that ships with each Total War game on Steam. CAIME only uses it as the default place processed files go: its `working_data\campaign_maps\{your map name}\` folder, unless you set an **Output folder** in **Settings > Preferences**.
+Processing needs two things, both set once in **Settings > Preferences** (see [Settings & Preferences](user-guide-settings-and-preferences.md#3-database-rpfm-and-output-folder)):
 
-The game's definition tables — every region name, every ground type, every climate zone, every road type, and more — are read through RPFM from the game's packs and your mod every time you open a project. This is how CAIME knows things like:
+- **The RPFM path.** The game's definition tables — every region name, every ground type, every climate zone, every road type, and more — are read through RPFM from the game's packs and your mod every time you open a project.
+- **The Output folder.** Processed files go to `campaign_maps\{your map name}\` inside it, laid out as in a pack, so it can be your mod's own folder.
+
+The database is how CAIME knows things like:
 
 - Which region names are valid for your campaign map
 - What movement costs each ground type has
@@ -59,65 +61,9 @@ The game's definition tables — every region name, every ground type, every cli
 
 > **Think of it this way:** the game's database is its rulebook. CAIME is the referee who checks your painted map against that rulebook before allowing you to export anything.
 
-The map opens before its database has been read, so you can start editing at once; **Map Data**, **Pathfinding data** and **Lookup and Minimap images** stay greyed out until the log says the database has been read. Without an RPFM path, a project opens with no database, and those steps stay unavailable. Without an output folder or an Assembly Kit path, nothing can be processed.
+The map opens before its database has been read, so you can start editing at once. Until the log says the database has been read, the map can't be saved, and **Map Data**, **Pathfinding data** and **Lookup and Minimap images** stay greyed out. Without an RPFM path, a project opens with no database, and stays unsaveable with those steps unavailable.
 
----
-
-### How to Set the Assembly Kit Path
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Menu Bar                                               │
-│  [ File ]  [ Edit ]  [ Process ]  [ Tools ]  [Settings]│
-│                                                     ↑   │
-│                                              Click here │
-└─────────────────────────────────────────────────────────┘
-         ↓
-┌─────────────────────────┐
-│  Settings               │
-│  ┌─────────────────┐    │
-│  │   Preferences   │ ←  │ Click this
-│  └─────────────────┘    │
-└─────────────────────────┘
-```
-
-1. Go to **Settings** in the top menu bar and click **Preferences**.
-
-2. The **Preferences** window will open. It contains several sections:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│  Preferences                                                                                                                │
-│  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
-│  Hex spacing:          [────●──────────────────────]                                                                        │
-│  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
-│  Base game:            [ Attila                    ▼]                                                                       │
-│  Assembly kit path:    [C:\Program Files (x86)\Steam\SteamLibrary\steamapps\common\Total War Attila\assembly_kit] [Browse]  │
-│  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
-│  Log to file:          (●) Enabled    ( ) Disabled                                                                          │
-│  Auto-save:            (●) Enabled    ( ) Disabled                                                                          │
-│  Auto-backup:          (●) Enabled    ( ) Disabled                                                                          │
-│  Map data config                                                                                                             │
-│  auto-patch:           (●) Enabled    ( ) Disabled                                                                          │
-│  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────  │
-│                                  [ Save ]  [ Cancel ]                                                                       │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-3. In the **Base game** dropdown, **select the game you are modding**. The path you set applies to the currently selected game — each game stores its own separate path.
-
-4. In the **Assembly kit path** field, either type the path directly or click **Browse** to open a folder picker. Navigate to and select the root folder of your Assembly Kit installation for that game.
-
-   > **The correct folder** is the one that contains subfolders named `binaries`, `raw_data`, and `working_data`. For example:
-   > ```
-   > C:\Program Files (x86)\Steam\SteamLibrary\steamapps\common\Total War Attila\assembly_kit
-   > ```
-
-5. Click **Save** to apply the change.
-
-6. Repeat steps 3–5 for **each game** you intend to mod. CAIME remembers a separate path per game.
-
-> **Tip:** Set an **Output folder** in **Settings > Preferences** to have processed files written there instead, as `campaign_maps\{your map name}\`; then the Assembly Kit path isn't needed.
+> **Assembly Kit:** CAIME doesn't need one. With no Output folder set, processed files go to the Assembly Kit's `working_data` folder instead, and **Assembly Kit Integration** builds Map Data and Dynamic Resources with the Assembly Kit's own builder. Both are legacy features; see [Annex: The Assembly Kit](user-guide-assembly-kit.md).
 
 ---
 
@@ -127,15 +73,16 @@ When you open a project, CAIME reads these tables through RPFM from the game's p
 
 | Table | What it provides to CAIME |
 |---|---|
-| `regions.xml` | The list of all region names and their map colours |
-| `campaign_map_regions.xml` | Which regions belong to your campaign map |
-| `campaign_ground_types.xml` | Ground type names and movement costs |
-| `climates.xml` | Climate zone definitions |
-| `campaign_map_attritions.xml` | Attrition effect definitions (terrain_land and terrain_sea only) |
-| `campaign_map_roads.xml` | Road types and movement cost thresholds |
-| `campaigns.xml` + `campaign_maps.xml` | Campaign structure (which campaign uses which map) |
-| `region_to_province_junctions.xml` | Which province each region belongs to |
-| `campaign_map_areas_of_interest.xml` | *(Three Kingdoms and Warhammer 3 only)* Areas of interest |
+| `regions` | The list of all region names and their map colours |
+| `campaign_map_regions` | Which regions belong to your campaign map |
+| `campaign_ground_types` | Ground type names and movement costs |
+| `climates` | Climate zone definitions |
+| `campaign_map_attritions` | Attrition effect definitions (terrain_land and terrain_sea only) |
+| `campaign_map_roads` | Road types and movement cost thresholds |
+| `campaigns` | Campaign structure (which campaign uses which map) |
+| `campaign_map_playable_areas` | Your map's playable area, which Map Data is built from |
+| `region_to_province_junctions` | Which province each region belongs to |
+| `campaign_map_areas_of_interest` | *(Three Kingdoms and Warhammer 3 only)* Areas of interest |
 
 > **The region order matters.** CAIME loads land regions first, then sea regions, in the order they appear in `regions`. Your painted region colours must correspond to the regions in that exact order. If you add or remove regions in your mod, you must reload your project so CAIME can re-synchronise.
 
@@ -167,7 +114,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.1 Map Data
 
-**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. CAIME writes the file itself, for each supported game the same way the game's Assembly Kit does. With **Assembly Kit Integration** enabled in **Settings > Preferences**, the Assembly Kit's own builder writes it instead (see the Settings and Preferences guide).
+**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. CAIME writes the file itself, for each supported game the same way the game's Assembly Kit does. *(Legacy: with **Assembly Kit Integration** enabled, the Assembly Kit's own builder writes it instead; see [Annex: The Assembly Kit](user-guide-assembly-kit.md#4-assembly-kit-integration).)*
 
 **Special requirements (read carefully!):**
 
@@ -275,7 +222,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.4 Dynamic Resources
 
-**What it does:** Generates the `dynamic_resources.esf` file: the farmland tiles that appear on the campaign map as a region's buildings level up. CAIME writes the file itself, or, with **Assembly Kit Integration** enabled, the Assembly Kit's own builder does.
+**What it does:** Generates the `dynamic_resources.esf` file: the farmland tiles that appear on the campaign map as a region's buildings level up. CAIME writes the file itself. *(Legacy: with **Assembly Kit Integration** enabled, the Assembly Kit's own builder does; see [Annex: The Assembly Kit](user-guide-assembly-kit.md#4-assembly-kit-integration).)*
 
 **Special requirements:** As for Map Data, save your project first: the file is built from the saved `map.hex`.
 
@@ -445,7 +392,7 @@ Access all validators from **Tools > Validate**:
 
 ### 3.5 Regions
 
-**What it checks:** That every hex has a region assigned, that the map's regions match the Assembly Kit database regions, and that no land region is split into disconnected blobs. It also warns if any sea region touches too many land regions (which can cause AI slowdowns).
+**What it checks:** That every hex has a region assigned, that the map's regions match the database's regions, and that no land region is split into disconnected blobs. It also warns if any sea region touches too many land regions (which can cause AI slowdowns).
 
 **How to use it:** Go to **Tools > Validate > Regions**.
 
@@ -453,7 +400,7 @@ Access all validators from **Tools > Validate**:
 
 | Message in Logger | What it means | How to fix it |
 |---|---|---|
-| *"There is a mismatch between database regions (count = X) and map.hex regions (count = Y)"* | The number of regions painted on your map does not match the number of regions defined in the Assembly Kit database. | Make sure your Assembly Kit database contains entries for exactly the same regions you have painted. Add or remove regions in both places until the counts match. |
+| *"There is a mismatch between database regions (count = X) and map.hex regions (count = Y)"* | The number of regions painted on your map does not match the number of regions the database gives your map. | Make sure your mod's or the game's `campaign_map_regions` has entries for exactly the same regions you have painted. Add or remove regions in both places until the counts match. |
 | *"Region names mismatch. DB region key was X. Map.hex region key was Y."* | A region at a specific index has a different name in the database versus the map. The order of regions must be identical between the two. | Re-check the order of regions in your `regions.xml` and `campaign_map_regions.xml` files. |
 | *"Hex has no region set"* | One or more hexes were left without a region assigned. Every single hex on the map must belong to a region. | Paint the region colour onto all unpainted hexes. |
 | *"is split into X disconnected areas. This may lead to startpos processing issues."* | A land region is painted in two or more separate island-like blobs that do not connect. | Repaint the region so it forms one continuous area, or use separate regions for each island. |
@@ -488,7 +435,7 @@ Access all validators from **Tools > Validate**:
 
 ### 3.7 Attritions
 
-**What it checks:** That the Attritions layer data is internally consistent with the definitions loaded from the Assembly Kit database.
+**What it checks:** That the Attritions layer data is internally consistent with the definitions loaded from the database.
 
 **How to use it:** Go to **Tools > Validate > Attritions**. Results appear in the Logger.
 
@@ -496,7 +443,7 @@ Access all validators from **Tools > Validate**:
 
 ### 3.8 Climates
 
-**What it checks:** That the Climates layer data is internally consistent with the climate definitions loaded from the Assembly Kit database.
+**What it checks:** That the Climates layer data is internally consistent with the climate definitions loaded from the database.
 
 **How to use it:** Go to **Tools > Validate > Climates**. Results appear in the Logger.
 
@@ -504,7 +451,7 @@ Access all validators from **Tools > Validate**:
 
 ### 3.9 Ground Types
 
-**What it checks:** That the Ground Types layer data is internally consistent with the ground type definitions loaded from the Assembly Kit database.
+**What it checks:** That the Ground Types layer data is internally consistent with the ground type definitions loaded from the database.
 
 **How to use it:** Go to **Tools > Validate > Ground types**. Results appear in the Logger.
 
@@ -662,7 +609,7 @@ These tools save visual representations of your map layers as image files. They 
 ```
 {output folder}\campaign_maps\{your map name}\
 ```
-or, with no output folder set in **Settings > Preferences**, to `{output folder}\campaign_maps\{your map name}\`.
+or, with no output folder set in **Settings > Preferences**, to `{Assembly Kit path}\working_data\campaign_maps\{your map name}\` (see [Annex: The Assembly Kit](user-guide-assembly-kit.md#3-output-fallback-working_data)).
 
 ---
 
