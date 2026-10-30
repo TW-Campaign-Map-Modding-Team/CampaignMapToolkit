@@ -7,26 +7,14 @@ using System.Xml.Linq;
 namespace CAIME.Rpfm
 {
     /// <summary>
-    /// Reads the database tables a project needs through rpfm_server, with RPFM's schema for each,
-    /// held in memory. For each required table it gathers every fragment of that table found anywhere - the
-    /// game's own packs and the project's mod with the mods it depends on - and merges them the same
-    /// way the game itself does: when two fragments define a row for the same primary key, the
-    /// fragment whose name sorts earlier wins; rows unique to any one fragment are all kept. When a mod
-    /// and the game share the exact same fragment name too (so fragment name breaks no tie), the mod
-    /// wins, since its fragments are read first.
+    /// Reads the database tables a project needs through rpfm_server (see <see cref="RpfmService"/>),
+    /// in one server session. Each table is merged from its fragments in the game's packs and in the
+    /// project's mod and the mods it depends on (see <see cref="DatabaseTableConverter.MergeFragments"/>);
+    /// a mod wins over the game when they share a fragment name.
     ///
-    /// RPFM's schema gives each table's fields. The one field CAIME needs that no pack carries,
-    /// "regions.is_sea", comes from the open map.
-    ///
-    /// Everything is read through rpfm_server (see <see cref="RpfmService"/>), one server session for
-    /// the length of <see cref="Prepare"/>. The game's own packs are found through the install folder
-    /// set in RPFM, so CAIME never needs to know which of them holds the tables - that has changed
-    /// between games and even within one game's lifetime. The mod is optional and named, not
-    /// located: RPFM finds it, and the mods it depends on, in the game's data folder or its Steam
-    /// Workshop folder. A project with none simply reads every table from the game, and a mod RPFM
-    /// cannot find or read is skipped with a warning rather than blocking the session - it's a
-    /// per-project convenience layered on top, not something that should be able to prevent a
-    /// project from opening.
+    /// RPFM finds the game's packs through its install folder, and the mod by name in the game's
+    /// data or Workshop folder. The mod is optional: a project with none reads the game alone, and
+    /// a mod RPFM can't find or read is skipped with a warning.
     /// </summary>
     public sealed class RpfmWorkflowSession
     {

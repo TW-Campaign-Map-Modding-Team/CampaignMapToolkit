@@ -128,37 +128,16 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Merges the records of several fragments of the same table into a single Assembly Kit
-        /// data XML document. A table can be split across multiple fragment files both within one pack
-        /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
-        /// the game itself combines them.
+        /// Merges every fragment of one table, from any pack, into one XML document, as the game does:
+        /// for rows with the same primary key the fragment whose name sorts first wins, and all other
+        /// rows are kept. Without a primary key the fragments are concatenated. Fragments with the
+        /// same name keep <paramref name="fragments"/>'s order, so callers put the winner first
+        /// (RpfmWorkflowSession puts mods before the game).
         ///
-        /// Fragments are processed in ascending fragment-name order, and when two fragments contain a
-        /// row for the same primary key, the one from the earlier-sorting fragment name wins - the
-        /// same rule the game uses to resolve conflicts between table fragments. This is why a plain
-        /// "data"/"data__" fragment (the vanilla default) loses to almost any distinctly-named mod
-        /// fragment sorting ahead of it. Rows with no primary-key counterpart in another fragment are
-        /// all kept. If the table has no primary key (<paramref name="primaryKeyColumns"/> is empty),
-        /// fragments are simply concatenated, since there is then no way to tell whether two rows refer
-        /// to the same record.
-        ///
-        /// The sort here is by fragment name only, never by which pack a fragment came from - two
-        /// fragments named identically but from different packs sort as ties, which a stable sort
-        /// resolves using <paramref name="fragments"/>'s incoming order. Callers are expected to place
-        /// the fragments that should win that case first (RpfmWorkflowSession puts mods before the
-        /// game), since fragment name is otherwise silent on which pack wins.
-        ///
-        /// A fragment only has the columns its table version was saved with, which can be older
-        /// than <paramref name="schemaFields"/>. A schema field missing from a row gets the field's
-        /// default rather than being left out, since CAIME's table loader expects every field, in the
-        /// schema's order.
-        ///
-        /// "is_sea", which no pack's table has, is sourced from <paramref name="regionIsSeaByKey"/>
-        /// when the row's key is in it: the open map is ground truth for which regions are sea. A row
-        /// whose key it does not recognise gets the field's default like any other.
-        ///
-        /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
-        /// row of every fragment is dropped before merging.
+        /// Every row gets every field of <paramref name="schemaFields"/>, in order: a field an older
+        /// fragment lacks gets its default, and "is_sea", which no pack has, comes from
+        /// <paramref name="regionIsSeaByKey"/>. <paramref name="rowFilter"/>, when given, drops rows
+        /// before merging.
         /// </summary>
         public static XDocument MergeFragments(
             IReadOnlyList<TableFragment> fragments,
