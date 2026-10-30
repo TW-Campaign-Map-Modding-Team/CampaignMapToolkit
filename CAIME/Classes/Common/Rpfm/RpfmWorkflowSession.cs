@@ -201,15 +201,17 @@ namespace CAIME.Rpfm
 
             foreach (var table in tables)
             {
-                var schema            = DatabaseTableConverter.SchemaFromRpfm(rpfm.GetTableDefinition(table), FieldsNoPackCarries(table));
+                var definition        = rpfm.GetTableDefinition(table);
+                var schema            = DatabaseTableConverter.SchemaFromRpfm(definition, FieldsNoPackCarries(table));
                 var booleanColumns    = DatabaseTableConverter.GetBooleanColumns(schema);
+                var colourColumns     = DatabaseTableConverter.GetColourColumns(definition);
                 var primaryKeyColumns = DatabaseTableConverter.GetPrimaryKeyColumns(schema);
 
                 // The fragment's own file name decides merge order when two sources define the same
                 // primary key - the same rule the game uses to combine table fragments across packs.
                 rowFilters.TryGetValue(table, out var rowFilter);
                 merged[table] = new RpfmTable(schema, DatabaseTableConverter.MergeFragments(
-                    fragmentsByTable[table], table, booleanColumns, primaryKeyColumns, schema.Fields, _regionIsSeaByKey, rowFilter));
+                    fragmentsByTable[table], table, booleanColumns, colourColumns, primaryKeyColumns, schema.Fields, _regionIsSeaByKey, rowFilter));
             }
 
             return merged;
