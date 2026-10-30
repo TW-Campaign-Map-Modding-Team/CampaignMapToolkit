@@ -27,8 +27,9 @@ python skills/esf-dump/esf_dump.py <a.esf> --compare <b.esf>
   bytes (leading `0x80`s) when their 1 MiB write buffer was flushed while it was open; see
   `EsfLibrary/Esf/EsfWriter.cs`.
 - The games list the string tables in the order of a hash map of the strings; ids are the order
-  of first use in the tree. Rome II's and Attila's order is known (`EsfLibrary/Esf/CaHashMapOrder.cs`,
-  `CaStringHash.cs`); the 64-bit games' is not. Compare string tables as id -> string maps.
+  of first use in the tree. Every game's order is known (`EsfLibrary/Esf/CaHashMap.cs`,
+  `CaStringHash.cs`, and FileFormatDefinitions/esf.md), so a writer's string tables should match
+  byte for byte.
 - Python's numpy `float32` reproduces the games' float arithmetic when every step is cast, which
   is how the map_data.esf geometry in `CAIME/Classes/Exporters/MapData/MapDataGeometry.cs` was
   matched.

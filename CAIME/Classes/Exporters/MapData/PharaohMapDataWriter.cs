@@ -20,20 +20,20 @@ namespace CAIME.Exporters
 
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            return Write(map, theatre, timestamp, NO_MASKS, MapDataRadiusRounding.TwoThirdsPerColumn);
+            return Write(map, theatre, timestamp, NO_MASKS, MapDataRadiusRounding.TwoThirdsPerColumn, CaHashMap.Murmur);
         }
 
         /// <summary>
         /// Writes the regions once for each of <paramref name="maskNames"/>: the UI's region list
         /// repeats, and each mask gets its own MASKED_REGIONS_DATA entry (Warhammer).
         /// </summary>
-        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, IReadOnlyList<string> maskNames, MapDataRadiusRounding rounding)
+        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, IReadOnlyList<string> maskNames, MapDataRadiusRounding rounding, CaHashMap stringTable)
         {
             var model       = new MapDataModel(map, theatre, rounding);
             var settlements = MapDataSlotSettlement.FindAll(model);
             MapDataSlotPositions.PlacePharaoh(model, settlements);
 
-            var esf = new EsfWriter(EsfFormat.Abca);
+            var esf = new EsfWriter(EsfFormat.Abca, stringTable);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
 
             esf.BeginRecord("MAP_FILE_DATA_VERSION", 0);

@@ -13,7 +13,7 @@ namespace CAIME.Tests.Unit
     /// The template's map.hex is older than the one the game's file was built from: CA has since
     /// painted attrition on about 45,000 hexes. Each hex's attrition byte is left out of the
     /// comparison; everything else must match. With the game's attrition put back in, the
-    /// writer's output is byte for byte the game's apart from the order of the string table.
+    /// writer's output is byte for byte the game's.
     /// </para>
     /// </summary>
     [TestClass]

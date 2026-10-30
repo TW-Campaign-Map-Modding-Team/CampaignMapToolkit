@@ -46,5 +46,6 @@ Read from Rome II's and Attila's `ToolDataBuilderDll.AssemblyKit.dll`.
 - **Order.** Regions, and each region's levels, are CA_STD hash maps (the one in
   [esf.md](esf.md#string-tables)) filled in walking order, and written in the maps' order. A
   region hashes as its u16 xored with `0x4A545EED`. A level hashes as its superchain followed by
-  its level in decimal, through the game's string hash. Later games are taken to hash as Attila
-  does; none of their shipped files has a region to check that against.
+  its level in decimal, through the game's string hash. Each game uses its string tables' map;
+  for the games after Attila that is read from Warhammer III's builder, since none of their
+  shipped files has a region to check it against.
