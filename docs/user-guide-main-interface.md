@@ -189,7 +189,7 @@ After a validation run, a pop-up will tell you either:
 
 | Menu Item | Shortcut | What It Does |
 |-----------|----------|--------------|
-| **Preferences** | Ctrl+P | Opens the *Preferences* window where you can set your hex spacing, base game, Assembly Kit path, RPFM path and output folder |
+| **Preferences** | Ctrl+P | Opens the *Preferences* window where you can set your RPFM path, output folder, hex spacing and other options (see [Settings & Preferences](user-guide-settings-and-preferences.md)) |
 
 ---
 
@@ -526,7 +526,7 @@ The **Status Bar** is the thin ribbon running along the very bottom of the appli
 
 - **If you accidentally paint over an area**, immediately press **Ctrl+Z** to undo. CAIME supports multiple undo steps, so you can press **Ctrl+Z** several times in a row to step back through your recent painting history.
 
-- **If the "Save" option is greyed out** or doesn't seem to respond, check that you have an open project — use **File > Open** (Ctrl+O) to open a `.hex` file first. Similarly, if a message appears saying *"Missing Assembly Kit path"*, go to **Settings > Preferences** (Ctrl+P) and set the correct path to your game's Assembly Kit installation folder.
+- **If the "Save" option is greyed out** or doesn't seem to respond, check that you have an open project — use **File > Open** (Ctrl+O) to open a `.hex` file first. A map also can't be saved until its database has been read through RPFM: if a message says so, wait for the log to say the database has been read, or, if it couldn't be read, fix what the log reports (often the **RPFM path** in **Settings > Preferences**, Ctrl+P) and reopen the project.
 
 - **If the map canvas feels slow or laggy**, check the **FPS counter** in the Status Bar. Try hiding some layers (uncheck their visibility checkbox in the Layers panel) to reduce the number of things being drawn at once. You can re-enable them at any time — hiding a layer does not delete any painted data.
 

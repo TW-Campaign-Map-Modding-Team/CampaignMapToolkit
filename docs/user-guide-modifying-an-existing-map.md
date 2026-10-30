@@ -4,7 +4,7 @@
 
 ## Overview
 
-Modifying an existing campaign map in CAIME is like editing a layer-based painting in a professional image editor. Some changes are purely about what you paint on the canvas — CAIME updates the map file and you re-process the outputs. Other changes also require you to update the **database** (your Assembly Kit's data tables edited in Dave), because the game engine and the startpos tool need the database to accurately reflect what is on the map.
+Modifying an existing campaign map in CAIME is like editing a layer-based painting in a professional image editor. Some changes are purely about what you paint on the canvas — CAIME updates the map file and you re-process the outputs. Other changes also require you to update the **database** (the data tables in your mod's pack, edited in RPFM), because the game engine and the startpos tool need the database to accurately reflect what is on the map.
 
 This guide explains every type of modification, tells you exactly which database tables need to change, and specifies which processing steps to run afterward — including all game-specific differences you need to be aware of.
 
@@ -68,7 +68,7 @@ Every modification you make falls into one of two categories:
 ┌─────────────────────────────────────────────────────────────────────┐
 │     CATEGORY B — Create, rename, or remove a swatch type            │
 │                                                                      │
-│  Update Dave (database) ↔ Use the Actions panel in CAIME →          │
+│  Update your mod (database) ↔ Use the Actions panel in CAIME →      │
 │  Save → Re-process outputs → Done                                    │
 │                                                                      │
 │  The rule: if a layer shows Create / Rename / Remove buttons in     │
@@ -81,6 +81,8 @@ Every modification you make falls into one of two categories:
 ```
 
 > **The golden rule:** CAIME reads the database when you open or reload a map. It never writes to the database automatically. If your database and your painted map get out of sync, the validators will flag the errors — and the startpos tool will likely fail.
+
+> **Making database changes.** CAIME reads the database through RPFM: the game's own packs, with your mod's rows merged over them. So every database change in this guide is made in your mod's pack, in RPFM: add the table to the pack if it isn't there yet, add or change the rows, and save the pack. CAIME reads the saved pack the next time the map is opened or reloaded (**File → Reload**, Ctrl+R). If your project doesn't have the mod set yet, set it under **Settings → RPFM Workflow**. *(If you use Dave instead, see [Annex: The Assembly Kit](user-guide-assembly-kit.md#5-dave-and-the-assembly-kits-database).)*
 
 ---
 
@@ -136,7 +138,7 @@ Every modification you make falls into one of two categories:
 
 **To add a new terrain type:**
 
-1. In Dave, add a new row to `campaign_ground_types`:
+1. In your mod, add a new row to `campaign_ground_types`:
 
 | Field | What to enter |
 |---|---|
@@ -144,15 +146,15 @@ Every modification you make falls into one of two categories:
 | `is_sea` | `0` for land terrain, `1` for sea terrain |
 | `movement_cost` | The movement cost for armies crossing this terrain |
 
-2. Save in Dave.
-3. In CAIME, with the **Ground Types** layer active, click **Create** in the **Actions** panel and type the same name you used in Dave.
+2. Save the pack in RPFM.
+3. In CAIME, with the **Ground Types** layer active, click **Create** in the **Actions** panel and type the same name you used in your mod.
 4. The new swatch appears — paint it onto the relevant hexes.
 5. Save (**Ctrl+S**) and re-process **Process → Pathfinding data** and **Process → Map Data**.
 
 **To rename a terrain type:**
 
-1. Rename the row in `campaign_ground_types` in Dave (change the `type` field).
-2. Save in Dave, then reload the map in CAIME (**File → Reload**, Ctrl+R).
+1. Rename the row in `campaign_ground_types` in your mod (change the `type` field).
+2. Save the pack in RPFM, then reload the map in CAIME (**File → Reload**, Ctrl+R).
 3. With the **Ground Types** layer active, select the swatch in the **Swatches** panel, then click **Rename** in the **Actions** panel and enter the new name.
 4. Save and re-process.
 
@@ -160,7 +162,7 @@ Every modification you make falls into one of two categories:
 
 1. Make sure no hexes are still painted with that terrain type (use the swatch's colour to identify them, then repaint them with an alternative swatch).
 2. In CAIME, select the swatch and click **Remove** in the **Actions** panel. Alternatively, click **Cleanup** to automatically remove all swatches that are not used by any hex.
-3. Remove the corresponding row from `campaign_ground_types` in Dave.
+3. Remove the corresponding row from `campaign_ground_types` in your mod.
 4. Save and re-process.
 
 ---
@@ -173,13 +175,13 @@ Every modification you make falls into one of two categories:
 
 **To add a new climate:**
 
-1. In Dave, add a new row to `climates`:
+1. In your mod, add a new row to `climates`:
 
 | Field | What to enter |
 |---|---|
 | `climate_type` | A unique internal name for the climate (e.g., `my_mod_climate_volcanic`) |
 
-2. Save in Dave.
+2. Save the pack in RPFM.
 3. In CAIME, with the **Climates** layer active, click **Create** in the **Actions** panel and enter the matching name.
 4. Paint the new climate swatch onto the relevant hexes.
 5. Save (**Ctrl+S**) and re-process **Process → Map Data**.
@@ -196,14 +198,14 @@ Every modification you make falls into one of two categories:
 
 **To add a new attrition type:**
 
-1. In Dave, add a new row to `campaign_map_attritions`:
+1. In your mod, add a new row to `campaign_map_attritions`:
 
 | Field | What to enter |
 |---|---|
 | `key` | A unique internal name for the attrition (e.g., `my_mod_attrition_lava`) |
 | `type` | Must be `terrain_land` or `terrain_sea` for CAIME to load it |
 
-2. Save in Dave, then reload the map in CAIME (**File → Reload**, Ctrl+R).
+2. Save the pack in RPFM, then reload the map in CAIME (**File → Reload**, Ctrl+R).
 3. With the **Attritions** layer active, click **Create** in the **Actions** panel and enter the matching key name.
 4. Paint the attrition onto the relevant hexes.
 5. Save (**Ctrl+S**) and re-process **Process → Map Data**.
@@ -252,7 +254,7 @@ Every modification you make falls into one of two categories:
 
 Adding a region is a Category B change — you must update the database **first**, then paint in CAIME.
 
-**Steps in Dave (the Assembly Kit database editor):**
+**Steps in RPFM, in your mod's pack:**
 
 **1. Add the region definition to `regions`:**
 
@@ -269,7 +271,7 @@ Adding a region is a Category B change — you must update the database **first*
 | `campaign_map` | Your map's exact internal name |
 | `region` | The `key` you just added in `regions` |
 
-> **Pharaoh only:** This table also has an `index` field. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties) for the extra steps required.
+> **Pharaoh Dynasties only:** CAIME also reads this table's `index` field. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties) for the extra steps required.
 
 **3. Add a province link in `region_to_province_junctions`:**
 
@@ -278,11 +280,11 @@ Adding a region is a Category B change — you must update the database **first*
 | `region` | The `key` of your new region |
 | `province` | The internal name of the province this region belongs to |
 
-If you are creating a brand-new province at the same time, you may also need to add it to the `provinces` table (check your game's schema in Dave).
+If you are creating a brand-new province at the same time, you may also need to add it to the `provinces` table (check your game's schema in RPFM).
 
 **Steps in CAIME:**
 
-4. Save all changes in Dave.
+4. Save the pack in RPFM.
 5. In CAIME, reload the map: **File → Reload** (Ctrl+R). The new region swatch will now appear in the **Swatches** panel under the **Regions** layer.
 6. Select the **Regions** layer and paint your new region onto the map.
 7. Also paint **Town Sprawl** and at least one **Town Slot** within the new region (unless it is intentionally a wasteland with no settlement).
@@ -294,7 +296,7 @@ If you are creating a brand-new province at the same time, you may also need to 
 
 ### Removing a Region
 
-Removing a region is a Category B change. You must repaint all the hexes that previously belonged to the deleted region **before** removing it from Dave, so that no hex is left without a region.
+Removing a region is a Category B change. You must repaint all the hexes that previously belonged to the deleted region **before** removing it from the database, so that no hex is left without a region.
 
 **Steps in CAIME (first):**
 
@@ -304,13 +306,13 @@ Removing a region is a Category B change. You must repaint all the hexes that pr
 4. Run **Tools → Validate → Regions** to confirm no unassigned hexes remain.
 5. Save (**Ctrl+S**).
 
-**Steps in Dave (second):**
+**Steps in RPFM, in your mod's pack (second):**
 
 6. In `campaign_map_regions`, delete the row where `campaign_map` = your map name and `region` = the region you are removing.
 7. In `region_to_province_junctions`, delete any rows where `region` = the deleted region's key.
 8. In `regions`, delete the row with the matching `key` — **only** if this region is not used by any other map. If it is shared with other campaign maps, leave it there.
 
-> **Pharaoh only:** After removing a region, you must renumber the remaining `index` values in `campaign_map_regions` so they are sequential with no gaps. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties).
+> **Pharaoh Dynasties only:** After removing a region, you must renumber the remaining `index` values in `campaign_map_regions` so they are sequential with no gaps. See [Pharaoh & Pharaoh Dynasties](#pharaoh--pharaoh-dynasties).
 
 9. Reload the map in CAIME (**File → Reload**).
 10. Re-process all outputs.
@@ -321,7 +323,7 @@ Removing a region is a Category B change. You must repaint all the hexes that pr
 
 Renaming a region means changing its internal `key`. This is a pure database operation — the painted hexes do not need to change, but every table that references the old name must be updated.
 
-**Steps in Dave:**
+**Steps in RPFM, in your mod's pack:**
 
 1. In `regions`, change the `key` field of the region to the new name.
 2. In `campaign_map_regions`, update the `region` field for all rows that referenced the old name.
@@ -388,7 +390,7 @@ Road hexes are painted in CAIME. The road **cost values** (how much movement roa
 
 **If you need to add a new road cost entry:**
 
-- In Dave, add a row to `campaign_map_roads` with the campaign name, a unique key, a threshold value, and a movement cost.
+- In your mod, add a row to `campaign_map_roads` with the campaign name, a unique key, a threshold value, and a movement cost.
 
 ---
 
@@ -443,19 +445,19 @@ Areas of Interest are special named locations on the map (landmarks, resource si
 
 **To add a new Area of Interest:**
 
-1. In Dave, add a new row to `campaign_map_areas_of_interest`:
+1. In your mod, add a new row to `campaign_map_areas_of_interest`:
 
 | Field | What to enter |
 |---|---|
 | `campaign_map` | Your map's exact internal name |
 | `key` | A unique name for this area of interest |
 
-2. Save in Dave, then reload the map in CAIME (**File → Reload**, Ctrl+R).
+2. Save the pack in RPFM, then reload the map in CAIME (**File → Reload**, Ctrl+R).
 3. With the **Areas of Interest** layer active, click **Create** in the **Actions** panel and enter the matching key name.
 4. Paint the area of interest onto the appropriate hex.
 5. Save (**Ctrl+S**) and re-process **Process → Map Data**.
 
-**To rename or remove an Area of Interest:** Update the `key` in `campaign_map_areas_of_interest` in Dave first, reload in CAIME, then use the **Rename** or **Remove** button in the **Actions** panel.
+**To rename or remove an Area of Interest:** Update the `key` in `campaign_map_areas_of_interest` in your mod first, reload in CAIME, then use the **Rename** or **Remove** button in the **Actions** panel.
 
 ---
 
@@ -483,7 +485,7 @@ You can grow or shrink the map canvas using **Edit → Resize** (Ctrl+Shift+R). 
 5. Paint all newly exposed hexes — they must have at least a region and a ground type assigned.
 6. Save (**Ctrl+S**) and re-process all outputs.
 
-> If you also need to update the `campaign_map_playable_areas` table in Dave (which defines the camera-visible and playable region boundaries), do so before re-processing Map Data.
+> If you also need to update your map's row in `campaign_map_playable_areas` (which defines the camera-visible and playable region boundaries), do so in your mod and reload the map before re-processing Map Data: CAIME builds `map_data.esf` from that row's `index` and `maxx`.
 
 ---
 
@@ -526,8 +528,7 @@ After painting and saving your changes, you need to tell CAIME to re-generate th
 │  (Rome 2, Attila, Thrones, Three Kingdoms only)                     │
 │                                                                     │
 │  Process → Map Data              ← After any map change            │
-│  ⚠ The map file must be saved to:                                  │
-│    [AKit]\raw_data\EmpireDesignData\campaign_maps\[MapName]\        │
+│  ⚠ Built from the saved map.hex: save first                        │
 │                                                                     │
 │  Process → Dynamic resources     ← Only if resource placement      │
 │                                    was modified externally          │
@@ -539,25 +540,20 @@ After painting and saving your changes, you need to tell CAIME to re-generate th
 
 **Where the output files land:**
 
-All processed files are written to your Assembly Kit's working data folder:
+All processed files are written to `campaign_maps\[YourMapName]\` in your **Output folder** (set in **Settings > Preferences**):
 ```
-[Assembly Kit]\
-└── working_data\
-    └── campaign_maps\
-        └── [YourMapName]\
-            ├── display\
-            │   └── borders\
-            │       └── borders.pbd          (Borders data)
-            ├── pathfinding.ppd               (Pathfinding data)
-            ├── trade_routes.ptd              (Trade Routes, where applicable)
-            └── map_data.esf                  (Map Data)
+[Output folder]\
+└── campaign_maps\
+    └── [YourMapName]\
+        ├── display\
+        │   └── borders\
+        │       └── borders.pbd          (Borders data)
+        ├── pathfinding.ppd               (Pathfinding data)
+        ├── trade_routes.ptd              (Trade Routes, where applicable)
+        └── map_data.esf                  (Map Data)
 ```
 
-> **Map Data requires the project to be in the correct location.** For **Process → Map Data** to work, your `map.hex` file must be saved directly inside the Assembly Kit at:
-> ```
-> [AKit]\raw_data\EmpireDesignData\campaign_maps\[YourMapName]\map.hex
-> ```
-> If your project is stored somewhere else (e.g., in the CAIME `Projects` folder), use **File → Save as...** (Ctrl+Shift+S) to save a copy to the Assembly Kit location, then re-open it from there before processing Map Data.
+> **Map Data and Dynamic Resources are built from the saved `map.hex`**, so save before running them; CAIME refuses while there are unsaved changes. The project can be saved anywhere.
 
 ---
 
@@ -736,7 +732,7 @@ To view validator output, open the Logger panel with **Tools → Show Logger** (
 
 ### Pharaoh & Pharaoh Dynasties
 
-> Pharaoh Dynasties uses the same map format as base Pharaoh and behaves identically in CAIME. Select whichever matches your map in the game dropdown — **Pharaoh** or **Pharaoh Dynasties**.
+> Select whichever matches your map in the game dropdown — **Pharaoh** or **Pharaoh Dynasties**. They differ only in how the map file stores regions (see below).
 
 | What is different | Detail |
 |---|---|
@@ -745,19 +741,19 @@ To view validator output, open the Logger panel with **Tools → Show Logger** (
 | **Restrictions layer** | Available |
 | **Areas of Interest** | Not available |
 | **Town slot size** | Smaller or non-uniform slots are allowed |
-| **Pharaoh region index** | **Yes — extra steps required for every region change** |
+| **Pharaoh region index** | **Pharaoh Dynasties only — extra steps required for every region change** |
 
-**The Pharaoh region index system:**
+**The Pharaoh Dynasties region index system:**
 
-Pharaoh stores all regions (land and sea together) in a single combined list sorted by an `index` number. This index is stored in the `campaign_map_regions` table in Dave and must be kept in sync with the binary map file.
+Pharaoh Dynasties stores all regions (land and sea together) in a single combined list sorted by an `index` number. This index is stored in the `campaign_map_regions` table, which CAIME reads through RPFM, and must be kept in sync with the binary map file. Vanilla Pharaoh maps store land and sea regions separately, like every other game, and don't need these steps.
 
-Every time you **add, remove, or reorder** regions for a Pharaoh map, you must:
+Every time you **add, remove, or reorder** regions for a Pharaoh Dynasties map, you must:
 
-1. Update the `index` values in `campaign_map_regions` in Dave.
+1. Update the `index` values in `campaign_map_regions` in your mod.
 2. The convention is: **land regions first (1, 2, 3…), then sea regions**, all numbered sequentially with no gaps.
-3. Reload the map in CAIME after updating the indices. CAIME reads these on load and will refuse to open the map if the indices do not match the binary file.
+3. Reload the map in CAIME after updating the indices. CAIME checks them on load: if they don't match the binary file, the map opens, but its database isn't loaded, so it can't be saved or processed.
 
-**Example — adding a new land region to an existing Pharaoh map:**
+**Example — adding a new land region to an existing Pharaoh Dynasties map:**
 
 ```
 Before adding:                          After adding "region_sinai" (land):
@@ -774,7 +770,7 @@ region_medsea sea      5                region_coast     sea      5   ← update
 
 The sea region indices must shift up to make room for the new land region. Every `index` value must be updated, not just the new one.
 
-> **CAIME does not write back to Dave.** You must make all index corrections manually in Dave, then reload the map. If you open a Pharaoh map and CAIME reports a region index mismatch, your `index` values in Dave do not match the binary map file — correct them in Dave and retry.
+> **CAIME never writes to the database.** You must make all index corrections manually in your mod, then reload the map. If CAIME reports a region index mismatch, the `index` values in your mod don't match the binary map file — correct them and reload.
 
 ---
 
@@ -790,7 +786,7 @@ The sea region indices must shift up to make room for the new land region. Every
             │
             ▼ (Category B changes only)
 ┌─────────────────────────────────────────────────────────────────────┐
-│  STEP 2: Update the database in Dave                                │
+│  STEP 2: Update the database in your mod (RPFM)                     │
 │  ─────────────────────────────────────────────────────────────────  │
 │  Add/remove/rename rows in:                                         │
 │  ├── regions                                                         │
@@ -798,8 +794,8 @@ The sea region indices must shift up to make room for the new land region. Every
 │  ├── region_to_province_junctions                                    │
 │  └── campaign_map_areas_of_interest (3K / WH3 only)                 │
 │                                                                      │
-│  Pharaoh: also update index values in campaign_map_regions          │
-│  Save all changes in Dave.                                           │
+│  Pharaoh Dynasties: also update index values in                     │
+│  campaign_map_regions. Save the pack in RPFM.                        │
 └─────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -834,8 +830,7 @@ The sea region indices must shift up to make room for the new land region. Every
 │  STEP 6: Save                                                       │
 │  ─────────────────────────────────────────────────────────────────  │
 │  File → Save (Ctrl+S)                                               │
-│  If processing Map Data: also save to the Assembly Kit location     │
-│  using File → Save as... (Ctrl+Shift+S)                             │
+│  Map Data and Dynamic Resources are built from the saved map.hex    │
 └─────────────────────────────────────────────────────────────────────┘
             │
             ▼
@@ -863,16 +858,16 @@ The sea region indices must shift up to make room for the new land region. Every
 ## 8. Pro-Tips & Troubleshooting
 
 - **"The Regions validator reports a count mismatch between the database and the map."**
-  This means the number of regions in your database (in Dave) and the number painted in the map file do not match. Open Dave and count the rows in `campaign_map_regions` that belong to your map. Compare that count to how many distinct region swatches are painted on the map. Add or remove database rows accordingly, save in Dave, then use **File → Reload** (Ctrl+R) in CAIME.
+  This means the number of regions in your database and the number painted in the map file do not match. Count the rows in `campaign_map_regions` that belong to your map, in your mod and the game's packs. Compare that count to how many distinct region swatches are painted on the map. Add or remove rows in your mod accordingly, save the pack in RPFM, then use **File → Reload** (Ctrl+R) in CAIME.
 
 - **"A region appears in the Swatches panel but its hexes are never painted on the map."**
-  The Regions validator will flag this region as having zero hexes assigned and warn that it may cause startpos processing issues. Either paint some hexes with that region's swatch, or remove it from `campaign_map_regions` in Dave if the region should not be part of this map.
+  The Regions validator will flag this region as having zero hexes assigned and warn that it may cause startpos processing issues. Either paint some hexes with that region's swatch, or remove it from `campaign_map_regions` in your mod if the region should not be part of this map.
 
 - **"I moved a land region's boundary and now the Regions validator says it is split into disconnected areas."**
   A land region whose hexes form two isolated blobs (e.g., an island and a mainland both belonging to the same region) is a known startpos bug. Sea regions can legitimately be split (e.g., a sea region that wraps around a peninsula), but land regions should be contiguous. Repaint one of the isolated blobs to belong to a different region.
 
-- **"My Pharaoh map opens fine, but after I added a region the map won't open anymore."**
-  CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If the index values are out of sync, the load is rejected. Open Dave, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save, and try opening the map again. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.
+- **"My Pharaoh Dynasties map worked fine, but after I added a region it can't be saved or processed."**
+  CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If they are out of sync, the database isn't loaded, so the map can't be saved or processed. In your mod, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save the pack, and reload the map. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.
 
 - **"A sea region is adjacent to more than 9 land regions and the Regions validator is flagging it."**
   This is a soft limit for AI pathfinding performance — a sea region touching more than 9 land regions causes a significant slowdown in the game's AI calculations **when the campaign features horde factions**. Split the sea region into two smaller sea regions. The validator treats more than 5 adjacencies as an informational note and more than 9 as an error.

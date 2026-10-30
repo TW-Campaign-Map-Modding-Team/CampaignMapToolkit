@@ -101,36 +101,41 @@ After accepting the EULA, the main editor window opens. Here is what you will se
 
 ## 3. Step 1 — Configure Your Settings
 
-Before creating or opening a map, you need to tell CAIME where your game's **Assembly Kit** is installed. The Assembly Kit is a set of official modding tools provided by Creative Assembly alongside each game, and CAIME reads game data from it (region names, terrain types, road types, etc.) to populate your Swatches.
+Before creating or opening a map, CAIME needs two things:
+
+- **RPFM**, version 5.3 or later. CAIME reads the game's database (region names, terrain types, road types, etc.) through RPFM, from the game's own packs and, optionally, your mod. That data fills your Swatches. RPFM finds the game's packs through the game folder set in RPFM's own settings, so set that in RPFM first.
+- **An output folder**, where CAIME writes the files it processes. It can be your mod's own folder.
 
 1. Go to **Settings** in the menu bar and click **Preferences** (or press **Ctrl+P**).  
    The **Preferences** window opens.
 
 ```
-┌────────────────────────────────────────────────┐
-│  Preferences                                   │
-│                                                │
-│  Hex spacing:        [━━━●━━━━━━━] 0.05        │
-│  ─────────────────────────────────────────     │
-│  Base game:          [ Warhammer3       ▼]     │
-│  Assembly kit path:  [C:\WH3_AssKit\  ] [Browse]│
-│  ─────────────────────────────────────────     │
-│  Log to file:        ● Enabled  ○ Disabled     │
-│  Auto-save:          ● Enabled  ○ Disabled     │
-│  Auto-backup:        ● Enabled  ○ Disabled     │
-│  Map data config                               │
-│  auto-patch:         ● Enabled  ○ Disabled     │
-│  ─────────────────────────────────────────     │
-│                          [ Save ] [ Cancel ]   │
-└────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Preferences                                     │
+│                                                  │
+│  Hex spacing:        [━━━●━━━━━━━] 0.05          │
+│  ─────────────────────────────────────────       │
+│  Base game:          [ Warhammer3       ▼]       │
+│  Assembly kit path:  [                ] [Browse] │ ← not needed
+│  ─────────────────────────────────────────       │
+│  Log to file:        ● Enabled  ○ Disabled       │
+│  Auto-save:          ● Enabled  ○ Disabled       │
+│  ...                                             │
+│  ─────────────────────────────────────────       │
+│  RPFM path:          [C:\...\rpfm     ] [Browse] │
+│  Output folder:      [C:\...\my_mod   ] [Browse] │
+│  ─────────────────────────────────────────       │
+│                          [ Save ] [ Cancel ]     │
+└──────────────────────────────────────────────────┘
 ```
 
-2. In the **Base game** dropdown, select the Total War game you are modding.  
-3. Next to **Assembly kit path**, click **Browse** and navigate to the folder where your game's Assembly Kit is installed.  
-   - This is typically found in your Steam library under `steamapps\common\[Game Name] Assembly Kit\`.  
+2. Next to **RPFM path**, click **Browse** and select the folder that contains `rpfm_server.exe`. CAIME checks it when you save.  
+3. Next to **Output folder**, click **Browse** and select the folder processed files should go to.  
 4. Click **Save** to apply your settings.
 
-> If you work on maps for multiple games, open **Preferences** again any time you switch games and update the **Base game** and **Assembly kit path** accordingly.
+> You can leave **Base game** and **Assembly kit path** as they are. CAIME takes the game from the map itself, and only uses the Assembly Kit for legacy features; see [Annex: The Assembly Kit](user-guide-assembly-kit.md).
+
+When you open a map, CAIME shows it straight away and reads its database in the background. Saving and processing wait until the log says the database has been read.
 
 ---
 
@@ -166,7 +171,7 @@ Before creating or opening a map, you need to tell CAIME where your game's **Ass
 
 CAIME will create your project files and open the map, ready to paint.
 
-> **Important for new maps:** Before clicking Create, make sure you have already registered your map in the game's database using the Assembly Kit's **Dave** database editor. CAIME reads region names, road types, and other data from the database the moment the map opens — if the database has not been set up yet, your Swatches will be empty. See the **Creating a New Campaign Map** guide for full database setup instructions.
+> **Important for new maps:** A new map's regions, roads and other data come from the database: the game's own packs, plus your mod. If your map isn't in the game, add its rows to your mod's tables in RPFM, set the mod for the project under **Settings > RPFM Workflow**, and reload the map. Until then your Swatches will be empty. See the [Creating a New Campaign Map](user-guide-creating-a-new-map.md) guide for the full database setup.
 
 ---
 
@@ -304,8 +309,7 @@ Run each export step relevant to your changes. A result message will appear in t
         │
         ▼
   Settings > Preferences
-  → Set Base game
-  → Set Assembly kit path
+  → Set RPFM path and Output folder
   → Save
         │
         ▼
@@ -342,20 +346,21 @@ Now that you are set up and familiar with the basics, explore the full feature g
 | Guide | What it covers |
 |---|---|
 | [Main Interface Guide](user-guide-main-interface.md) | Detailed breakdown of every panel, button, and menu item |
-| [Creating a New Campaign Map](user-guide-creating-a-new-map.md) | Database setup in Dave, templates, and game-specific notes |
+| [Creating a New Campaign Map](user-guide-creating-a-new-map.md) | Database setup in your mod, templates, and game-specific notes |
 | [Painting with Swatches](user-guide-painting-with-swatches.md) | Swatches in depth, creating custom swatches, managing colours |
 | [Toolbar & Painting Tools](user-guide-toolbar-painting-tools.md) | Each painting tool explained in detail |
 | [Settings & Preferences](user-guide-settings-and-preferences.md) | All Preferences options and what they do |
 | [Tools Menu](user-guide-tools-menu.md) | Logger, Border Editor, Map Data Editor, Shader Resolution Corrector, Import/Export/Validate |
 | [Modifying an Existing Map](user-guide-modifying-an-existing-map.md) | Loading, editing, and re-exporting an existing map |
 | [Processing & Exporting](user-guide-processing-and-exporting.md) | All Process menu export steps explained in detail |
+| [Annex: The Assembly Kit](user-guide-assembly-kit.md) | Legacy and advanced: the Assembly Kit path, Assembly Kit Integration, and Dave |
 
 ---
 
 ## 11. Pro-Tips & Troubleshooting
 
 - **Swatches are empty after creating a map.**  
-  This means CAIME could not find your game's database. Go to **Settings > Preferences**, confirm the **Assembly kit path** points to the correct folder for your game, and then **File > Reload** the map. Also make sure you have set up your map's entries in Dave before creating the CAIME project (see the [Creating a New Campaign Map](user-guide-creating-a-new-map.md) guide).
+  Either the database hasn't been read, or it has no rows for your map; the log says which. Check that the **RPFM path** is set in **Settings > Preferences**, that your mod is set under **Settings > RPFM Workflow**, and that the mod has your map's rows (see the [Creating a New Campaign Map](user-guide-creating-a-new-map.md) guide). Then **File > Reload** the map.
 
 - **Map size width was rejected.**  
   The map width must always be an **even number** (e.g. 1016, 512, 2048). If you enter an odd number, CAIME will show an error and will not create the map. Simply add or subtract 1 to make it even.
