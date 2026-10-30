@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Xml.Linq;
+using CAIME.Classes.Importers;
+using EsfLibrary;
 
 namespace CAIME.Exporters
 {
@@ -84,55 +86,113 @@ namespace CAIME.Exporters
 
     /// <summary>
     /// Works out dynamic_resources.esf's regions from dynamic_resources.png, its database and the
-    /// map, as the Assembly Kit's builder does. Worked out from Attila's main_attila_map, whose
-    /// output this reproduces apart from the hex order of one group (see <see cref="GroupHexes"/>).
+    /// map, as the Assembly Kit's builder does. Read from Rome II's and Attila's
+    /// ToolDataBuilderDll and checked against main_attila_map and main_rome_map, whose output this
+    /// reproduces apart from the hex order of one Attila group (see <see cref="GroupHexes"/>).
     ///
     /// <para>
     /// The image has two pixels per hex column and two per row, plus one for the odd columns'
     /// half-row offset, with row 0 at the bottom: hex (c, r) reads pixel (2c, height - 1 - (2r + c % 2)).
-    /// A hex whose pixel has a database colour gets that building level's tiles, if it is in a land
-    /// region.
+    /// A hex whose pixel has a database colour gets that building level's tiles unless map_data.esf
+    /// types it as open sea; sea regions count (main_rome_map's region 177 has a tile). Where two
+    /// database rows share a colour, the first one is used.
+    /// </para>
+    ///
+    /// <para>
+    /// The builder keeps the regions, and each region's building levels, in hash maps
+    /// (<see cref="CaHashMapOrder"/>) and writes them in the maps' order. Both maps get their keys
+    /// in column-major walking order. A region hashes as its u16 xored with 0x4A545EED, a building
+    /// level as <see cref="HashLevelKey"/>.
     /// </para>
     /// </summary>
     public static class DynamicResourceRegions
     {
-        private const ushort REGION_KEY_SALT = 0xFEED;
+        private const uint REGION_HASH_SALT = 0x4A545EED;
 
-        public static List<DynamicResourceRegion> Find(MapHexFile map, DynamicResourcesImage image, IReadOnlyList<DynamicResourceType> types)
+        public static List<DynamicResourceRegion> Find(MapHexFile map, DynamicResourcesImage image, IReadOnlyList<DynamicResourceType> types, GameTemplate game)
         {
             var grid        = new MapDataGrid((int)map.MapWidth, (int)map.MapHeight);
             var hexTypes    = ClassifyHexes(map, grid, image, types);
-            var groups      = GroupHexes(map, grid, hexTypes);
+            var hexLevels   = BuildingLevels(hexTypes, types);
+            var groups      = GroupHexes(map, grid, hexLevels, out var keysInWalkOrder);
 
-            var regions = new Dictionary<int, DynamicResourceRegion>();
-            foreach (var entry in groups.OrderBy(entry => types[entry.Key.Type].Level).ThenBy(entry => entry.Key.Type))
+            var regionsInWalkOrder  = new List<int>();
+            var keysByRegion        = new Dictionary<int, List<GroupKey>>();
+            foreach (var key in keysInWalkOrder)
             {
-                if (regions.TryGetValue(entry.Key.Region, out var region) == false)
+                if (keysByRegion.TryGetValue(key.Region, out var regionKeys) == false)
                 {
-                    region = new DynamicResourceRegion { Region = entry.Key.Region };
-                    regions.Add(entry.Key.Region, region);
+                    regionKeys = new List<GroupKey>();
+                    keysByRegion.Add(key.Region, regionKeys);
+                    regionsInWalkOrder.Add(key.Region);
                 }
 
-                var type = types[entry.Key.Type];
-                var area = new DynamicResourceArea { BuildingSuperchain = type.BuildingSuperchain, Level = type.Level, TileUpgradeId = type.TileUpgradeId };
-                foreach (var group in entry.Value)
-                {
-                    var coordinates = new List<ushort>(group.Count * 2);
-                    foreach (int hexIndex in group)
-                    {
-                        coordinates.Add((ushort)grid.Column(hexIndex));
-                        coordinates.Add((ushort)grid.Row(hexIndex));
-                    }
-
-                    area.HexGroups.Add(coordinates);
-                }
-
-                region.Areas.Add(area);
+                regionKeys.Add(key);
             }
 
-            // The builder lists regions in the order of a map keyed by the region's u16 xored with
-            // 0xFEED, which is ascending order of that value.
-            return regions.Values.OrderBy(region => (DynamicResourcesWriter.RegionKey(region.Region) ^ REGION_KEY_SALT)).ToList();
+            var regions = new List<DynamicResourceRegion>();
+            foreach (int regionIndex in CaHashMapOrder.Iterate(regionsInWalkOrder, r => DynamicResourcesWriter.RegionKey(r) ^ REGION_HASH_SALT))
+            {
+                var region = new DynamicResourceRegion { Region = regionIndex };
+                foreach (var key in CaHashMapOrder.Iterate(keysByRegion[regionIndex], k => HashLevelKey(game, types[k.Type])))
+                {
+                    // The tile upgrade is the one of the level's first hex in the region.
+                    var type = types[hexTypes[groups[key][0][0]]];
+                    var area = new DynamicResourceArea { BuildingSuperchain = type.BuildingSuperchain, Level = type.Level, TileUpgradeId = type.TileUpgradeId };
+                    foreach (var group in groups[key])
+                    {
+                        var coordinates = new List<ushort>(group.Count * 2);
+                        foreach (int hexIndex in group)
+                        {
+                            coordinates.Add((ushort)grid.Column(hexIndex));
+                            coordinates.Add((ushort)grid.Row(hexIndex));
+                        }
+
+                        area.HexGroups.Add(coordinates);
+                    }
+
+                    region.Areas.Add(area);
+                }
+
+                regions.Add(region);
+            }
+
+            return regions;
+        }
+
+        /// <summary>
+        /// A building level's hash: its superchain followed by its level in decimal, hashed by the
+        /// game's CALibs (<see cref="CaStringHash"/>). Later games are taken to hash as Attila does;
+        /// none of their shipped files has a region to check that against.
+        /// </summary>
+        public static uint HashLevelKey(GameTemplate game, DynamicResourceType type)
+        {
+            var key = type.BuildingSuperchain + type.Level.ToString(CultureInfo.InvariantCulture);
+            return game == GameTemplate.Rome2 ? CaStringHash.RomeII(key) : CaStringHash.Attila(key);
+        }
+
+        /// <summary>
+        /// Each hex's building level, as the first database type with its superchain and level, or
+        /// -1. The builder's key for a level compares only those two, so types that differ only in
+        /// their tile upgrade are one level (main_rome_map paints farmland_northern colours inside
+        /// farmland_mediterranean regions, and gets mediterranean tiles there).
+        /// </summary>
+        private static int[] BuildingLevels(int[] hexTypes, IReadOnlyList<DynamicResourceType> types)
+        {
+            var firstOfLevel    = new Dictionary<(string, uint), int>();
+            var levelOfType     = new int[types.Count];
+            for (int type = 0; type < types.Count; ++type)
+            {
+                var level = (types[type].BuildingSuperchain, types[type].Level);
+                if (firstOfLevel.ContainsKey(level) == false)
+                {
+                    firstOfLevel.Add(level, type);
+                }
+
+                levelOfType[type] = firstOfLevel[level];
+            }
+
+            return hexTypes.Select(type => type < 0 ? -1 : levelOfType[type]).ToArray();
         }
 
         /// <summary>The database type of each hex, or -1.</summary>
@@ -147,15 +207,14 @@ namespace CAIME.Exporters
                 }
             }
 
-            int landRegionCount = map.LandRegions.Count;
-            var hexTypes        = new int[grid.HexCount];
+            var areaTypes   = MapDataAreas.ClassifyHexes(map, grid);
+            var hexTypes    = new int[grid.HexCount];
 
             for (int hexIndex = 0; hexIndex < hexTypes.Length; ++hexIndex)
             {
                 hexTypes[hexIndex] = -1;
 
-                int region = map.HexData[hexIndex].RegionId;
-                if (region < 0 || region >= landRegionCount)
+                if (map.HexData[hexIndex].RegionId < 0 || areaTypes[hexIndex] == MapDataAreaType.Sea)
                 {
                     continue;
                 }
@@ -180,116 +239,119 @@ namespace CAIME.Exporters
         }
 
         /// <summary>
-        /// Splits each region's hexes of one type into connected groups by two-pass labelling: the
-        /// builder walks the grid column by column, and a hex takes the smallest label among its
-        /// already-labelled neighbours of the same region and type, or a new one. A group lists
-        /// its labels in ascending order, each label's hexes in walking order, and groups come in
-        /// the order of their first hex.
-        ///
-        /// <para>
-        /// TODO: in main_attila_map one group of 2315 (att_reg_frisia_angulus, level 2, labels
-        /// 0, 1, 3 and 4) lists label 4 before label 3. Labels 3 and 4 met each other before either
-        /// met label 0; no rule tried (merge order, list concatenation, walking the merges breadth-
-        /// or depth-first) reproduces that without breaking other groups.
-        /// </para>
+        /// Splits each region's hexes of one building level into groups as the builder does. It
+        /// walks the grid column by column and adds each hex to the first of its level's groups
+        /// that holds a neighbour, or starts a new group. Then, until a pass changes nothing, it
+        /// appends every group that touches an earlier one to that earlier group, in group order,
+        /// and drops the emptied groups.
         /// </summary>
-        private static Dictionary<GroupKey, List<List<int>>> GroupHexes(MapHexFile map, MapDataGrid grid, int[] hexTypes)
+        /// <param name="keysInWalkOrder">Each region and level, in the walking order of its first hex.</param>
+        private static Dictionary<GroupKey, List<List<int>>> GroupHexes(MapHexFile map, MapDataGrid grid, int[] hexLevels, out List<GroupKey> keysInWalkOrder)
         {
-            var labels      = Enumerable.Repeat(-1, grid.HexCount).ToArray();
-            var labelHexes  = new List<List<int>>();
-            var labelKeys   = new List<GroupKey>();
-            var parent      = new List<int>();
-
-            int Find(int label)
-            {
-                while (parent[label] != label)
-                {
-                    label = parent[label];
-                }
-
-                return label;
-            }
+            keysInWalkOrder = new List<GroupKey>();
+            var walked      = new Dictionary<GroupKey, List<HexGroup>>();
 
             for (int column = 0; column < grid.Width; ++column)
             {
                 for (int row = 0; row < grid.Height; ++row)
                 {
                     int hexIndex = row * grid.Width + column;
-                    if (hexTypes[hexIndex] < 0)
+                    if (hexLevels[hexIndex] < 0)
                     {
                         continue;
                     }
 
-                    int region  = map.HexData[hexIndex].RegionId;
-                    int label   = int.MaxValue;
-
-                    for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                    var key = new GroupKey { Region = map.HexData[hexIndex].RegionId, Type = hexLevels[hexIndex] };
+                    if (walked.TryGetValue(key, out var groups) == false)
                     {
-                        int neighbour = grid.Neighbour(hexIndex, n);
-                        if (IsLabelledAlike(map, hexTypes, labels, neighbour, region, hexTypes[hexIndex]))
-                        {
-                            label = Math.Min(label, labels[neighbour]);
-                        }
+                        groups = new List<HexGroup>();
+                        walked.Add(key, groups);
+                        keysInWalkOrder.Add(key);
                     }
 
-                    if (label == int.MaxValue)
+                    var group = groups.FirstOrDefault(g => g.Touches(grid, hexIndex));
+                    if (group == null)
                     {
-                        label = labelHexes.Count;
-                        labelHexes.Add(new List<int>());
-                        labelKeys.Add(new GroupKey { Region = region, Type = hexTypes[hexIndex] });
-                        parent.Add(label);
+                        group = new HexGroup();
+                        groups.Add(group);
                     }
 
-                    labels[hexIndex] = label;
-                    labelHexes[label].Add(hexIndex);
-
-                    for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
-                    {
-                        int neighbour = grid.Neighbour(hexIndex, n);
-                        if (IsLabelledAlike(map, hexTypes, labels, neighbour, region, hexTypes[hexIndex]))
-                        {
-                            int a = Find(label);
-                            int b = Find(labels[neighbour]);
-                            parent[Math.Max(a, b)] = Math.Min(a, b);
-                        }
-                    }
+                    group.Add(hexIndex);
                 }
             }
 
-            // Labels are numbered in walking order, so a group's smallest label is its first hex's
-            // and ascending labels order both the groups and each group's labels.
-            var groups      = new Dictionary<GroupKey, List<List<int>>>();
-            var groupOfRoot = new Dictionary<int, List<int>>();
-
-            for (int label = 0; label < labelHexes.Count; ++label)
+            var result = new Dictionary<GroupKey, List<List<int>>>();
+            foreach (var entry in walked)
             {
-                int root = Find(label);
-                if (groupOfRoot.TryGetValue(root, out var group) == false)
-                {
-                    group = new List<int>();
-                    groupOfRoot.Add(root, group);
-
-                    if (groups.TryGetValue(labelKeys[label], out var keyGroups) == false)
-                    {
-                        keyGroups = new List<List<int>>();
-                        groups.Add(labelKeys[label], keyGroups);
-                    }
-
-                    keyGroups.Add(group);
-                }
-
-                group.AddRange(labelHexes[label]);
+                MergeTouchingGroups(grid, entry.Value);
+                result.Add(entry.Key, entry.Value.Select(group => group.Hexes).ToList());
             }
 
-            return groups;
+            return result;
         }
 
-        private static bool IsLabelledAlike(MapHexFile map, int[] hexTypes, int[] labels, int neighbour, int region, int type)
+        private static void MergeTouchingGroups(MapDataGrid grid, List<HexGroup> groups)
         {
-            return neighbour >= 0
-                && labels[neighbour] >= 0
-                && hexTypes[neighbour] == type
-                && map.HexData[neighbour].RegionId == region;
+            bool merged;
+            do
+            {
+                merged = false;
+                for (int i = 0; i < groups.Count; ++i)
+                {
+                    for (int j = i + 1; j < groups.Count && groups[i].Hexes.Count > 0; ++j)
+                    {
+                        if (groups[j].Hexes.Any(hexIndex => groups[i].Touches(grid, hexIndex)))
+                        {
+                            groups[i].AddAll(groups[j]);
+                            groups[j].Clear();
+                            merged = true;
+                        }
+                    }
+                }
+
+                groups.RemoveAll(group => group.Hexes.Count == 0);
+            }
+            while (merged);
+        }
+
+        private sealed class HexGroup
+        {
+            private readonly HashSet<int> _members = new HashSet<int>();
+
+            public List<int> Hexes { get; } = new List<int>();
+
+            public bool Touches(MapDataGrid grid, int hexIndex)
+            {
+                for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                {
+                    if (_members.Contains(grid.Neighbour(hexIndex, n)))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            public void Add(int hexIndex)
+            {
+                Hexes.Add(hexIndex);
+                _members.Add(hexIndex);
+            }
+
+            public void AddAll(HexGroup other)
+            {
+                foreach (int hexIndex in other.Hexes)
+                {
+                    Add(hexIndex);
+                }
+            }
+
+            public void Clear()
+            {
+                Hexes.Clear();
+                _members.Clear();
+            }
         }
     }
 }

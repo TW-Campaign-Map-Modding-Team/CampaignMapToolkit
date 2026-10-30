@@ -52,111 +52,53 @@ namespace CAIME.Tests.Unit
         {
             var reference = File.ReadAllBytes(FindTestData(Path.Combine("dynamic_resources", "wh3_main_prologue_map.esf")));
 
-            var written = DynamicResourcesWriter.Write(new List<DynamicResourceRegion>(), PrologueBuildTime);
+            var written = DynamicResourcesWriter.Write(new List<DynamicResourceRegion>(), PrologueBuildTime, GameTemplate.Warhammer3);
 
             CollectionAssert.AreEqual(reference, written);
         }
 
         /// <summary>
         /// Templates/main_attila_map holds the inputs of TestData/dynamic_resources/main_attila_map.esf,
-        /// Attila's own build. Everything must match except the hex order of the one group
-        /// <see cref="DynamicResourceRegions"/> documents as not reproduced.
+        /// Attila's own build.
         /// </summary>
         [TestMethod]
-        public void Find_AttilaMainMap_MatchesTheGamesFile()
+        public void Write_AttilaMainMap_MatchesTheGamesFile()
         {
-            var reference   = FindTestData(Path.Combine("dynamic_resources", "main_attila_map.esf"));
-            var templates   = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(reference))), "Templates", "main_attila_map");
+            AssertMatchesTheGamesFile("main_attila_map", GameTemplate.Attila);
+        }
+
+        /// <summary>
+        /// Templates/main_rome_map holds the inputs of TestData/dynamic_resources/main_rome_map.esf,
+        /// Rome II's own build. It has hashes that collide, a farmland colour of the other tile
+        /// upgrade inside a region's farmland, and a tile in a sea region.
+        /// </summary>
+        [TestMethod]
+        public void Write_RomeIIMainMap_MatchesTheGamesFile()
+        {
+            AssertMatchesTheGamesFile("main_rome_map", GameTemplate.Rome2);
+        }
+
+        private static void AssertMatchesTheGamesFile(string mapName, GameTemplate game)
+        {
+            var reference   = File.ReadAllBytes(FindTestData(Path.Combine("dynamic_resources", mapName + ".esf")));
+            var templates   = Path.GetDirectoryName(MapDataEsfComparison.FindRepoFile("Templates", mapName, "map.hex"));
+            var buildTime   = DateTimeOffset.FromUnixTimeSeconds(BitConverter.ToUInt32(reference, 8)).UtcDateTime;
 
             var map = new MapHexFile();
             Assert.IsTrue(map.Load(Path.Combine(templates, "map.hex")));
 
-            var found = DynamicResourceRegions.Find(map,
+            var regions = DynamicResourceRegions.Find(map,
                 DynamicResourcesImage.Load(Path.Combine(templates, "dynamic_resources.png")),
-                DynamicResourceType.LoadDatabase(Path.Combine(templates, "dynamic_resources_database.xml")));
+                DynamicResourceType.LoadDatabase(Path.Combine(templates, "dynamic_resources_database.xml")),
+                game);
 
-            var expected = ReadRegions(reference);
-
-            CollectionAssert.AreEqual(expected.Select(region => region.Region).ToArray(), found.Select(region => region.Region).ToArray(), "region order");
-
-            int groupsInADifferentHexOrder = 0;
-            for (int r = 0; r < expected.Count; ++r)
-            {
-                var expectedAreas   = expected[r].Areas;
-                var foundAreas      = found[r].Areas;
-                Assert.AreEqual(expectedAreas.Count, foundAreas.Count, $"region {expected[r].Region}: areas");
-
-                for (int a = 0; a < expectedAreas.Count; ++a)
-                {
-                    var context = $"region {expected[r].Region}, area {a}";
-                    Assert.AreEqual(expectedAreas[a].BuildingSuperchain, foundAreas[a].BuildingSuperchain, context);
-                    Assert.AreEqual(expectedAreas[a].Level, foundAreas[a].Level, context);
-                    Assert.AreEqual(expectedAreas[a].TileUpgradeId, foundAreas[a].TileUpgradeId, context);
-                    Assert.AreEqual(expectedAreas[a].HexGroups.Count, foundAreas[a].HexGroups.Count, $"{context}: groups");
-
-                    for (int g = 0; g < expectedAreas[a].HexGroups.Count; ++g)
-                    {
-                        var expectedHexes   = Pairs(expectedAreas[a].HexGroups[g]);
-                        var foundHexes      = Pairs(foundAreas[a].HexGroups[g]);
-
-                        CollectionAssert.AreEquivalent(expectedHexes, foundHexes, $"{context}, group {g}: hexes");
-                        if (expectedHexes.SequenceEqual(foundHexes) == false)
-                        {
-                            ++groupsInADifferentHexOrder;
-                        }
-                    }
-                }
-            }
-
-            Assert.AreEqual(1, groupsInADifferentHexOrder, "Only the one documented group may list its hexes in another order.");
-        }
-
-        private static List<(ushort, ushort)> Pairs(List<ushort> coordinates)
-        {
-            var pairs = new List<(ushort, ushort)>();
-            for (int i = 0; i < coordinates.Count; i += 2)
-            {
-                pairs.Add((coordinates[i], coordinates[i + 1]));
-            }
-
-            return pairs;
-        }
-
-        private static List<DynamicResourceRegion> ReadRegions(string path)
-        {
-            var root    = (ParentNode)EsfCodecUtil.LoadEsfFile(path).RootNode;
-            var regions = new List<DynamicResourceRegion>();
-
-            foreach (var regionEntry in root.Children.Single().Children)
-            {
-                var region = new DynamicResourceRegion { Region = ((EsfValueNode<ushort>)regionEntry.Values[0]).Value & 0x1FF };
-
-                foreach (var areaEntry in regionEntry.Children.Single().Children)
-                {
-                    var area = new DynamicResourceArea
-                    {
-                        BuildingSuperchain  = ((EsfValueNode<string>)areaEntry.Values[0]).Value,
-                        Level               = ((EsfValueNode<uint>)areaEntry.Values[1]).Value,
-                        TileUpgradeId       = ((EsfValueNode<string>)areaEntry.Values[2]).Value,
-                    };
-
-                    foreach (var groupEntry in areaEntry.Children.Single().Children)
-                    {
-                        area.HexGroups.Add(((EsfValueNode<ushort[]>)groupEntry.Values[0]).Value.ToList());
-                    }
-
-                    region.Areas.Add(area);
-                }
-
-                regions.Add(region);
-            }
-
-            return regions;
+            CollectionAssert.AreEqual(reference, DynamicResourcesWriter.Write(regions, buildTime, game));
         }
 
         [TestMethod]
-        public void BuildTimeStamp_LeavesTheHourUnpadded()
+        public void BuildTimeStamp_PadsNoField()
         {
+            Assert.AreEqual("2021319901", DynamicResourcesWriter.BuildTimeStamp(new DateTime(2021, 3, 19, 9, 0, 1, DateTimeKind.Utc)));
             Assert.AreEqual("2026102832334", DynamicResourcesWriter.BuildTimeStamp(PrologueBuildTime));
             Assert.AreEqual("20141114153252", DynamicResourcesWriter.BuildTimeStamp(new DateTime(2014, 11, 14, 15, 32, 52, DateTimeKind.Utc)));
         }
@@ -170,7 +112,7 @@ namespace CAIME.Tests.Unit
             region.Areas.Add(area);
 
             var path = Path.Combine(_dir, "dynamic_resources.esf");
-            File.WriteAllBytes(path, DynamicResourcesWriter.Write(new[] { region }, PrologueBuildTime));
+            File.WriteAllBytes(path, DynamicResourcesWriter.Write(new[] { region }, PrologueBuildTime, GameTemplate.Attila));
             var root = (ParentNode)EsfCodecUtil.LoadEsfFile(path).RootNode;
 
             var regionEntry = root.Children.Single().Children.Single();

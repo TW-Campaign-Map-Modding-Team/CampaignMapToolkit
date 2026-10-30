@@ -77,7 +77,7 @@ namespace CAIME.Exporters
                 || (fromSea && to == MapDataAreaType.Beach);
         }
 
-        private static MapDataAreaType[] ClassifyHexes(MapHexFile map, MapDataGrid grid)
+        internal static MapDataAreaType[] ClassifyHexes(MapHexFile map, MapDataGrid grid)
         {
             var hexes = map.HexData;
             var types = new MapDataAreaType[grid.HexCount];

@@ -42,8 +42,9 @@ namespace CAIME.Exporters
     /// </para>
     ///
     /// <para>
-    /// TODO: Attila writes the file as ABCA (16-bit string table lengths); this writes Warhammer
-    /// III's ABCB.
+    /// Warhammer III's Assembly Kit writes ABCB; every other game's shipped file is ABCA. Rome II's
+    /// and Attila's string tables follow their games' string hashes (<see cref="CaStringHash"/>);
+    /// the 64-bit games' files hold only the build time, so their order cannot show.
     /// </para>
     /// </summary>
     public static class DynamicResourcesWriter
@@ -56,9 +57,9 @@ namespace CAIME.Exporters
             return (ushort)(REGION_INDEX_FLAG | region);
         }
 
-        public static byte[] Write(IReadOnlyList<DynamicResourceRegion> regions, DateTime buildTimeUtc)
+        public static byte[] Write(IReadOnlyList<DynamicResourceRegion> regions, DateTime buildTimeUtc, GameTemplate game)
         {
-            var esf = new EsfWriter(EsfFormat.Abcb);
+            var esf = new EsfWriter(game == GameTemplate.Warhammer3 ? EsfFormat.Abcb : EsfFormat.Abca, StringTableHash(game));
             esf.BeginRecord("CAMPAIGN_DYNAMIC_RESOURCES", 0);
             esf.WriteAscii(BuildTimeStamp(buildTimeUtc));
 
@@ -77,14 +78,25 @@ namespace CAIME.Exporters
             return esf.ToArray((uint)new DateTimeOffset(buildTimeUtc, TimeSpan.Zero).ToUnixTimeSeconds());
         }
 
+        private static Func<string, uint> StringTableHash(GameTemplate game)
+        {
+            switch (game)
+            {
+                case GameTemplate.Rome2:                return CaStringHash.RomeII;
+                case GameTemplate.Attila:
+                case GameTemplate.Thrones_Of_Britannia: return CaStringHash.Attila;
+                default:                                return null;
+            }
+        }
+
         /// <summary>
-        /// yyyyMMdd then the time: Attila's file has "20141114153252", and a Warhammer III build
-        /// at 03:23:34 UTC wrote "2026102832334", the hour unpadded. Whether a single-digit month
-        /// or day is padded is not known.
+        /// Year, month, day, hour, minute and second, none of them padded: Troy's troy_mythic file,
+        /// built 2021-03-19 09:00:01 UTC, has "2021319901". Every shipped file's text matches the
+        /// timestamp in its header this way.
         /// </summary>
         public static string BuildTimeStamp(DateTime buildTimeUtc)
         {
-            return buildTimeUtc.ToString("yyyyMMdd") + buildTimeUtc.Hour + buildTimeUtc.ToString("mmss");
+            return string.Concat(buildTimeUtc.Year, buildTimeUtc.Month, buildTimeUtc.Day, buildTimeUtc.Hour, buildTimeUtc.Minute, buildTimeUtc.Second);
         }
 
         private static void WriteAreas(EsfWriter esf, List<DynamicResourceArea> areas)
