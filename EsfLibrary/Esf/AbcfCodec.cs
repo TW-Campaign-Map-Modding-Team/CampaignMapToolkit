@@ -129,16 +129,30 @@ namespace EsfLibrary {
         protected override void ReadNodeNames(BinaryReader reader) {
             base.ReadNodeNames(reader);
             // create lookup lists (positioned immediately after the node names)
-            Utf16StringList = ReadStringList(reader, ReadUtf16);
-            AsciiStringList = ReadStringList(reader, ReadAscii);
+            Utf16StringList = ReadStringList(reader, ReadUtf16TableEntry);
+            AsciiStringList = ReadStringList(reader, ReadAsciiTableEntry);
 
             IndexStringList(Utf16StringList, Utf16StringById, Utf16UsedIds);
             IndexStringList(AsciiStringList, AsciiStringById, AsciiUsedIds);
         }
         protected override void WriteNodeNames(BinaryWriter writer) {
             base.WriteNodeNames(writer);
-            WriteStringList(writer, Utf16StringList, WriteUtf16);
-            WriteStringList(writer, AsciiStringList, WriteAscii);
+            WriteStringList(writer, Utf16StringList, WriteUtf16TableEntry);
+            WriteStringList(writer, AsciiStringList, WriteAsciiTableEntry);
+        }
+
+        // How a string in the two lookup lists is stored; later formats widen its length prefix.
+        protected virtual string ReadUtf16TableEntry(BinaryReader reader) {
+            return ReadUtf16(reader);
+        }
+        protected virtual string ReadAsciiTableEntry(BinaryReader reader) {
+            return ReadAscii(reader);
+        }
+        protected virtual void WriteUtf16TableEntry(BinaryWriter writer, string toWrite) {
+            WriteUtf16(writer, toWrite);
+        }
+        protected virtual void WriteAsciiTableEntry(BinaryWriter writer, string toWrite) {
+            WriteAscii(writer, toWrite);
         }
 
         #region CAIME: User-friendly stuff
