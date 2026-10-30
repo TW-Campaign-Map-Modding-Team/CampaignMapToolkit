@@ -206,12 +206,7 @@ namespace CAIME.Painters
         /// </summary>
         protected bool CanPaintHex(Swatch swatch, int hexIndex)
         {
-            if (swatch is BeachSwatch beachSwatch && beachSwatch.IsBeach)
-            {
-                return project.MapHexFile.IsEligibleForBeach(project.MapHexFile.HexData[hexIndex]);
-            }
-
-            return true;
+            return MapPainter.CanPaintHex(project.MapHexFile, swatch, hexIndex);
         }
 
         protected abstract void InitialiseSnapshotStates();

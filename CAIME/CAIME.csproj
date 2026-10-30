@@ -314,6 +314,8 @@
     <Compile Include="Classes\Common\UndoRedoManager.cs" />
     <Compile Include="Classes\Common\HotkeyManager.cs" />
     <Compile Include="Classes\Editor\Painters\BrushPainter.cs" />
+    <Compile Include="Classes\Editor\Painters\HexShapes.cs" />
+    <Compile Include="Classes\Editor\Painters\MapPainter.cs" />
     <Compile Include="Classes\Editor\Painters\ViewportPainter.cs" />
     <Compile Include="Classes\Editor\GridSubdivider.cs" />
     <Compile Include="Classes\Editor\LayerBlend.cs" />
@@ -769,6 +771,27 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Cli\CliCommand.cs" />
+    <Compile Include="Cli\CliConsole.cs" />
+    <Compile Include="Cli\CliNames.cs" />
+    <Compile Include="Cli\CliOptions.cs" />
+    <Compile Include="Cli\CliPaths.cs" />
+    <Compile Include="Cli\CliSession.cs" />
+    <Compile Include="Cli\MapCommand.cs" />
+    <Compile Include="Cli\Commands\BatchCommand.cs" />
+    <Compile Include="Cli\Commands\ConfigCommand.cs" />
+    <Compile Include="Cli\Commands\CreateCommand.cs" />
+    <Compile Include="Cli\Commands\EraseCommand.cs" />
+    <Compile Include="Cli\Commands\ExportLayerCommand.cs" />
+    <Compile Include="Cli\Commands\FillCommand.cs" />
+    <Compile Include="Cli\Commands\FillSwatchesCommand.cs" />
+    <Compile Include="Cli\Commands\ImportLayerCommand.cs" />
+    <Compile Include="Cli\Commands\LayerFileCommand.cs" />
+    <Compile Include="Cli\Commands\LineCommand.cs" />
+    <Compile Include="Cli\Commands\PaintCommand.cs" />
+    <Compile Include="Cli\Commands\PaintingCommand.cs" />
+    <Compile Include="Cli\Commands\PickCommand.cs" />
+    <Compile Include="Cli\Commands\QueryCommand.cs" />
     <Compile Include="Cli\CliRunner.cs" />
     <Compile Include="Cli\ConsoleManager.cs" />
     <Compile Include="Views\Windows\MainWindow.xaml.cs">

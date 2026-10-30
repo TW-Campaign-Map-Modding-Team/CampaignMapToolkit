@@ -8,6 +8,8 @@
 
 The Preferences window is CAIME's control panel — the one place where you configure everything about how the application behaves before you start working on your map. Think of it like the "Options" menu in a video game: you visit it once at the start, set everything up the way you like, and then it stays out of your way while you work. The most important setting here is the **Assembly Kit Path**, which tells CAIME where your game's modding tools are installed so it can produce files the game engine can read.
 
+> **Prefer the command line?** Every setting in this window can also be read and changed with `CAIME.exe config` — see [Changing Settings](user-guide-command-line-interface.md#changing-settings).
+
 ---
 
 ### Table of Contents

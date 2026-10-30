@@ -367,23 +367,21 @@ namespace CAIME
 
         public Project CreateProject(string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template)
         {
-            var newProjectPath = $@"{ProjectsDir}{mapName}\";
-            
-            bool canWrite = true;
+            return CreateProject(ProjectsDir, mapName, mapWidth, mapHeight, game, template, ConfirmProjectOverwrite);
+        }
+
+        public Project CreateProject(string projectsDir, string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template, Func<bool> canOverwriteExistingProject)
+        {
+            var newProjectPath = GetProjectPath(projectsDir, mapName);
+
             if (Directory.Exists(newProjectPath))
             {
-                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
-                canWrite = res == MessageBoxResult.Yes;
-
-                if (canWrite)
+                if (canOverwriteExistingProject() == false)
                 {
-                    Directory.Delete(newProjectPath, true);
+                    return null;
                 }
-            }
 
-            if (canWrite == false)
-            {
-                return null;
+                Directory.Delete(newProjectPath, true);
             }
 
             Directory.CreateDirectory(newProjectPath);
@@ -409,8 +407,62 @@ namespace CAIME
                     File.Copy(filePath, filePath.Replace(templatePath, newProjectPath), true);
                 }
 
-                return Open($"{newProjectPath}map.hex");
+                var mapHexPath = $"{newProjectPath}map.hex";
+                if (RenameTemplateMap(mapHexPath, mapName) == false)
+                {
+                    return null;
+                }
+
+                return Open(mapHexPath);
             }
+        }
+
+        private bool RenameTemplateMap(string mapHexPath, string mapName)
+        {
+            var templateProject = new Project();
+            try
+            {
+                if (templateProject.Open(mapHexPath, g => PrepareRpfmDatabaseIfNeeded(templateProject, g)) == false)
+                {
+                    return false;
+                }
+
+                if (templateProject.MapName == mapName)
+                {
+                    return true;
+                }
+
+                var templateMapName = templateProject.MapName;
+                templateProject.MapHexFile.RenameMap(mapName);
+
+                if (templateProject.Save(SaveParameters.SaveFlags.MapHexFile, templateProject.MapHexFileName, templateProject.ProjectPath) == false)
+                {
+                    return false;
+                }
+
+                LoggerViewModel.Log($"Campaign map has been renamed from {templateMapName} to {mapName}", LogLevel.Info);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log($"{mapHexPath} could not be renamed to {mapName}!\n\nReason: {ex.Message}", LogLevel.ErrorMessageBox);
+                return false;
+            }
+            finally
+            {
+                templateProject.CleanupRpfmSession();
+            }
+        }
+
+        public static string GetProjectPath(string projectsDir, string mapName)
+        {
+            return Path.Combine(projectsDir, mapName) + @"\";
+        }
+
+        private static bool ConfirmProjectOverwrite()
+        {
+            var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
+            return res == MessageBoxResult.Yes;
         }
 
         public void Save(SaveParameters saveParams)

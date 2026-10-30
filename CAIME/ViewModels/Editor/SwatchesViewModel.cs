@@ -224,6 +224,35 @@ namespace CAIME
             }
         }
 
+        public Swatch GetSwatchForHex(LayerType layerType, Hex hex)
+        {
+            if (Swatches.TryGetValue(layerType, out var swatches) == false)
+            {
+                return null;
+            }
+
+            switch (layerType)
+            {
+                case LayerType.GroundTypes:     return swatches.Find(s => ((GroundSwatch)s).GroundTypeIndex == hex.GroundTypeIndex);
+                case LayerType.Attritions:      return swatches.Find(s => ((AttritionSwatch)s).AttritionIndex == hex.AttritionIndex);
+                case LayerType.Climates:        return swatches.Find(s => ((ClimateSwatch)s).ClimateIndex == hex.ClimateIndex);
+                case LayerType.AreasOfInterest: return swatches.Find(s => ((AreaOfInterestSwatch)s).AreaOfInterestIndex == hex.InterestIndex);
+                case LayerType.Regions:         return swatches.Find(s => ((RegionSwatch)s).RegionIndex == hex.RegionId);
+                case LayerType.RegionBorders:   return swatches.Find(s => ((RegionBorderSwatch)s).IsBorder == hex.IsBorder);
+                case LayerType.Beaches:         return swatches.Find(s => ((BeachSwatch)s).IsBeach == hex.IsBeach);
+                case LayerType.Rivers:          return swatches.Find(s => ((RiverSwatch)s).IsRiver == hex.IsRiver);
+                case LayerType.Roads:           return swatches.Find(s => ((RoadSwatch)s).IsRoad == hex.IsRoad);
+                case LayerType.Bridges:         return swatches.Find(s => ((BridgeSwatch)s).IsBridge == hex.IsBridge);
+                case LayerType.TradeRoutes:     return swatches.Find(s => ((TradeRouteSwatch)s).IsTradeRoute == hex.IsTradeRoute);
+                case LayerType.Impassable:      return swatches.Find(s => ((NogoSwatch)s).IsImpassable == hex.IsImpassable);
+                case LayerType.TownSlots:       return swatches.Find(s => ((TownSlotSwatch)s).SlotIndex == hex.TownSlotIndex);
+                case LayerType.TownSprawl:      return swatches.Find(s => ((TownSprawlSwatch)s).Value == hex.IsTownSprawl);
+                case LayerType.Restrictions:    return swatches.Find(s => ((RestrictionSwatch)s).RestrictionLevel == hex.RestrictionLvl);
+            }
+
+            return null;
+        }
+
         public void ResetIndex()
         {
             SwatchIndex = 0;
