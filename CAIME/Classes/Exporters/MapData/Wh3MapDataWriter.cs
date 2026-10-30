@@ -7,15 +7,7 @@ namespace CAIME.Exporters
 {
     /// <summary>
     /// Builds a Warhammer III map_data.esf (MAP_DATA v2) from a map.hex, as the Assembly Kit's
-    /// ToolDataBuilder does. Everything in the file comes from the map and the playable area's
-    /// index and maxx; the builder reads other tables but nothing else in them reaches the file.
-    ///
-    /// <para>
-    /// The output matches the builder's byte for byte apart from the timestamp at bytes 8-11 and
-    /// the order of the string table (see <see cref="EsfWriter"/>). How each part is derived was
-    /// worked out by comparing against the builder's output for CA's maps and edited ones; see the
-    /// classes this one uses.
-    /// </para>
+    /// builder does. The layouts are in FileFormatDefinitions/map_data_esf.md.
     /// </summary>
     public static class Wh3MapDataWriter
     {
