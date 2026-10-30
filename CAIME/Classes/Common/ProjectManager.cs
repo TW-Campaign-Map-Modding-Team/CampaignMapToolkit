@@ -385,13 +385,9 @@ namespace CAIME
 
             if (template == TEMPLATE_NONE)
             {
-                var project = Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
-                if (project.Open($"{newProjectPath}map.hex"))
-                {
-                    return project;
-                }
-
-                return null;
+                // Writes the empty map.hex, which is then opened like any other.
+                Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
+                return Open($"{newProjectPath}map.hex");
             }
             else
             {
