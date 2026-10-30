@@ -1,4 +1,7 @@
 # Campaign map AI Model Editor
+
+[![Discord](https://img.shields.io/badge/Discord-Join%20our%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/YN5ndunme6)
+
 The aim of this project is to allow Total War modders to create or modify campaign ai model files, such as map_data.esf, pathfinding.ppd and so on.
 Games supported:
 - Total War: ROME 2
@@ -9,6 +12,9 @@ Games supported:
 - Total War: THREE KINGDOMS
 - Total War Saga: Thrones of Britannia
 - Total War Saga: TROY
+
+**Community & Support**:
+Join our [Discord server](https://discord.gg/YN5ndunme6) for questions, discussions, and mapping guides.
 
 **Build instructions**:
 1. Clone the project to any location on your PC.
