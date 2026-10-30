@@ -115,15 +115,16 @@ Before creating or opening a map, CAIME needs two things:
 │                                                  │
 │  Hex spacing:        [━━━●━━━━━━━] 0.05          │
 │  ─────────────────────────────────────────       │
-│  Base game:          [ Warhammer3       ▼]       │
-│  Assembly kit path:  [                ] [Browse] │ ← not needed
-│  ─────────────────────────────────────────       │
 │  Log to file:        ● Enabled  ○ Disabled       │
 │  Auto-save:          ● Enabled  ○ Disabled       │
 │  ...                                             │
 │  ─────────────────────────────────────────       │
 │  RPFM path:          [C:\...\rpfm     ] [Browse] │
 │  Output folder:      [C:\...\my_mod   ] [Browse] │
+│  ─────────────────────────────────────────       │
+│  Base game:          [ Warhammer3       ▼]       │ ← not needed
+│  Assembly kit path:  [                ] [Browse] │ ← not needed
+│  Assembly Kit Integration: ○ Enabled ● Disabled  │ ← not needed
 │  ─────────────────────────────────────────       │
 │                          [ Save ] [ Cancel ]     │
 └──────────────────────────────────────────────────┘
