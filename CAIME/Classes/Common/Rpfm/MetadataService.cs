@@ -7,7 +7,7 @@ namespace CAIME.Rpfm
 {
     /// <summary>
     /// Reads and writes <c>caime_metadata.json</c> beside a project's map.hex. All writes are
-    /// read-modify-write: a caller that updates one field (e.g. the RPFM pack path) never clobbers
+    /// read-modify-write: a caller that updates one field (e.g. the RPFM mod pack name) never clobbers
     /// unrelated fields (e.g. the map_data config path written by the Map Data Editor). This is
     /// what keeps the metadata file decoupled from any single feature that touches it.
     /// </summary>
@@ -63,47 +63,45 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Returns the stored pack file paths, sorted alphabetically by pack file name (not full
-        /// path), or an empty list when unset / no metadata file. This order is not a user-chosen
-        /// priority - it only decides one rare tiebreak: when two of these modded packs each contain a
-        /// fragment with the exact same name for the same table, the one whose pack file name sorts
-        /// first wins. Which fragment wins between differently-named fragments is decided by fragment
-        /// name, not pack name, and a modded pack always beats the vanilla pack on an identical
-        /// fragment name whatever either is called (RpfmWorkflowSession consults vanilla last).
+        /// Returns the stored mod pack name, or null when unset / no metadata file.
         /// </summary>
-        public static IReadOnlyList<string> GetPackFilePaths(string projectPath)
+        public static string GetModPackName(string projectPath)
         {
             try
             {
-                var metadata = Load(projectPath);
-                var paths = metadata?.PackFilePaths ?? new List<string>();
-                return SortByPackName(paths);
+                return NormalizeModPackName(Load(projectPath)?.ModPackName);
             }
             catch (Exception ex)
             {
-                LoggerViewModel.Log($"MetadataService - failed to read pack paths: {ex.Message}", LogLevel.Warning);
-                return new List<string>();
+                LoggerViewModel.Log($"MetadataService - failed to read the mod pack name: {ex.Message}", LogLevel.Warning);
+                return null;
             }
         }
 
         /// <summary>
-        /// Stores the pack file paths, preserving all other metadata fields. Sorted alphabetically by
-        /// pack file name before writing so the on-disk order always matches what GetPackFilePaths
-        /// returns and what the UI displays.
+        /// Stores the mod pack name (normalized, see <see cref="NormalizeModPackName"/>; blank clears
+        /// it), preserving all other metadata fields.
         /// </summary>
-        public static void SetPackFilePaths(string projectPath, IEnumerable<string> packFilePaths)
+        public static void SetModPackName(string projectPath, string modPackName)
         {
-            var normalized = SortByPackName(
-                (packFilePaths ?? Enumerable.Empty<string>()).Where(p => !string.IsNullOrWhiteSpace(p)));
-
-            Update(projectPath, m => m.PackFilePaths = normalized);
+            var normalized = NormalizeModPackName(modPackName);
+            Update(projectPath, m => m.ModPackName = normalized);
         }
 
-        private static List<string> SortByPackName(IEnumerable<string> packPaths)
+        /// <summary>
+        /// The name RPFM looks a mod up by: the pack's file name with its <c>.pack</c> extension,
+        /// whether given a bare name ("my_mod"), a file name, or a full path. Null for blank input.
+        /// Case is kept as given: RPFM compares the name to file names exactly.
+        /// </summary>
+        public static string NormalizeModPackName(string nameOrPath)
         {
-            return packPaths
-                .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            if (string.IsNullOrWhiteSpace(nameOrPath))
+            {
+                return null;
+            }
+
+            var name = Path.GetFileName(nameOrPath.Trim());
+            return name.EndsWith(".pack", StringComparison.OrdinalIgnoreCase) ? name : name + ".pack";
         }
     }
 }

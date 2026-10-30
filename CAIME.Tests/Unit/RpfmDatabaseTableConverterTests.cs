@@ -8,7 +8,7 @@ namespace CAIME.Tests.Unit
 {
     /// <summary>
     /// Unit tests for <see cref="DatabaseTableConverter"/>. The inline TSV mirrors the exact format
-    /// rpfm_cli.exe produces (column-names line, then a "#&lt;table&gt;;&lt;version&gt;;..." metadata
+    /// RPFM's TSV export produces (column-names line, then a "#&lt;table&gt;;&lt;version&gt;;..." metadata
     /// line, then true/false booleans) and the inline schema mirrors a TWaD_*.xml Assembly Kit schema.
     /// The key behaviour verified is that yes/no columns become "1"/"0" - the form the existing
     /// database loader expects.
@@ -141,14 +141,13 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeTsvToXml_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
+        public void MergeTsv_SameFragmentNameFromTwoSources_EarlierListedFragmentWins()
         {
             // Two fragments that happen to share the exact same in-pack fragment name (e.g. two packs
             // both shipping a "!!!mod" fragment for this table) - fragment-name sorting alone cannot
-            // break this tie, so MergeTsvToXml must fall back to a stable sort and let whichever
-            // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists
-            // fragments in pack-file-name order specifically so this tie resolves alphabetically by
-            // pack name.
+            // break this tie, so MergeTsv must fall back to a stable sort and let whichever
+            // fragment the caller listed first win. RpfmWorkflowSession relies on this: it lists a
+            // mod's fragments before the game's, so a mod wins this tie.
             var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
             File.WriteAllText(schemaPath, TwadSchema);
 
@@ -168,25 +167,98 @@ namespace CAIME.Tests.Unit
             var primaryKeyColumns = DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath);
             var schemaFields      = DatabaseTableConverter.GetFields(schemaPath);
 
-            var outputXmlPath = Path.Combine(_dir, "first_pack_wins.xml");
-            DatabaseTableConverter.MergeTsvToXml(
+            var merged = DatabaseTableConverter.MergeTsv(
                 new[] { (tsvFromFirstPack, "!!!mod"), (tsvFromSecondPack, "!!!mod") },
-                "test_table", booleans, primaryKeyColumns, schemaFields, null, null, outputXmlPath);
+                "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
-            var records = XDocument.Load(outputXmlPath).Root.Elements("test_table").ToList();
+            var records = merged.Root.Elements("test_table").ToList();
             Assert.AreEqual(1, records.Count, "Same primary key across both fragments must collapse to one record.");
             Assert.AreEqual("111", records[0].Element("movement_cost").Value,
                 "With tied fragment names, the fragment listed first must win.");
 
             // Reversing the listed order must reverse the winner - proves the tiebreak really tracks
             // input order rather than, say, file path or an unstable sort.
-            var reversedOutputXmlPath = Path.Combine(_dir, "second_pack_wins.xml");
-            DatabaseTableConverter.MergeTsvToXml(
+            var reversed = DatabaseTableConverter.MergeTsv(
                 new[] { (tsvFromSecondPack, "!!!mod"), (tsvFromFirstPack, "!!!mod") },
-                "test_table", booleans, primaryKeyColumns, schemaFields, null, null, reversedOutputXmlPath);
+                "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
-            var reversedRecords = XDocument.Load(reversedOutputXmlPath).Root.Elements("test_table").ToList();
+            var reversedRecords = reversed.Root.Elements("test_table").ToList();
             Assert.AreEqual("222", reversedRecords[0].Element("movement_cost").Value);
+        }
+
+        [TestMethod]
+        public void MergeTsv_WithRowFilter_KeepsOnlySelectedRowsInTheirOrder()
+        {
+            // The RPFM workflow keeps only one campaign map's regions; dropping the rest must not
+            // reorder the ones kept, since CAIME numbers regions by their order in the table.
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
+            File.WriteAllText(schemaPath, TwadSchema);
+            File.WriteAllText(tsvPath,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/rom_test\t\t\t\n" +
+                "zz_kept\t1\ttrue\tfalse\n" +
+                "dropped\t2\ttrue\tfalse\n" +
+                "aa_kept\t3\tfalse\ttrue\n");
+
+            var merged = DatabaseTableConverter.MergeTsv(
+                new[] { (tsvPath, "rom_test") }, "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null,
+                new TsvRowFilter("type", new[] { "AA_KEPT", "zz_kept" }));
+
+            var kept = merged.Root.Elements("test_table").Select(r => r.Element("type").Value).ToArray();
+            CollectionAssert.AreEqual(new[] { "zz_kept", "aa_kept" }, kept,
+                "Only the selected rows may be kept (matched ignoring case), in their original order.");
+        }
+
+        [TestMethod]
+        public void MergeTsv_RowFilterOnAMissingColumn_Throws()
+        {
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            var tsvPath    = Path.Combine(_dir, "rom_test.tsv");
+            File.WriteAllText(schemaPath, TwadSchema);
+            File.WriteAllText(tsvPath, Tsv);
+
+            Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsv(
+                new[] { (tsvPath, "rom_test") }, "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null,
+                new TsvRowFilter("no_such_column", new[] { "x" })),
+                "A filter that cannot be applied must fail rather than silently keep every row or none.");
+        }
+
+        [TestMethod]
+        public void WriteAssemblyKitXml_WritesNoBom_AndCreatesTheFolder()
+        {
+            var xmlPath  = Path.Combine(_dir, "not_yet_created", "regions.xml");
+            var document = new XDocument(new XElement("dataroot", new XElement("regions", new XElement("key", "reg_a"))));
+
+            DatabaseTableConverter.WriteAssemblyKitXml(document, xmlPath);
+
+            Assert.AreNotEqual(0xEF, File.ReadAllBytes(xmlPath)[0], "The Assembly Kit's reader crashes on a UTF-8 BOM.");
+            Assert.AreEqual("reg_a", XDocument.Load(xmlPath).Root.Element("regions").Element("key").Value);
+        }
+
+        [TestMethod]
+        public void ReadTsvRows_ReturnsDataRowsByColumnName_SkippingTheMetadataLine()
+        {
+            var tsvPath = Path.Combine(_dir, "campaign_map_regions.tsv");
+            File.WriteAllText(tsvPath,
+                "campaign_map\tregion\n" +
+                "#campaign_map_regions_tables;0;db/campaign_map_regions_tables/data__\t\n" +
+                "main_map\treg_a\n" +
+                "other_map\treg_b\n");
+
+            var rows = DatabaseTableConverter.ReadTsvRows(tsvPath).ToList();
+
+            Assert.AreEqual(2, rows.Count);
+            Assert.AreEqual("main_map", rows[0]["campaign_map"]);
+            Assert.AreEqual("reg_b", rows[1]["region"]);
         }
 
         [TestMethod]
