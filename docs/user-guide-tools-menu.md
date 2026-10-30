@@ -13,20 +13,21 @@ The **Tools** menu is your modder's workbench — a collection of specialist edi
 - [Map Data Editor](#3-map-data-editor)
 - [Shader Resolution Corrector](#4-shader-resolution-corrector)
 - [Import → Layer Data](#5-import--layer-data)
-- [Export → SVG Borders](#6-export--svg-borders)
-- [Export → Baseline Tilemap Image](#7-export--baseline-tilemap-image)
-- [Export → Layer Data](#8-export--layer-data)
-- [Validate → Rivers](#9-validate--rivers)
-- [Validate → Town Slots](#10-validate--town-slots)
-- [Validate → Roads](#11-validate--roads)
-- [Validate → Bridges](#12-validate--bridges)
-- [Validate → Beaches](#13-validate--beaches)
-- [Validate → Regions](#14-validate--regions)
-- [Validate → Attritions](#15-validate--attritions)
-- [Validate → Climates](#16-validate--climates)
-- [Validate → Ground Types](#17-validate--ground-types)
-- [Validate → Impassable](#18-validate--impassable)
-- [Validate → Town Sprawl](#19-validate--town-sprawl)
+- [Import → map_data.esf](#6-import--map_dataesf)
+- [Export → SVG Borders](#7-export--svg-borders)
+- [Export → Baseline Tilemap Image](#8-export--baseline-tilemap-image)
+- [Export → Layer Data](#9-export--layer-data)
+- [Validate → Rivers](#10-validate--rivers)
+- [Validate → Town Slots](#11-validate--town-slots)
+- [Validate → Roads](#12-validate--roads)
+- [Validate → Bridges](#13-validate--bridges)
+- [Validate → Beaches](#14-validate--beaches)
+- [Validate → Regions](#15-validate--regions)
+- [Validate → Attritions](#16-validate--attritions)
+- [Validate → Climates](#17-validate--climates)
+- [Validate → Ground Types](#18-validate--ground-types)
+- [Validate → Impassable](#19-validate--impassable)
+- [Validate → Town Sprawl](#20-validate--town-sprawl)
 - [Pro-Tips & Troubleshooting](#pro-tips--troubleshooting)
 
 ---
@@ -215,7 +216,24 @@ This tool lets you bring in a previously exported layer binary file (`.hex_layer
 
 ---
 
-### 6. Export → SVG Borders
+### 6. Import → map_data.esf
+
+> **Note:** Available whenever a project can be opened. Works with every supported game.
+
+Creates a new project from a `map_data.esf` by rebuilding the `map.hex` it was made from — useful when you have a map's `map_data.esf` but not its `map.hex`. The current project is closed first.
+
+**Steps:**
+
+1. Click **Tools** → **Import** → **map_data.esf**.
+2. Navigate to the `map_data.esf` file and click **Open**. The file picker only shows files named `map_data.esf`.
+   - Warhammer III and Three Kingdoms files are recognised on their own. The other games share file layouts (Rome II, Attila and Thrones of Britannia share one; Warhammer, Warhammer II, Troy and Pharaoh share another), so CAIME asks which game the file is from. Pick the right one: the game decides the `map.hex` version and how **Process → Map Data** writes the file.
+3. The new project opens. The map is named after the folder the file is in.
+
+See [Starting from a map_data.esf](user-guide-modifying-an-existing-map.md#starting-from-a-map_dataesf) for what the import recovers and what it leaves empty.
+
+---
+
+### 7. Export → SVG Borders
 
 > **Note:** Available only when a project with borders data ready to export is open.
 
@@ -229,7 +247,7 @@ Exports your map's region borders as an **SVG vector image** file. SVG files can
 
 ---
 
-### 7. Export → Baseline Tilemap Image
+### 8. Export → Baseline Tilemap Image
 
 > **Note:** Available only when a project is open.
 
@@ -243,7 +261,7 @@ Generates a **Baseline Tilemap** image — a flat colour image of the map that s
 
 ---
 
-### 8. Export → Layer Data
+### 9. Export → Layer Data
 
 > **Note:** Available only when lookup/minimap generation is enabled for your project.
 
@@ -304,7 +322,7 @@ The **Validate** submenu contains eleven independent checks, each scanning a dif
 
 ---
 
-### 9. Validate → Rivers
+### 10. Validate → Rivers
 
 Checks every river hex on your map for consistency problems.
 
@@ -322,7 +340,7 @@ Checks every river hex on your map for consistency problems.
 
 ---
 
-### 10. Validate → Town Slots
+### 11. Validate → Town Slots
 
 Checks the placement and size of every settlement slot (the cluster of hexes that represents a city or port).
 
@@ -341,7 +359,7 @@ Checks the placement and size of every settlement slot (the cluster of hexes tha
 
 ---
 
-### 11. Validate → Roads
+### 12. Validate → Roads
 
 Checks every road hex for placement and connectivity issues.
 
@@ -357,7 +375,7 @@ Checks every road hex for placement and connectivity issues.
 
 ---
 
-### 12. Validate → Bridges
+### 13. Validate → Bridges
 
 Checks every bridge structure on the map.
 
@@ -371,7 +389,7 @@ Checks every bridge structure on the map.
 
 ---
 
-### 13. Validate → Beaches
+### 14. Validate → Beaches
 
 Checks every beach hex for correct placement.
 
@@ -386,7 +404,7 @@ Checks every beach hex for correct placement.
 
 ---
 
-### 14. Validate → Regions
+### 15. Validate → Regions
 
 This is the most comprehensive validator. It checks the overall health and consistency of your region painting.
 
@@ -404,7 +422,7 @@ This is the most comprehensive validator. It checks the overall health and consi
 
 ---
 
-### 15. Validate → Attritions
+### 16. Validate → Attritions
 
 Checks that the attrition zone data painted on the map is consistent with the game's database.
 
@@ -418,7 +436,7 @@ Checks that the attrition zone data painted on the map is consistent with the ga
 
 ---
 
-### 16. Validate → Climates
+### 17. Validate → Climates
 
 Checks that the climate zone data is consistent with the game's database.
 
@@ -433,7 +451,7 @@ Checks that the climate zone data is consistent with the game's database.
 
 ---
 
-### 17. Validate → Ground Types
+### 18. Validate → Ground Types
 
 Checks the terrain type (ground type) painted on every hex for consistency errors.
 
@@ -451,7 +469,7 @@ Checks the terrain type (ground type) painted on every hex for consistency error
 
 ---
 
-### 18. Validate → Impassable
+### 19. Validate → Impassable
 
 Checks the impassable (no-go) layer for holes and inconsistencies.
 
@@ -465,7 +483,7 @@ Checks the impassable (no-go) layer for holes and inconsistencies.
 
 ---
 
-### 19. Validate → Town Sprawl
+### 20. Validate → Town Sprawl
 
 Checks that every settlement's Town Sprawl footprint is a single, well-formed blob that stays inside its own region and terrain.
 

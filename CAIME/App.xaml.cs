@@ -26,10 +26,10 @@ namespace CAIME
             // applies a downloaded update on restart before your UI ever appears.
             VelopackApp.Build().Run();
 
-            // The Assembly Kit's XML tables store numbers with a '.' decimal separator. Parse them
+            // The database tables CAIME builds store numbers with a '.' decimal separator. Parse them
             // with the invariant culture whatever the Windows display language, otherwise the
             // database refuses to load on e.g. a French Windows ("Impossible de stocker <533.74>
-            // dans la colonne maxx. Type attendu est Double.") and every project opens read-only.
+            // dans la colonne maxx. Type attendu est Double.").
             System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
             System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -59,11 +59,6 @@ namespace CAIME
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-
-            // Restore any Assembly Kit changes left behind by an RPFM session that was killed before it
-            // could clean up (End Task, kill, or Visual Studio "Stop Debugging" - none of which run the
-            // in-process cleanup). Must happen before a project can be opened.
-            CAIME.Rpfm.RpfmRecoveryJournal.RecoverAll();
 
             _ = CheckForUpdatesAsync();
 

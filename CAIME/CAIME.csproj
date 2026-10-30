@@ -283,13 +283,11 @@
     <Compile Include="Classes\Common\AutoSavesManager.cs" />
     <Compile Include="Classes\Common\HexGridUtility.cs" />
     <Compile Include="Classes\Common\CaimeMetadata.cs" />
-    <Compile Include="Classes\Common\Rpfm\BackupService.cs" />
-    <Compile Include="Classes\Common\Rpfm\DatabaseSource.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableConverter.cs" />
     <Compile Include="Classes\Common\Rpfm\DatabaseTableProvider.cs" />
     <Compile Include="Classes\Common\Rpfm\GameMappingProvider.cs" />
     <Compile Include="Classes\Common\Rpfm\MetadataService.cs" />
-    <Compile Include="Classes\Common\Rpfm\RpfmRecoveryJournal.cs" />
+    <Compile Include="Classes\Common\Rpfm\RpfmServerClient.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmService.cs" />
     <Compile Include="Classes\Common\Rpfm\RpfmWorkflowSession.cs" />
     <Compile Include="Classes\Common\LayerOrdersJson.cs" />
@@ -299,12 +297,19 @@
     <Compile Include="Classes\Editor\MapDataEditor\MapDataConfig.cs" />
     <Compile Include="Classes\Editor\Painters\LinePainter.cs" />
     <Compile Include="Classes\Editor\Painters\FloodFillPainter.cs" />
+    <Compile Include="Classes\Exporters\AssemblyKit\AssemblyKitBuilder.cs" />
+    <Compile Include="Classes\Exporters\AssemblyKit\MapDataBuilderTables.cs" />
     <Compile Include="Classes\Exporters\BaselineTilemapExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGBordersExporter.cs" />
     <Compile Include="Classes\Exporters\Borders\SVGRoadExporter.cs" />
+    <Compile Include="Classes\Exporters\DynamicResources\DynamicResourceRegions.cs" />
+    <Compile Include="Classes\Exporters\DynamicResources\DynamicResourcesWriter.cs" />
     <Compile Include="Classes\Exporters\DynamicResources\ProcessDynamicResources.cs" />
     <Compile Include="Classes\Exporters\LayerToImageExporter.cs" />
     <Compile Include="Classes\Importers\LayerImporter.cs" />
+    <Compile Include="Classes\Importers\MapData\MapDataContents.cs" />
+    <Compile Include="Classes\Importers\MapData\MapDataImporter.cs" />
+    <Compile Include="Classes\Importers\MapData\MapDataReader.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.Climates.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.AreasOfInterest.cs" />
@@ -321,8 +326,27 @@
     <Compile Include="Classes\Editor\LayerCompositor.cs" />
     <Compile Include="Classes\Editor\LayerOpacityPreview.cs" />
     <Compile Include="Classes\Exporters\LookupImageExporter.cs" />
+    <Compile Include="Classes\Exporters\MapData\AttilaMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataAreas.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataGeometry.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataEsfParts.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataGrid.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataModel.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataRegionLinks.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataSettlement.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataSlotSettlement.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataSprawlFill.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataSlotPositions.cs" />
+    <Compile Include="Classes\Exporters\MapData\PharaohMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\RomeIIMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\ThreeKingdomsMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\MapDataWriter.cs" />
     <Compile Include="Classes\Exporters\MapData\MapDataConfigPostProcessor.cs" />
     <Compile Include="Classes\Exporters\MapData\ProcessMapData.cs" />
+    <Compile Include="Classes\Exporters\MapData\TroyMapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\Wh1MapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\Wh2MapDataWriter.cs" />
+    <Compile Include="Classes\Exporters\MapData\Wh3MapDataWriter.cs" />
     <Compile Include="Classes\Exporters\Pathfinding\Generators\BordersGenerator.cs" />
     <Compile Include="Classes\Exporters\Pathfinding\Generators\BordersCountPerTileGroupGenerator.cs" />
     <Compile Include="Classes\Exporters\Pathfinding\Generators\RestrictionsGenerator.cs" />
@@ -466,6 +490,7 @@
     <Compile Include="ViewModels\MapDataEditor\MapDataSettingsViewModel.cs" />
     <Compile Include="ViewModels\Windows\ImportLayerViewModel.cs" />
     <Compile Include="ViewModels\Windows\RenameCampaignMapViewModel.cs" />
+    <Compile Include="ViewModels\Windows\ChooseGameViewModel.cs" />
     <Compile Include="Views\Controls\ActionsControls\GroundTypeActionsControl.xaml.cs">
       <DependentUpon>GroundTypeActionsControl.xaml</DependentUpon>
     </Compile>
@@ -559,6 +584,9 @@
     </Compile>
     <Compile Include="Views\Windows\MapHexFile\RenameCampaignMapWindow.xaml.cs">
       <DependentUpon>RenameCampaignMapWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\Windows\ChooseGameWindow.xaml.cs">
+      <DependentUpon>ChooseGameWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Windows\ResizeWindow.xaml.cs">
       <DependentUpon>ResizeWindow.xaml</DependentUpon>
@@ -792,6 +820,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Views\Windows\MapHexFile\RenameCampaignMapWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Views\Windows\ChooseGameWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

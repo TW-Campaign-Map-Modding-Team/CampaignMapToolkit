@@ -29,6 +29,10 @@ Use the **Back** and **Forward** buttons at the top of this window to navigate b
 - [Processing & Exporting Your Campaign Map](user-guide-processing-and-exporting.md)
 - [Using CAIME from the Command Line (CLI)](user-guide-command-line-interface.md)
 
+## Annex
+
+- [The Assembly Kit (Legacy & Advanced)](user-guide-assembly-kit.md) — CAIME needs no Assembly Kit; this covers the optional features that use one.
+
 ---
 
 *This page is the index for all user guides. To add or rearrange guides, edit `docs/user-guides.md`.*

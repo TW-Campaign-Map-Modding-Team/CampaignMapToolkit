@@ -41,6 +41,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Esf\AbcaCodec.cs" />
+    <Compile Include="Esf\AbcbCodec.cs" />
+    <Compile Include="Esf\CaHashMap.cs" />
+    <Compile Include="Esf\CaStringHash.cs" />
+    <Compile Include="Esf\EsfWriter.cs" />
     <Compile Include="Esf\AbceCodec.cs" />
     <Compile Include="Esf\AbcfCodec.cs" />
     <Compile Include="Esf\SimpleNodes.cs" />

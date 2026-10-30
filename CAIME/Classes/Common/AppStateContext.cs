@@ -21,12 +21,10 @@ namespace CAIME
             context.IsSidebarEnabled                = false;
             context.IsViewportEnabled               = false;
             context.IsExportBordersEnabled          = false;
-            context.IsExportSVGBordersEnabled       = false;
             context.IsExportSVGRoadsEnabled          = false;
             context.IsProcessTradeRoutesEnabled     = false;
-            context.IsExportPathfindingEnabled      = false;
-            context.IsGenerateLookupEnabled         = false;
-            context.IsProcessMapDataEnabled         = false;
+            context.IsImportLayerDataEnabled        = false;
+            context.IsExportLayerImagesEnabled      = false;
             context.IsProcessDynResEnabled          = false;
             context.IsLoggerItemEnabled             = true;
             context.IsLoadItemEnabled               = true;
@@ -39,10 +37,6 @@ namespace CAIME
             context.IsRenameMapEnabled              = false;
             context.IsBrushSizeSliderEnabled        = false;
             context.IsBackImgSliderEnabled          = false;
-            context.IsGroundTypesValidatorEnabled   = false;
-            context.IsClimatesValidatorEnabled      = false;
-            context.IsAttritionsValidatorEnabled    = false;
-            context.IsRegionsValidatorEnabled       = false;
             context.IsTownSlotsValidatorEnabled     = false;
             context.IsRoadsValidatorEnabled         = false;
             context.IsRiversValidatorEnabled        = false;
@@ -66,28 +60,16 @@ namespace CAIME
             context.IsSwatchesExpanded              = true;
             context.IsActionsExpanded               = true;
             context.IsMinimapExpanded               = true;
-            context.IsToolbarEnabled                = true;
-            context.IsSidebarEnabled                = true;
             context.IsViewportEnabled               = true;
-            context.IsProcessMapDataEnabled         = true;
             context.IsProcessDynResEnabled          = true;
             context.IsExportBordersEnabled          = true;
-            context.IsExportSVGBordersEnabled       = true;
             context.IsExportSVGRoadsEnabled          = true;
             context.IsProcessTradeRoutesEnabled     = true;
-            context.IsExportPathfindingEnabled      = true;
-            context.IsGenerateLookupEnabled         = true;
+            context.IsExportLayerImagesEnabled      = true;
             context.IsLoadItemEnabled               = true;
             context.IsReloadItemEnabled             = true;
-            context.IsSaveItemEnabled               = true;
             context.IsCloseItemEnabled              = true;
-            context.IsResizeEnabled                 = true;
-            context.IsRenameMapEnabled              = true;
             context.BrushSizeSliderVisibility       = Visibility.Visible;
-            context.IsGroundTypesValidatorEnabled   = true;
-            context.IsClimatesValidatorEnabled      = true;
-            context.IsAttritionsValidatorEnabled    = true;
-            context.IsRegionsValidatorEnabled       = true;
             context.IsTownSlotsValidatorEnabled     = true;
             context.IsRoadsValidatorEnabled         = true;
             context.IsRiversValidatorEnabled        = true;
@@ -107,6 +89,16 @@ namespace CAIME
         public static readonly IAppState UninitialisedState = new UninitialisedState();
 
         private IAppState currentState;
+
+        // The open project, or null; see SetProject.
+        private Project project;
+
+        /// <summary>
+        /// Whether the map can be changed: once the editor is initialised and the project's database
+        /// is loaded, whichever comes last. A map can't be saved without its database (see
+        /// ProjectManager.Save), so it can't be changed without it either.
+        /// </summary>
+        public bool IsEditingEnabled => project != null && project.IsDatabaseLoaded && currentState is InitialisedState;
 
         #region Sidebar properties
         private bool isBackImgSliderEnabled;
@@ -349,6 +341,32 @@ namespace CAIME
             {
                 isGenerateLookupEnabled = value;
                 OnPropertyChanged(nameof(IsGenerateLookupEnabled));
+            }
+        }
+        private bool isImportLayerDataEnabled;
+        public bool IsImportLayerDataEnabled
+        {
+            get
+            {
+                return isImportLayerDataEnabled;
+            }
+            set
+            {
+                isImportLayerDataEnabled = value;
+                OnPropertyChanged(nameof(IsImportLayerDataEnabled));
+            }
+        }
+        private bool isExportLayerImagesEnabled;
+        public bool IsExportLayerImagesEnabled
+        {
+            get
+            {
+                return isExportLayerImagesEnabled;
+            }
+            set
+            {
+                isExportLayerImagesEnabled = value;
+                OnPropertyChanged(nameof(IsExportLayerImagesEnabled));
             }
         }
 
@@ -684,6 +702,40 @@ namespace CAIME
         {
             currentState = state;
             currentState.UpdateView(this);
+            UpdateDatabaseItems();
+        }
+
+        /// <summary>
+        /// Records the open project, or null, and updates what can be used from whether its database
+        /// is loaded. The database is read through RPFM in the background once the map is open (see
+        /// ProjectManager), so call this again once it has been.
+        /// </summary>
+        public void SetProject(Project project)
+        {
+            this.project = project;
+            UpdateDatabaseItems();
+        }
+
+        // Editing, saving and the steps that read the database wait for the database.
+        private void UpdateDatabaseItems()
+        {
+            var enabled = IsEditingEnabled;
+
+            IsToolbarEnabled                = enabled;
+            IsSidebarEnabled                = enabled;
+            IsSaveItemEnabled               = enabled;
+            IsResizeEnabled                 = enabled;
+            IsRenameMapEnabled              = enabled;
+            IsImportLayerDataEnabled        = enabled;
+
+            IsProcessMapDataEnabled         = enabled;
+            IsExportPathfindingEnabled      = enabled;
+            IsGenerateLookupEnabled         = enabled;
+            IsExportSVGBordersEnabled       = enabled;
+            IsGroundTypesValidatorEnabled   = enabled;
+            IsClimatesValidatorEnabled      = enabled;
+            IsAttritionsValidatorEnabled    = enabled;
+            IsRegionsValidatorEnabled       = enabled;
         }
 
         public void OnToolChanged(ToolType tool)
