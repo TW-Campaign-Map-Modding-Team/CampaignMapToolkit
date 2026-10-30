@@ -217,18 +217,13 @@ namespace CAIME.Exporters
             public int Type;
         }
 
-        /// <summary>
-        /// Splits each region's hexes of one building level into groups as the builder does. It
-        /// walks the grid column by column and adds each hex to the first of its level's groups
-        /// that holds a neighbour, or starts a new group. Then, until a pass changes nothing, it
-        /// appends every group that touches an earlier one to that earlier group, in group order,
-        /// and drops the emptied groups.
-        /// </summary>
+        /// <summary>Numbers each region's building levels in walking order and groups their hexes.</summary>
         /// <param name="keysInWalkOrder">Each region and level, in the walking order of its first hex.</param>
         private static Dictionary<GroupKey, List<List<int>>> GroupHexes(MapHexFile map, MapDataGrid grid, int[] hexLevels, out List<GroupKey> keysInWalkOrder)
         {
             keysInWalkOrder = new List<GroupKey>();
-            var walked      = new Dictionary<GroupKey, List<HexGroup>>();
+            var keyIds      = new Dictionary<GroupKey, int>();
+            var hexKeys     = new int[grid.HexCount];
 
             for (int column = 0; column < grid.Width; ++column)
             {
@@ -237,100 +232,151 @@ namespace CAIME.Exporters
                     int hexIndex = row * grid.Width + column;
                     if (hexLevels[hexIndex] < 0)
                     {
+                        hexKeys[hexIndex] = -1;
                         continue;
                     }
 
                     var key = new GroupKey { Region = map.HexData[hexIndex].RegionId, Type = hexLevels[hexIndex] };
-                    if (walked.TryGetValue(key, out var groups) == false)
+                    if (keyIds.TryGetValue(key, out int keyId) == false)
                     {
-                        groups = new List<HexGroup>();
-                        walked.Add(key, groups);
+                        keyId = keysInWalkOrder.Count;
+                        keyIds.Add(key, keyId);
                         keysInWalkOrder.Add(key);
                     }
 
-                    var group = groups.FirstOrDefault(g => g.Touches(grid, hexIndex));
-                    if (group == null)
-                    {
-                        group = new HexGroup();
-                        groups.Add(group);
-                    }
-
-                    group.Add(hexIndex);
+                    hexKeys[hexIndex] = keyId;
                 }
             }
 
-            var result = new Dictionary<GroupKey, List<List<int>>>();
-            foreach (var entry in walked)
-            {
-                MergeTouchingGroups(grid, entry.Value);
-                result.Add(entry.Key, entry.Value.Select(group => group.Hexes).ToList());
-            }
-
-            return result;
+            var groups = GroupHexes(grid, hexKeys, keysInWalkOrder.Count);
+            return keysInWalkOrder.Select((key, keyId) => (key, keyId)).ToDictionary(entry => entry.key, entry => groups[entry.keyId]);
         }
 
-        private static void MergeTouchingGroups(MapDataGrid grid, List<HexGroup> groups)
+        /// <summary>
+        /// Splits the hexes of each key, a region's building level, into groups as the builder does.
+        /// It walks the grid column by column and adds each hex to the first of its key's groups
+        /// that holds a neighbour, or starts a new group. Then, until a pass changes nothing, it
+        /// appends every group that touches an earlier one to that earlier group, in group order,
+        /// and drops the emptied groups.
+        /// </summary>
+        /// <param name="hexKeys">Each hex's key, from 0 up to <paramref name="keyCount"/>, or -1 for none.</param>
+        internal static List<List<int>>[] GroupHexes(MapDataGrid grid, int[] hexKeys, int keyCount)
         {
+            var groups      = new List<List<int>>[keyCount];
+            var hexGroups   = Enumerable.Repeat(-1, grid.HexCount).ToArray();
+
+            for (int key = 0; key < keyCount; ++key)
+            {
+                groups[key] = new List<List<int>>();
+            }
+
+            for (int column = 0; column < grid.Width; ++column)
+            {
+                for (int row = 0; row < grid.Height; ++row)
+                {
+                    int hexIndex = row * grid.Width + column;
+                    int key      = hexKeys[hexIndex];
+                    if (key < 0)
+                    {
+                        continue;
+                    }
+
+                    // The first group holding a walked neighbour is the one with the lowest index.
+                    int group = int.MaxValue;
+                    for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                    {
+                        int neighbour = grid.Neighbour(hexIndex, n);
+                        if (neighbour >= 0 && hexKeys[neighbour] == key && hexGroups[neighbour] >= 0)
+                        {
+                            group = Math.Min(group, hexGroups[neighbour]);
+                        }
+                    }
+
+                    if (group == int.MaxValue)
+                    {
+                        group = groups[key].Count;
+                        groups[key].Add(new List<int>());
+                    }
+
+                    groups[key][group].Add(hexIndex);
+                    hexGroups[hexIndex] = group;
+                }
+            }
+
+            for (int key = 0; key < keyCount; ++key)
+            {
+                groups[key] = MergeTouchingGroups(grid, hexKeys, hexGroups, groups[key]);
+            }
+
+            return groups;
+        }
+
+        /// <summary>
+        /// The builder's merge passes, worked out on which groups touch rather than by testing every
+        /// hex of every later group against each group. Group i takes in the later groups touching it
+        /// in index order, including those it touches only through a group it took in earlier in the
+        /// pass, as long as their index is higher than that group's.
+        /// </summary>
+        private static List<List<int>> MergeTouchingGroups(MapDataGrid grid, int[] hexKeys, int[] hexGroups, List<List<int>> groups)
+        {
+            var touching = new HashSet<int>[groups.Count];
+            for (int group = 0; group < groups.Count; ++group)
+            {
+                touching[group] = new HashSet<int>();
+                foreach (int hexIndex in groups[group])
+                {
+                    for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
+                    {
+                        int neighbour = grid.Neighbour(hexIndex, n);
+                        if (neighbour >= 0 && hexKeys[neighbour] == hexKeys[hexIndex] && hexGroups[neighbour] != group)
+                        {
+                            touching[group].Add(hexGroups[neighbour]);
+                        }
+                    }
+                }
+            }
+
             bool merged;
             do
             {
                 merged = false;
                 for (int i = 0; i < groups.Count; ++i)
                 {
-                    for (int j = i + 1; j < groups.Count && groups[i].Hexes.Count > 0; ++j)
+                    if (groups[i] == null)
                     {
-                        if (groups[j].Hexes.Any(hexIndex => groups[i].Touches(grid, hexIndex)))
+                        continue;
+                    }
+
+                    var later = new SortedSet<int>(touching[i].Where(group => group > i));
+                    while (later.Count > 0)
+                    {
+                        int j = later.Min;
+                        later.Remove(j);
+
+                        groups[i].AddRange(groups[j]);
+                        groups[j] = null;
+
+                        foreach (int other in touching[j].Where(group => group != i))
                         {
-                            groups[i].AddAll(groups[j]);
-                            groups[j].Clear();
-                            merged = true;
+                            touching[other].Remove(j);
+                            touching[other].Add(i);
+                            touching[i].Add(other);
+
+                            if (other > j)
+                            {
+                                later.Add(other);
+                            }
                         }
+
+                        touching[i].Remove(j);
+                        touching[j] = null;
+                        merged = true;
                     }
                 }
-
-                groups.RemoveAll(group => group.Hexes.Count == 0);
             }
             while (merged);
-        }
 
-        private sealed class HexGroup
-        {
-            private readonly HashSet<int> _members = new HashSet<int>();
-
-            public List<int> Hexes { get; } = new List<int>();
-
-            public bool Touches(MapDataGrid grid, int hexIndex)
-            {
-                for (int n = 0; n < MapDataGrid.NEIGHBOUR_COUNT; ++n)
-                {
-                    if (_members.Contains(grid.Neighbour(hexIndex, n)))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            public void Add(int hexIndex)
-            {
-                Hexes.Add(hexIndex);
-                _members.Add(hexIndex);
-            }
-
-            public void AddAll(HexGroup other)
-            {
-                foreach (int hexIndex in other.Hexes)
-                {
-                    Add(hexIndex);
-                }
-            }
-
-            public void Clear()
-            {
-                Hexes.Clear();
-                _members.Clear();
-            }
+            return groups.Where(group => group != null).ToList();
         }
     }
 }
