@@ -340,7 +340,7 @@ namespace CAIME
 
         public void ResizeMap()
         {
-            if (ProjectManager.IsProjectOpen)
+            if (AppStateContext.Instance.IsEditingEnabled)
             {
                 var window = new ResizeWindow(ProjectManager)
                 {
@@ -353,7 +353,7 @@ namespace CAIME
 
         public void RenameCampaignMap()
         {
-            if (ProjectManager.IsProjectOpen)
+            if (AppStateContext.Instance.IsEditingEnabled)
             {
                 var renameMapWindow = new RenameCampaignMapWindow(this.ProjectManager)
                 {
@@ -597,7 +597,7 @@ namespace CAIME
             _autoSavesManager.Shutdown();
             _autoBackupManager.Shutdown();
 
-            AppStateContext.Instance.SetDatabaseLoaded(false);
+            AppStateContext.Instance.SetProject(null);
             AppStateContext.Instance.SetState(AppStateContext.UninitialisedState);
         }
 
@@ -772,6 +772,7 @@ namespace CAIME
         private void OnProjectOpened(object sender, ProjectEventArgs e)
         {
             this.project = e.Project;
+            AppStateContext.Instance.SetProject(e.Project);
 
             if (project.MapHexFile != null)
             {
@@ -814,7 +815,7 @@ namespace CAIME
 
         private void OnDatabaseLoaded(object sender, ProjectEventArgs e)
         {
-            AppStateContext.Instance.SetDatabaseLoaded(true);
+            AppStateContext.Instance.SetProject(e.Project);
         }
 
         private void OnProjectClosed(object sender, RoutedEventArgs e)
@@ -1450,8 +1451,9 @@ namespace CAIME
         
         private void Viewport_OnLeftMouseDown(object sender, ViewportMouseEventArgs e)
         {
+            // Nothing is painted until the map can be edited; the view still pans and zooms.
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }
@@ -1486,7 +1488,7 @@ namespace CAIME
         private void Viewport_OnLeftMouseMove(object sender, ViewportMouseEventArgs e)
         {
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }
@@ -1511,7 +1513,7 @@ namespace CAIME
         private void Viewport_OnLeftMouseUp(object sender, ViewportMouseEventArgs e)
         {
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }

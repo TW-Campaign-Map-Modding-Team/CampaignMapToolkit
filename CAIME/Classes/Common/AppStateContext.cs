@@ -60,21 +60,15 @@ namespace CAIME
             context.IsSwatchesExpanded              = true;
             context.IsActionsExpanded               = true;
             context.IsMinimapExpanded               = true;
-            context.IsToolbarEnabled                = true;
-            context.IsSidebarEnabled                = true;
             context.IsViewportEnabled               = true;
             context.IsProcessDynResEnabled          = true;
             context.IsExportBordersEnabled          = true;
             context.IsExportSVGRoadsEnabled          = true;
             context.IsProcessTradeRoutesEnabled     = true;
-            context.IsImportLayerDataEnabled        = true;
             context.IsExportLayerImagesEnabled      = true;
             context.IsLoadItemEnabled               = true;
             context.IsReloadItemEnabled             = true;
-            context.IsSaveItemEnabled               = true;
             context.IsCloseItemEnabled              = true;
-            context.IsResizeEnabled                 = true;
-            context.IsRenameMapEnabled              = true;
             context.BrushSizeSliderVisibility       = Visibility.Visible;
             context.IsTownSlotsValidatorEnabled     = true;
             context.IsRoadsValidatorEnabled         = true;
@@ -96,8 +90,15 @@ namespace CAIME
 
         private IAppState currentState;
 
-        // Whether the open project's database has been read; see SetDatabaseLoaded.
-        private bool isDatabaseLoaded;
+        // The open project, or null; see SetProject.
+        private Project project;
+
+        /// <summary>
+        /// Whether the map can be changed: once the editor is initialised and the project's database
+        /// is loaded, whichever comes last. A map can't be saved without its database (see
+        /// ProjectManager.Save), so it can't be changed without it either.
+        /// </summary>
+        public bool IsEditingEnabled => project != null && project.IsDatabaseLoaded && currentState is InitialisedState;
 
         #region Sidebar properties
         private bool isBackImgSliderEnabled;
@@ -705,21 +706,27 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Records whether the open project's database has been read. It is read through RPFM in the
-        /// background once the map is open (see ProjectManager), so it can arrive before or after the
-        /// editor is initialised.
+        /// Records the open project, or null, and updates what can be used from whether its database
+        /// is loaded. The database is read through RPFM in the background once the map is open (see
+        /// ProjectManager), so call this again once it has been.
         /// </summary>
-        public void SetDatabaseLoaded(bool loaded)
+        public void SetProject(Project project)
         {
-            isDatabaseLoaded = loaded;
+            this.project = project;
             UpdateDatabaseItems();
         }
 
-        // The steps that read the database are available once the editor is initialised and the
-        // database is loaded, whichever comes last.
+        // Editing, saving and the steps that read the database wait for the database.
         private void UpdateDatabaseItems()
         {
-            var enabled = isDatabaseLoaded && currentState is InitialisedState;
+            var enabled = IsEditingEnabled;
+
+            IsToolbarEnabled                = enabled;
+            IsSidebarEnabled                = enabled;
+            IsSaveItemEnabled               = enabled;
+            IsResizeEnabled                 = enabled;
+            IsRenameMapEnabled              = enabled;
+            IsImportLayerDataEnabled        = enabled;
 
             IsProcessMapDataEnabled         = enabled;
             IsExportPathfindingEnabled      = enabled;

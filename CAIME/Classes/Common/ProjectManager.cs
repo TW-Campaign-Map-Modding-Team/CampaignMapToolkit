@@ -199,15 +199,15 @@ namespace CAIME
                 // Only Pharaoh Dynasties checks the database against the map; the mismatches are logged.
                 LoggerViewModel.Log(
                     $"The region indices in {Game}'s database don't match the map's (see the log). " +
-                    "Saving and processing stay unavailable for this session.",
+                    "The map can't be edited, saved or processed this session.",
                     LogLevel.ErrorMessageBox);
             }
             catch (Exception ex)
             {
                 LoggerViewModel.Log(
                     $"Could not load database tables for {Game} ({ex.Message}). " +
-                    "Saving and processing stay unavailable for this session.",
-                    LogLevel.Warning);
+                    "The map can't be edited, saved or processed this session.",
+                    LogLevel.ErrorMessageBox);
             }
 
             Database.ShutDown();
@@ -603,9 +603,9 @@ namespace CAIME
             {
                 LoggerViewModel.Log(
                     $"No RPFM path is configured, so {project.Game}'s database (ground type names/costs, region names, " +
-                    "campaign data) can't be read, and the map can't be saved or processed this session - set the RPFM " +
-                    "path in Settings > Preferences and reopen the project.",
-                    LogLevel.Warning);
+                    "campaign data) can't be read, and the map can't be edited, saved or processed this session - set the " +
+                    "RPFM path in Settings > Preferences and reopen the project.",
+                    LogLevel.ErrorMessageBox);
                 return;
             }
 
@@ -629,7 +629,7 @@ namespace CAIME
             // Null in the CLI, which has no UI thread: there the tables are loaded on the reading thread.
             var dispatcher = Application.Current?.Dispatcher;
 
-            LoggerViewModel.Log("Reading the database through RPFM. Saving and processing are unavailable until it has been read.", LogLevel.Info);
+            LoggerViewModel.Log("Reading the database through RPFM. Editing, saving and processing are unavailable until it has been read.", LogLevel.Info);
 
             _databaseRead = Task.Run(() =>
             {
@@ -661,7 +661,9 @@ namespace CAIME
 
             if (failure != null)
             {
-                LoggerViewModel.Log($"Reading the database through RPFM failed: {failure.Message}", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"Reading the database through RPFM failed: {failure.Message}\n\n" +
+                    "The map can't be edited, saved or processed this session. Fix that, then reopen the project.",
+                    LogLevel.ErrorMessageBox);
                 return false;
             }
 
@@ -670,7 +672,7 @@ namespace CAIME
                 return false;
             }
 
-            LoggerViewModel.Log("RPFM database tables read successfully. Saving and processing are now available.", LogLevel.Info);
+            LoggerViewModel.Log("RPFM database tables read successfully. Editing, saving and processing are now available.", LogLevel.Info);
             OnDatabaseLoaded?.Invoke(this, new ProjectEventArgs(project));
             return true;
         }

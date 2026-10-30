@@ -61,7 +61,7 @@ The database is how CAIME knows things like:
 
 > **Think of it this way:** the game's database is its rulebook. CAIME is the referee who checks your painted map against that rulebook before allowing you to export anything.
 
-The map opens before its database has been read, so you can start editing at once. Until the log says the database has been read, the map can't be saved, and **Map Data**, **Pathfinding data** and **Lookup and Minimap images** stay greyed out. Without an RPFM path, a project opens with no database, and stays unsaveable with those steps unavailable.
+The map opens before its database has been read, so you can look around it at once. Until the log says the database has been read, the map can't be edited or saved, and **Map Data**, **Pathfinding data** and **Lookup and Minimap images** stay greyed out. Without an RPFM path, a project opens with no database, and stays view-only.
 
 > **Assembly Kit:** CAIME doesn't need one. With no Output folder set, processed files go to the Assembly Kit's `working_data` folder instead, and **Assembly Kit Integration** builds Map Data and Dynamic Resources with the Assembly Kit's own builder. Both are legacy features; see [Annex: The Assembly Kit](user-guide-assembly-kit.md).
 
