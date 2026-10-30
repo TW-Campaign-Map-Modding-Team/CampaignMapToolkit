@@ -82,6 +82,7 @@ namespace CAIME
         private BridgesActionsControl           bridgesActionsControl;
         private BeachesActionsControl           beachesActionsControl;
         private TownSlotsActionsControl         townSlotsActionsControl;
+        private CampaignMasksActionsControl     campaignMasksActionsControl;
 
         private int[]                           gridColours;
         private bool                            isLayersStackRedrawScheduled;
@@ -114,6 +115,7 @@ namespace CAIME
             bridgesActionsControl                                           = new BridgesActionsControl();
             beachesActionsControl                                           = new BeachesActionsControl();
             townSlotsActionsControl                                         = new TownSlotsActionsControl();
+            campaignMasksActionsControl                                     = new CampaignMasksActionsControl();
 
             FloodFillLayersSource                                           = new ObservableCollection<string>();
 
@@ -138,9 +140,12 @@ namespace CAIME
             tradeRoutesActionControl.ViewModel.OnUpdateTradeRouteColour     += OnUpdateTradeRouteColour;
             tradeRoutesActionControl.ViewModel.OnTradeRouteColoursUpdated   += UpdateColours;
 
+            campaignMasksActionsControl.ViewModel.OnMaskShown               += OnCampaignMaskShown;
+
             _preferencesViewModel.OnPreferencesChanged                      += OnPreferencesChanged;
 
             ProjectManager.OnOpenProject                                    += OnProjectOpened;
+            ProjectManager.OnDatabaseLoaded                                 += OnDatabaseLoaded;
             ProjectManager.OnCloseProject                                   += OnProjectClosed;
             ProjectManager.OnSaveProject                                    += OnProjectSaved;
             ProjectManager.OnFilePathChanged                                += OnProjectPathChanged;
@@ -339,7 +344,7 @@ namespace CAIME
 
         public void ResizeMap()
         {
-            if (ProjectManager.IsProjectOpen)
+            if (AppStateContext.Instance.IsEditingEnabled)
             {
                 var window = new ResizeWindow(ProjectManager)
                 {
@@ -352,7 +357,7 @@ namespace CAIME
 
         public void RenameCampaignMap()
         {
-            if (ProjectManager.IsProjectOpen)
+            if (AppStateContext.Instance.IsEditingEnabled)
             {
                 var renameMapWindow = new RenameCampaignMapWindow(this.ProjectManager)
                 {
@@ -387,6 +392,28 @@ namespace CAIME
                 }
 
                 ProjectManager.Open(dialog.FileName);
+            }
+        }
+
+        public void ImportMapData()
+        {
+            var dialog = new OpenFileDialog()
+            {
+                Title  = "Import a map_data.esf",
+                Filter = "map_data.esf|map_data.esf"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (ProjectManager.IsProjectOpen)
+                {
+                    ProjectManager.CloseProject();
+                }
+
+                ProjectManager.ImportMapData(dialog.FileName, games => ChooseGameWindow.Ask(
+                    Application.Current.MainWindow,
+                    $"{dialog.FileName} is laid out as these games lay out map_data.esf. Which game is it from?",
+                    games));
             }
         }
 
@@ -574,6 +601,7 @@ namespace CAIME
             _autoSavesManager.Shutdown();
             _autoBackupManager.Shutdown();
 
+            AppStateContext.Instance.SetProject(null);
             AppStateContext.Instance.SetState(AppStateContext.UninitialisedState);
         }
 
@@ -693,6 +721,7 @@ namespace CAIME
                 case LayerType.TownSlots:       return swatches.Find(s => ((TownSlotSwatch)s).SlotIndex == hex.TownSlotIndex);
                 case LayerType.TownSprawl:      return swatches.Find(s => ((TownSprawlSwatch)s).Value == hex.IsTownSprawl);
                 case LayerType.Restrictions:    return swatches.Find(s => ((RestrictionSwatch)s).RestrictionLevel == hex.RestrictionLvl);
+                case LayerType.CampaignMasks:   return swatches.Find(s => ((CampaignMaskSwatch)s).Matches(hex));
             }
 
             return null;
@@ -720,6 +749,13 @@ namespace CAIME
 
             // Update swatches set
             SidebarViewModel.SwatchesVM.UpdateSwatchesSet(ProjectManager.Project);
+
+            var campaignMaskLayer = SidebarViewModel.LayersVM.CampaignMaskLayer;
+            if (campaignMaskLayer != null)
+            {
+                SidebarViewModel.SwatchesVM.UpdateCampaignMaskSwatches(campaignMaskLayer);
+            }
+
             SidebarViewModel.SwatchesVM.SetActiveSwatches(LayerType.GroundTypes, 0);
         }
 
@@ -748,6 +784,7 @@ namespace CAIME
         private void OnProjectOpened(object sender, ProjectEventArgs e)
         {
             this.project = e.Project;
+            AppStateContext.Instance.SetProject(e.Project);
 
             if (project.MapHexFile != null)
             {
@@ -765,8 +802,10 @@ namespace CAIME
             bridgesActionsControl.ViewModel.Initialise(e.Project);
             beachesActionsControl.ViewModel.Initialise(e.Project);
             townSlotsActionsControl.ViewModel.Initialise(e.Project);
+            campaignMasksActionsControl.ViewModel.Initialise(e.Project);
 
             SidebarViewModel.LayersVM.Initialise(e.Project.Game, _preferencesViewModel.GetLayerOrder(e.Project.Game));
+            campaignMasksActionsControl.ViewModel.Attach(SidebarViewModel.LayersVM.CampaignMaskLayer);
 
             FloodFillLayersSource.Clear();
             foreach (var layer in SidebarViewModel.LayersVM.Layers)
@@ -786,6 +825,11 @@ namespace CAIME
             _autoBackupManager.Initialise(e.Project.ProjectPath);
 
             this.PostLoadProject();
+        }
+
+        private void OnDatabaseLoaded(object sender, ProjectEventArgs e)
+        {
+            AppStateContext.Instance.SetProject(e.Project);
         }
 
         private void OnProjectClosed(object sender, RoutedEventArgs e)
@@ -817,6 +861,28 @@ namespace CAIME
                 cachedHexSpacing = _preferencesViewModel.HexSpacing;
                 ResetGrid();
             }
+        }
+
+        /// <summary>
+        /// Repaints the campaign masks layer and swaps its swatch once it shows another mask. Before
+        /// the map has loaded, the layers are coloured and the swatches built in PostLoadProject.
+        /// </summary>
+        private void OnCampaignMaskShown(object sender, EventArgs e)
+        {
+            if (isInit == false)
+            {
+                return;
+            }
+
+            var layer = SidebarViewModel.LayersVM.CampaignMaskLayer;
+
+            SidebarViewModel.SwatchesVM.UpdateCampaignMaskSwatches(layer);
+            if (SidebarViewModel.LayersVM.ActiveLayer == LayerType.CampaignMasks)
+            {
+                SidebarViewModel.SwatchesVM.SetActiveSwatches(LayerType.CampaignMasks, 0);
+            }
+
+            project.ColourTable.SetColours(layer, true);
         }
 
         private void OnMapHexLayerChanged(object sender, LayerChangedEventArgs e)
@@ -879,6 +945,9 @@ namespace CAIME
                     break;
                 case LayerType.TownSlots:
                     SidebarViewModel.ActionsVM.LayerControl = townSlotsActionsControl;
+                    break;
+                case LayerType.CampaignMasks:
+                    SidebarViewModel.ActionsVM.LayerControl = campaignMasksActionsControl;
                     break;
                 default:
                     SidebarViewModel.ActionsVM.LayerControl = null;
@@ -1421,8 +1490,9 @@ namespace CAIME
         
         private void Viewport_OnLeftMouseDown(object sender, ViewportMouseEventArgs e)
         {
+            // Nothing is painted until the map can be edited; the view still pans and zooms.
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }
@@ -1457,7 +1527,7 @@ namespace CAIME
         private void Viewport_OnLeftMouseMove(object sender, ViewportMouseEventArgs e)
         {
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }
@@ -1482,7 +1552,7 @@ namespace CAIME
         private void Viewport_OnLeftMouseUp(object sender, ViewportMouseEventArgs e)
         {
             var tool = GetActiveTool();
-            if (tool is null)
+            if (tool is null || !AppStateContext.Instance.IsEditingEnabled)
             {
                 return;
             }

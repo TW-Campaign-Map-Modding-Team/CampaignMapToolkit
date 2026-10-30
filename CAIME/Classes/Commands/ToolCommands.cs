@@ -128,6 +128,15 @@ namespace CAIME
             };
         }
 
+        /// <summary>
+        /// The swatch that erases the layer. The campaign masks layer's is the shown mask's own, so
+        /// it is not in <see cref="CLEAR_SWATCHES"/>.
+        /// </summary>
+        public static Swatch ClearSwatchFor(Layer layer)
+        {
+            return layer is CampaignMaskLayer maskLayer ? maskLayer.UnmaskSwatch : CLEAR_SWATCHES[layer.Type];
+        }
+
         public override void Execute(object parameter)
         {
             base.Execute(parameter);
@@ -140,7 +149,7 @@ namespace CAIME
                 var layer       = (parameter as ViewportToolParameters).Layer;
                 var canDisplay  = (parameter as ViewportToolParameters).CanDisplay;
                 var brushSize   = tool.GetBrushSize();
-                var swatch      = CLEAR_SWATCHES[layer.Type];
+                var swatch      = ClearSwatchFor(layer);
 
                 var paintData = new PaintData()
                 {

@@ -284,7 +284,7 @@ namespace CAIME.Painters
         {
             var hex = project.MapHexFile.GetHex(hexIndex);
             swatch.Apply(hex);
-            layer.Colours[hexIndex] = swatch.Colour;
+            layer.Colours[hexIndex] = layer.ColourAfterApplying(swatch, hexIndex);
 
             if (canDisplay)
             {
@@ -414,7 +414,7 @@ namespace CAIME.Painters
 
             if (oldSwatch == null)
             {
-                oldSwatch = EraserToolCommand.CLEAR_SWATCHES[layer.Type];
+                oldSwatch = EraserToolCommand.ClearSwatchFor(layer);
             }
 
             var oldChange = new HexSnapshot()

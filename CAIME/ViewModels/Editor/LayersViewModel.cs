@@ -120,6 +120,19 @@ namespace CAIME
                 Layers.Insert(Layers.Count - 4, LayersMap[LayerType.AreasOfInterest]);
             }
 
+            // The games whose map.hex stores campaign masks. Masked hexes are impassable for the
+            // mask's campaigns, so the layer sits above Impassable.
+            if (game == GameTemplate.Warhammer ||
+                game == GameTemplate.Warhammer2 ||
+                game == GameTemplate.Warhammer3 ||
+                game == GameTemplate.Troy ||
+                game == GameTemplate.Pharaoh ||
+                game == GameTemplate.Pharaoh_Dynasties)
+            {
+                LayersMap[LayerType.CampaignMasks] = new CampaignMaskLayer();
+                Layers.Insert(Layers.IndexOf(LayersMap[LayerType.Impassable]), LayersMap[LayerType.CampaignMasks]);
+            }
+
             defaultOrder = Layers.ToList();
 
             if (savedOrder != null)
@@ -389,5 +402,8 @@ namespace CAIME
         {
             return LayersMap[type];
         }
+
+        /// <summary>The campaign masks layer, or null for a game whose map.hex has no masks.</summary>
+        public CampaignMaskLayer CampaignMaskLayer => LayersMap.TryGetValue(LayerType.CampaignMasks, out var layer) ? (CampaignMaskLayer)layer : null;
     }
 }

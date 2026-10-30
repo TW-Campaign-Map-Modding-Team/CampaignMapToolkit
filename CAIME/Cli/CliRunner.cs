@@ -56,18 +56,21 @@ namespace CAIME
             public TTask Task;
             public string Flag;
             public string Description;
+
+            // As the GUI enables it only once the database has been read.
+            public bool NeedsDatabase;
         }
 
         // Order here is the canonical run order used by --all and to keep runs deterministic
         // when several individual tasks are requested.
         private static readonly TaskInfo<ProcessTask>[] Tasks =
         {
-            new TaskInfo<ProcessTask> { Task = ProcessTask.MapData,          Flag = "--map-data",          Description = "Process map_data.esf" },
+            new TaskInfo<ProcessTask> { Task = ProcessTask.MapData,          Flag = "--map-data",          Description = "Process map_data.esf", NeedsDatabase = true },
             new TaskInfo<ProcessTask> { Task = ProcessTask.DynamicResources, Flag = "--dynamic-resources", Description = "Process dynamic resources (.esf)" },
-            new TaskInfo<ProcessTask> { Task = ProcessTask.Pathfinding,      Flag = "--pathfinding",       Description = "Generate processed pathfinding data (.ppd)" },
+            new TaskInfo<ProcessTask> { Task = ProcessTask.Pathfinding,      Flag = "--pathfinding",       Description = "Generate processed pathfinding data (.ppd)", NeedsDatabase = true },
             new TaskInfo<ProcessTask> { Task = ProcessTask.Borders,          Flag = "--borders",           Description = "Generate processed borders data (.pbd)" },
             new TaskInfo<ProcessTask> { Task = ProcessTask.TradeRoutes,      Flag = "--trade-routes",      Description = "Generate processed trade routes data (.ptd)" },
-            new TaskInfo<ProcessTask> { Task = ProcessTask.Lookup,           Flag = "--lookup",            Description = "Generate lookup and minimap images" },
+            new TaskInfo<ProcessTask> { Task = ProcessTask.Lookup,           Flag = "--lookup",            Description = "Generate lookup and minimap images", NeedsDatabase = true },
         };
 
         // Mirrors the GUI's "Validate" menu order.
@@ -78,10 +81,10 @@ namespace CAIME
             new TaskInfo<ValidateTask> { Task = ValidateTask.Roads,       Flag = "--roads",        Description = "Validate the Roads layer" },
             new TaskInfo<ValidateTask> { Task = ValidateTask.Bridges,     Flag = "--bridges",      Description = "Validate the Bridges layer" },
             new TaskInfo<ValidateTask> { Task = ValidateTask.Beaches,     Flag = "--beaches",      Description = "Validate the Beaches layer" },
-            new TaskInfo<ValidateTask> { Task = ValidateTask.Regions,     Flag = "--regions",      Description = "Validate the Regions layer" },
-            new TaskInfo<ValidateTask> { Task = ValidateTask.Attritions,  Flag = "--attritions",   Description = "Validate the Attritions layer" },
-            new TaskInfo<ValidateTask> { Task = ValidateTask.Climates,    Flag = "--climates",     Description = "Validate the Climates layer" },
-            new TaskInfo<ValidateTask> { Task = ValidateTask.GroundTypes, Flag = "--ground-types", Description = "Validate the Ground Types layer" },
+            new TaskInfo<ValidateTask> { Task = ValidateTask.Regions,     Flag = "--regions",      Description = "Validate the Regions layer", NeedsDatabase = true },
+            new TaskInfo<ValidateTask> { Task = ValidateTask.Attritions,  Flag = "--attritions",   Description = "Validate the Attritions layer", NeedsDatabase = true },
+            new TaskInfo<ValidateTask> { Task = ValidateTask.Climates,    Flag = "--climates",     Description = "Validate the Climates layer", NeedsDatabase = true },
+            new TaskInfo<ValidateTask> { Task = ValidateTask.GroundTypes, Flag = "--ground-types", Description = "Validate the Ground Types layer", NeedsDatabase = true },
             new TaskInfo<ValidateTask> { Task = ValidateTask.Impassable,  Flag = "--impassable",   Description = "Validate the Impassable layer" },
             new TaskInfo<ValidateTask> { Task = ValidateTask.Sprawl,      Flag = "--town-sprawl",  Description = "Validate the Town Sprawl layer" },
         };
@@ -94,9 +97,6 @@ namespace CAIME
             IsActive = true;
             ConsoleManager.EnsureConsole();
             LoggerViewModel.ConsoleSink = WriteLog;
-
-            // Recover any Assembly Kit changes left behind by an RPFM session that was killed mid-run.
-            CAIME.Rpfm.RpfmRecoveryJournal.RecoverAll();
 
             try
             {
@@ -150,7 +150,7 @@ namespace CAIME
                 return exitCode.Value;
             }
 
-            if (!TryOpenProject(mapPath, out var projectManager))
+            if (!TryOpenProject(mapPath, Tasks, tasksToRun, out var projectManager))
             {
                 return ExitProcessingError;
             }
@@ -158,11 +158,10 @@ namespace CAIME
             try
             {
                 var project = projectManager.Project;
-                var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(project.Game);
-                if (string.IsNullOrEmpty(asskitPath))
+                if (PreferencesViewModel.Instance.GetCampaignMapOutputPath(project.Game, project.MapName) == null)
                 {
-                    WriteError($"No assembly kit path is configured for {project.Game}. " +
-                               "Set it once in the GUI (Settings > Preferences) before using the CLI.");
+                    WriteError($"No output folder, and no assembly kit path for {project.Game}, is configured. " +
+                               "Set one once in the GUI (Settings > Preferences) before using the CLI.");
                     return ExitProcessingError;
                 }
 
@@ -171,7 +170,6 @@ namespace CAIME
             }
             finally
             {
-                // Deterministically restore any temporary RPFM database changes before returning.
                 projectManager.CloseProject();
             }
         }
@@ -184,7 +182,7 @@ namespace CAIME
                 return exitCode.Value;
             }
 
-            if (!TryOpenProject(mapPath, out var projectManager))
+            if (!TryOpenProject(mapPath, ValidateTasks, tasksToRun, out var projectManager))
             {
                 return ExitProcessingError;
             }
@@ -197,7 +195,6 @@ namespace CAIME
             }
             finally
             {
-                // Deterministically restore any temporary RPFM database changes before returning.
                 projectManager.CloseProject();
             }
         }
@@ -317,7 +314,7 @@ namespace CAIME
         // Execution
         // -------------------------------------------------------------------
 
-        private static bool TryOpenProject(string mapHexPath, out ProjectManager projectManager)
+        private static bool TryOpenProject<TTask>(string mapHexPath, TaskInfo<TTask>[] taskInfos, List<TTask> tasks, out ProjectManager projectManager)
         {
             WriteInfo($"Loading map: {mapHexPath}");
 
@@ -329,7 +326,22 @@ namespace CAIME
                 return false;
             }
 
-            return true;
+            // The database is read in the background once the map is open.
+            if (projectManager.WaitForDatabase())
+            {
+                return true;
+            }
+
+            var needingDatabase = taskInfos.Where(t => t.NeedsDatabase && tasks.Contains(t.Task)).Select(t => t.Flag).ToList();
+            if (needingDatabase.Count == 0)
+            {
+                return true;
+            }
+
+            WriteError($"The map's database was not read through RPFM, and these tasks need it: {string.Join(", ", needingDatabase)}. " +
+                       "See the messages above for details.");
+            projectManager.CloseProject();
+            return false;
         }
 
         private static int ExecuteTasks<TTask>(TaskInfo<TTask>[] taskInfos, List<TTask> tasks, Func<TTask, bool> runTask)
@@ -445,10 +457,12 @@ namespace CAIME
 
             sb.AppendLine();
             sb.AppendLine("NOTES:");
-            sb.AppendLine("  - The assembly kit path must already be configured per game in the GUI");
-            sb.AppendLine("    (Settings > Preferences) before running 'process'.");
-            sb.AppendLine("  - --map-data and --dynamic-resources require the project to be saved as");
-            sb.AppendLine("    map.hex under <assembly_kit>\\raw_data\\EmpireDesignData\\campaign_maps\\<map>\\.");
+            sb.AppendLine("  - Processed files go to <output folder>\\campaign_maps\\<map>\\, or to the game's");
+            sb.AppendLine("    <assembly_kit>\\working_data\\campaign_maps\\<map>\\ with no output folder set.");
+            sb.AppendLine("    Set either once in the GUI (Settings > Preferences) before running 'process'.");
+            sb.AppendLine("  - --map-data, --pathfinding, --lookup, --regions, --attritions, --climates and");
+            sb.AppendLine("    --ground-types need the project's database, read through RPFM, whose path is set");
+            sb.AppendLine("    there too.");
             sb.AppendLine();
             sb.AppendLine("EXIT CODES:");
             sb.AppendLine("  0  success    1  invalid arguments    2  processing failure");

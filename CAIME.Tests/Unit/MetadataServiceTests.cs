@@ -1,17 +1,15 @@
 using System;
 using System.IO;
-using System.Linq;
 using CAIME.Rpfm;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CAIME.Tests.Unit
 {
     /// <summary>
-    /// Unit tests for <see cref="MetadataService"/>'s pack file path ordering. The RPFM workflow
-    /// merges every configured pack's fragments for a table (see RpfmWorkflowSession) rather than
-    /// picking one pack to "win" - pack order only breaks a rare tie between two packs that happen to
-    /// contain a fragment with the exact same name, and that tie is always broken by comparing the
-    /// packs' file names alphabetically, never their full paths or the order they were added in.
+    /// Unit tests for <see cref="MetadataService"/>'s mod pack name. A project stores its mod by
+    /// .pack file name only - RPFM locates it and the mods it depends on - so whatever form the name
+    /// arrives in (bare name, file name, full path from the Browse dialog or an older metadata file)
+    /// it must end up as the one file name RPFM looks the mod up by.
     /// </summary>
     [TestClass]
     public class MetadataServiceTests
@@ -34,31 +32,57 @@ namespace CAIME.Tests.Unit
             }
         }
 
-        [TestMethod]
-        public void SetThenGetPackFilePaths_SortsByFileNameOnly_IgnoringDirectoryAndInputOrder()
+        [DataTestMethod]
+        [DataRow(@"D:\workshop\content\1142710\3081800026\!My_Campaign.pack", "!My_Campaign.pack", DisplayName = "Path keeps only its file name, case untouched")]
+        [DataRow("  my_campaign  ", "my_campaign.pack", DisplayName = "Bare name gains .pack")]
+        [DataRow("my_campaign.PACK", "my_campaign.PACK", DisplayName = "Existing extension in any case is kept")]
+        public void SetThenGetModPackName_Normalizes(string given, string expected)
         {
-            // Directory names deliberately sort the opposite way from the file names they contain, so
-            // a sort that accidentally used the full path (or simply preserved insertion order) instead
-            // of just the file name would return these in the wrong order.
-            var lateByDirectory  = @"C:\AAA_folder\zzz_low_priority.pack";
-            var earlyByFileName  = @"C:\ZZZ_folder\!!!important.pack";
+            MetadataService.SetModPackName(_projectDir, given);
 
-            MetadataService.SetPackFilePaths(_projectDir, new[] { lateByDirectory, earlyByFileName });
-
-            var result = MetadataService.GetPackFilePaths(_projectDir);
-
-            CollectionAssert.AreEqual(
-                new[] { earlyByFileName, lateByDirectory }, result.ToArray(),
-                "Packs must be ordered by file name alone ('!!!important.pack' before 'zzz_low_priority.pack'), " +
-                "not by full path or insertion order.");
+            Assert.AreEqual(expected, MetadataService.GetModPackName(_projectDir));
         }
 
         [TestMethod]
-        public void GetPackFilePaths_NoMetadataFile_ReturnsEmptyList()
+        public void SetModPackName_Blank_ClearsIt()
         {
-            var result = MetadataService.GetPackFilePaths(_projectDir);
+            MetadataService.SetModPackName(_projectDir, "my_campaign.pack");
+            MetadataService.SetModPackName(_projectDir, "   ");
 
-            Assert.AreEqual(0, result.Count);
+            Assert.IsNull(MetadataService.GetModPackName(_projectDir));
+        }
+
+        [TestMethod]
+        public void GetModPackName_NoMetadataFile_ReturnsNull()
+        {
+            Assert.IsNull(MetadataService.GetModPackName(_projectDir));
+        }
+
+        [TestMethod]
+        public void GetModPackName_Version3Metadata_KeepsTheFirstPacksFileName()
+        {
+            File.WriteAllText(MetadataService.GetMetadataPath(_projectDir),
+                @"{
+                    ""version"": 3,
+                    ""map_data_config_path"": ""config.json"",
+                    ""pack_file_paths"": [
+                        ""C:\\Steam\\steamapps\\common\\Total War WARHAMMER III\\data\\!my_campaign.pack"",
+                        ""D:\\workshop\\content\\1142710\\123\\other_mod.pack""
+                    ]
+                }");
+
+            Assert.AreEqual("!my_campaign.pack", MetadataService.GetModPackName(_projectDir),
+                "The v3 list was stored sorted by file name, so its first entry is the one kept.");
+            Assert.AreEqual("config.json", MetadataService.Load(_projectDir).MapDataConfigPath,
+                "Migrating the pack list must leave the other metadata fields alone.");
+        }
+
+        [TestMethod]
+        public void GetModPackName_Version3MetadataWithNoPacks_ReturnsNull()
+        {
+            File.WriteAllText(MetadataService.GetMetadataPath(_projectDir), @"{ ""version"": 3, ""pack_file_paths"": [] }");
+
+            Assert.IsNull(MetadataService.GetModPackName(_projectDir));
         }
     }
 }

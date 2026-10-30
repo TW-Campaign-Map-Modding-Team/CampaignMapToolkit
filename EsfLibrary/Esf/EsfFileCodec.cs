@@ -54,6 +54,9 @@ namespace EsfLibrary
                 case 0xABCA:
                     codec = new AbcaFileCodec();
                     break;
+                case 0xABCB:
+                    codec = new AbcbFileCodec();
+                    break;
             }
             return codec;
         }
@@ -76,7 +79,7 @@ namespace EsfLibrary
             if (codec == null)
             {
                 throw new InvalidDataException(
-                    $"'{filename}' is not an ESF file: it does not start with a recognised magic number (0xABCE, 0xABCF or 0xABCA).");
+                    $"'{filename}' is not an ESF file: it does not start with a recognised magic number (0xABCE, 0xABCF, 0xABCA or 0xABCB).");
             }
 
             return new EsfFile(codec.Parse(fileData), codec);

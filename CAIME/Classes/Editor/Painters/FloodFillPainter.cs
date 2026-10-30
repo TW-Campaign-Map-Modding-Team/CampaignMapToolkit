@@ -83,6 +83,11 @@ namespace CAIME.Painters
                     _currentConditionMatch = _restrictionsConditionMatch;
                     _sourceLayer = layer;
                     return true;
+                case LayerType.CampaignMasks:
+                    var maskLayer = (CampaignMaskLayer)layer;
+                    _currentConditionMatch = (hex, nbr) => maskLayer.IsMasked(hex) == maskLayer.IsMasked(nbr);
+                    _sourceLayer = layer;
+                    return true;
             }
 
             _sourceLayer = null;
@@ -281,7 +286,7 @@ namespace CAIME.Painters
             {
                 var hex         = project.MapHexFile.HexData[hexIndex];
                 var oldSwatch   = editorVM.GetSwatchForHex(curLayer.Type, hex)
-                                  ?? EraserToolCommand.CLEAR_SWATCHES[curLayer.Type];
+                                  ?? EraserToolCommand.ClearSwatchFor(curLayer);
 
                 var record = new HexRecord
                 {

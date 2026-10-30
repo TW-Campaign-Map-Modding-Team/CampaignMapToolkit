@@ -1,0 +1,83 @@
+<Window x:Class="CAIME.Windows.AddCampaignMaskWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:CAIME.Windows"
+        mc:Ignorable="d"
+        Title="Add campaign mask"
+        Height="Auto"
+        Width="Auto"
+        MinWidth="310"
+        MaxWidth="800"
+        MinHeight="130"
+        MaxHeight="130"
+        WindowStartupLocation="CenterOwner"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="ToolWindow"
+        FocusManager.FocusedElement="{Binding ElementName=nameTextBox}"
+        Background="{StaticResource BackgroundDarkV1Brush}">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="20" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" MaxWidth="600" />
+            <ColumnDefinition Width="*" MinWidth="20" />
+        </Grid.ColumnDefinitions>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="1"
+                   Grid.Column="1"
+                   Margin="0 5 10 5"
+                   Text="Name:"
+                   Foreground="White"
+                   VerticalAlignment="Center" />
+
+        <TextBox x:Name="nameTextBox"
+                 Grid.Row="1"
+                 Grid.Column="2"
+                 Margin="0 5"
+                 MinWidth="200"
+                 VerticalAlignment="Center"
+                 ToolTip="The name a campaigns row's mask column refers to."
+                 Text="{Binding NewMaskName, UpdateSourceTrigger=PropertyChanged}"
+                 Style="{StaticResource DarkTextBox}" />
+
+        <Separator Grid.Row="2"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="4"
+                   Margin="0 5"
+                   Background="{StaticResource BackgroundDarkV3Brush}" />
+
+        <StackPanel Grid.Row="3"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="4"
+                    Margin="5"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Bottom"
+                    HorizontalAlignment="Right">
+
+            <Button Content="Add"
+                    IsDefault="True"
+                    Padding="15 3"
+                    Margin="0 5 0 5"
+                    Style="{StaticResource DarkButton}"
+                    Click="AddButton_Click"/>
+
+            <Button Content="Cancel"
+                    IsCancel="True"
+                    Padding="15 3"
+                    Margin="2 5 0 5"
+                    Style="{StaticResource DarkButton}"/>
+
+        </StackPanel>
+
+    </Grid>
+</Window>

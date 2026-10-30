@@ -133,7 +133,11 @@
                 <MenuItem Header="Layer data"
                           Click="ImportLayerData_Click"
                           IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
-                                              Path=IsExportPathfindingEnabled}"/>
+                                              Path=IsImportLayerDataEnabled}"/>
+                <MenuItem Header="map__data.esf"
+                          Click="ImportMapData_Click"
+                          IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
+                                              Path=IsLoadItemEnabled}"/>
             </MenuItem>
 
             <MenuItem Header="Export">
@@ -150,12 +154,12 @@
                 <MenuItem Header="Baseline Tilemap image"
                           Click="GenerateBaselineTilemap_Click"
                           IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
-                                              Path=IsGenerateLookupEnabled}"/>
+                                              Path=IsExportLayerImagesEnabled}"/>
 
                 <MenuItem Header="Layer data"
                           Click="ExportLayerToImage_Click"
                           IsEnabled="{Binding Source={x:Static local:AppStateContext.Instance},
-                                              Path=IsGenerateLookupEnabled}"/>
+                                              Path=IsExportLayerImagesEnabled}"/>
             </MenuItem>
 
             <MenuItem Header="Validate">

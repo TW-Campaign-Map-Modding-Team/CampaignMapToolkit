@@ -184,6 +184,37 @@ namespace CAIME
         }
     }
 
+    /// <summary>
+    /// Masks or unmasks hexes of one campaign mask. The swatch keeps its own mask, so undoing a
+    /// stroke changes the mask it was painted on, whichever mask the layer shows by then.
+    /// </summary>
+    public class CampaignMaskSwatch : Swatch
+    {
+        private readonly MapHexFile _mapHexFile;
+
+        public CampaignMask Mask     { get; }
+        public bool         IsMasked { get; }
+
+        public CampaignMaskSwatch(MapHexFile mapHexFile, CampaignMask mask, bool isMasked) : base()
+        {
+            _mapHexFile = mapHexFile;
+            Mask        = mask;
+            IsMasked    = isMasked;
+            Name        = isMasked ? "Masked" : "Unmasked";
+            Colour      = ColourTable.GetCampaignMaskColour(isMasked);
+        }
+
+        public bool Matches(Hex hex)
+        {
+            return Mask.IsMasked(hex.Q, hex.R, _mapHexFile.MapWidth) == IsMasked;
+        }
+
+        public override void Apply(Hex hex)
+        {
+            Mask.SetMasked(hex.Q, hex.R, _mapHexFile.MapWidth, _mapHexFile.MapHeight, IsMasked);
+        }
+    }
+
     public class RegionSwatch : Swatch
     {
         public int RegionIndex { get; protected set; }

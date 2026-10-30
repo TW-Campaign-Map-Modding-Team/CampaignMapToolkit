@@ -174,6 +174,11 @@ namespace CAIME.ViewModels
             EditorViewModel.OpenProject();
         }
 
+        public void ImportMapData()
+        {
+            EditorViewModel.ImportMapData();
+        }
+
         public void Reload()
         {
             EditorViewModel.ReloadProject();

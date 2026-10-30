@@ -18,6 +18,7 @@ Layers are the central concept in CAIME. Everything you paint, import, or valida
   - [Town Sprawl — Align Town Sprawl/Slot & Validate](#town-sprawl--align-town-sprawlslot--validate)
   - [Region Borders — Auto-generate](#region-borders--auto-generate)
   - [Roads, Rivers, Bridges, Beaches, Town Slots — Validate](#roads-rivers-bridges-beaches-town-slots--validate)
+  - [Campaign Masks — Choose & Add Masks](#campaign-masks--choose--add-masks)
 - [Layer Reference Table](#layer-reference-table)
 - [Importing Layer Data](#importing-layer-data)
 - [Exporting Layer Data](#exporting-layer-data)
@@ -37,6 +38,7 @@ The **Layers** panel lives in the sidebar on the right side of the screen, insid
 ┌─────────────────────────────────┐
 │  ▼ LAYERS                       │
 │ ┌─────────────────────────────┐ │
+│ │ ☐  ○ Campaign Masks       ⋮ │ │  (Warhammer, Warhammer 2, Warhammer 3, Troy, Pharaoh and Pharaoh Dynasties only)
 │ │ ☑  ● Impassable           ⋮ │ │  ← Visible + Active (selected for painting)
 │ │ ☐  ○ Trade Routes         ⋮ │ │  ← Hidden (Rome 2, Attila, Thrones of Britannia and Three Kingdoms only)
 │ │ ☐  ○ Roads                ⋮ │ │
@@ -186,12 +188,30 @@ These five layers have no layer-specific painting shortcut, so their Actions pan
 
 ---
 
+### Campaign Masks — Choose & Add Masks
+
+A campaign mask is a set of hexes taken away from some campaigns on the map: CAIME writes the regions into `map_data.esf` once for each mask, with that mask's hexes impassable. A campaign uses the mask its row in the `campaigns` table names. A campaign that names none uses the map's unnamed mask entry, listed as **(no mask)**. Maps usually have only that entry, with no hexes masked.
+
+When the **Campaign Masks** layer is active, the Actions panel shows:
+
+```
+[ (no mask)        ▼ ]  [ Add mask ]
+     Add a mask to paint one.
+```
+
+**What it does:** The dropdown picks which mask the layer shows. Painting, erasing, the Line tool and Flood Fill all work on the mask shown there: paint with the **Masked** swatch to mask hexes, erase to unmask them. **(no mask)** cannot be painted, and the line under the dropdown says so while it is shown. Its hexes are taken away from every campaign that names no mask, which is what the Impassable layer is for. The layer still shows any hexes a loaded map already has in it. **Add mask** asks for a name and adds a mask that masks no hexes yet, then shows it. The name is what the `campaigns` table's mask column refers to; it must be ASCII and not already used by another mask.
+
+Undo and redo change the mask a stroke was painted on, even if the dropdown shows another mask by then. Masks cannot be renamed or removed in CAIME.
+
+---
+
 ## Layer Reference Table
 
 The table below lists every available layer, what data it holds, and which games include it.
 
 | Layer | What it paints | Available in |
 |---|---|---|
+| **Campaign Masks** | The hexes each [campaign mask](#campaign-masks--choose--add-masks) takes away from the campaigns that use it, one mask at a time. | Warhammer, Warhammer 2, Warhammer 3, Troy, Pharaoh, Pharaoh Dynasties |
 | **Impassable** | Hexes that armies cannot enter (mountains, cliffs, deep water barriers). | All games |
 | **Trade Routes** | The sea and land trade route network for the campaign. | Rome 2, Attila, Thrones of Britannia, Three Kingdoms |
 | **Roads** | Road hexes that improve army movement speed. | All games |
@@ -432,4 +452,4 @@ Each validator checks for a specific set of rules. The table below explains what
 
 - **If the Validate menu items are greyed out**, you either do not have a project open, or your project has not been fully processed yet. Open a project file first, or check that the project loaded without errors.
 
-- **Layers higher in the Layers panel are drawn on top of layers lower in the list.** For example, the Impassable layer starts at the very top, so making it visible will overlay it on everything else. Use the visibility checkboxes strategically to focus on one layer at a time without confusion, [re-arrange the layers](#re-arranging-layers) to bring the one you care about to the top, or lower a layer's [opacity](#layer-opacity) to see through it.
+- **Layers higher in the Layers panel are drawn on top of layers lower in the list.** For example, the Impassable layer starts at the top (just below Campaign Masks, in the games that have it), so making it visible will overlay it on everything else. Use the visibility checkboxes strategically to focus on one layer at a time without confusion, [re-arrange the layers](#re-arranging-layers) to bring the one you care about to the top, or lower a layer's [opacity](#layer-opacity) to see through it.

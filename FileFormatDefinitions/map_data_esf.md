@@ -1,0 +1,74 @@
+# map_data.esf
+
+A campaign map's regions, areas, settlements and geometry, which the game reads instead of
+`map.hex`. The Assembly Kit's builder makes it from `map.hex` and, of the database, only the
+first `campaign_map_playable_areas` row for the map: its `index` (stored as the theatre's name)
+and `maxx`, plus `maxy` on Rome II. CAIME's writers are in `CAIME/Classes/Exporters/MapData/`:
+`MapDataModel` works out what every game shares, and each `*MapDataWriter` lays it out for its
+game. [map_data_esf_open_questions.md](map_data_esf_open_questions.md) records what was learned
+from which builder, and what is still open.
+
+## Layouts
+
+An ESF file (see [esf.md](esf.md)). MAP_DATA's version tells the three layouts apart:
+
+| Game | MAP_DATA | ESF | Writer | Hex radius rounding |
+|---|---|---|---|---|
+| Rome II | v0 | ABCA | Attila's, keeping maxy | per column and a half |
+| Attila, Thrones of Britannia | v0 | ABCA | `AttilaMapDataWriter` | per column and a half |
+| Warhammer | v1 | ABCA | Pharaoh's | per column and a half |
+| Warhammer II, Troy | v1 | ABCA | Warhammer's | two thirds per column |
+| Pharaoh | v1 | ABCA | `PharaohMapDataWriter` | two thirds per column |
+| Warhammer III | v2 | ABCB | `Wh3MapDataWriter` | two thirds per column |
+| Three Kingdoms | v2 | ABCA | Warhammer III's, with its own layout | two thirds per column |
+
+Thrones of Britannia is taken to be Attila's; no Thrones file has been checked.
+
+### v2: Warhammer III, Three Kingdoms
+
+The full layout. REGIONS_DATA holds a MASKED_REGIONS_DATA entry per campaign mask, per-hex region
+runs and areas of interest, and each REGION_DATA has a REGION_INDEX. Three Kingdoms differs in:
+ABCA rather than ABCB; MAP_FILE_DATA_VERSION 2; MAP_FILE_VALIDATION holding the map.hex's save
+time; and packed area references and per-hex runs, as in Pharaoh.
+
+### v0: Rome II, Attila
+
+Compared with Warhammer III:
+
+- no version records;
+- REGIONS_DATA holds empty `trade_nodes` and `bridges` records, the theatre, the bounds and the
+  regions directly: no MASKED_REGIONS_DATA, no per-hex region runs, no areas of interest;
+- seven bytes per hex, the first two the region and area;
+- REGION_DATA has no REGION_INDEX;
+- an area's touching areas are packed u16s;
+- settlements have several building slots.
+
+Rome II's builder writes Attila's file, but stores the playable area's maxy as given rather than
+the top of the hex grid. Rome II's packs have no maxy (the table lost minx, miny and maxy after
+version 4), so the writer estimates it from the grid when the table has none. The game's own
+main_rome_map was built by an older builder: its CAMPAIGN_THEATRE is v2, with a 256-colour table
+before HEX_MAP_DATA. The Assembly Kit's builder writes v3 with no table, as Attila's does.
+
+### v1: Pharaoh, Warhammer, Warhammer II, Troy
+
+Between Attila's and Warhammer III's: a MAP_FILE_DATA_VERSION record but no validation record;
+MASKED_REGIONS_DATA and REGION_INDEX as in Warhammer III; five bytes per hex, no areas of
+interest; packed area references and settlements with building slots, as in Attila; and the
+per-hex runs as a u16 array. A port lists the main slot's hexes after its own, as in Warhammer
+III.
+
+Warhammer's builder writes Pharaoh's file, and Warhammer II's and Troy's write Warhammer's.
+
+## Campaign masks
+
+map.hex versions 0x12 and 0x14 (Warhammer, Warhammer II, Warhammer III, Troy, Pharaoh) list
+campaign masks, the first one unnamed, each with a bitmap of hexes. The v1 and v2 builders write
+the regions once per mask, in a MASKED_REGIONS_DATA entry under the mask's name, with the mask's
+hexes made impassable before the regions are split into areas, so a masked entry's areas can be
+numbered differently from the unnamed one's. The UI's region list repeats once per mask. Each
+entry holds the mask's runs, (row, first column, end column) per run of masked hexes; a run that
+reaches the row's last bit ends at the row's byte count. A campaign plays on the entry its
+`campaigns.mask` names.
+
+Three Kingdoms' map.hex loader gives every map one empty unnamed mask. Every vanilla bitmap is
+empty; Warhammer's mini-campaign maps add the masks `8` and `32`.

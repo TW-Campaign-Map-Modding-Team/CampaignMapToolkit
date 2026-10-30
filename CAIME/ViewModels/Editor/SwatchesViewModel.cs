@@ -229,6 +229,13 @@ namespace CAIME
             SwatchIndex = 0;
         }
 
+        /// <summary>The campaign masks layer paints with the swatch of the mask it shows.</summary>
+        public void UpdateCampaignMaskSwatches(CampaignMaskLayer layer)
+        {
+            Swatches[LayerType.CampaignMasks] = layer.MaskSwatch == null ? new List<Swatch>() : new List<Swatch> { layer.MaskSwatch };
+            SwatchesCollection[LayerType.CampaignMasks] = new ObservableCollection<Swatch>(Swatches[LayerType.CampaignMasks]);
+        }
+
         private void UpdateGroundTypeSwatches(Project project)
         {
             if (Swatches.ContainsKey(LayerType.GroundTypes))

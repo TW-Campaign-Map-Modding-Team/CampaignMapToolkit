@@ -20,6 +20,7 @@ namespace CAIME
         GroundTypes,
         Restrictions,
         AreasOfInterest,
+        CampaignMasks,
 
         Count
     }
@@ -129,6 +130,12 @@ namespace CAIME
         {
             raiseActive = raiseEvent;
             IsActive = isActive;
+        }
+
+        /// <summary>The colour this layer shows on a hex once the swatch has been applied to it.</summary>
+        public virtual int ColourAfterApplying(Swatch swatch, int hexIndex)
+        {
+            return swatch.Colour;
         }
 
         /// <summary>

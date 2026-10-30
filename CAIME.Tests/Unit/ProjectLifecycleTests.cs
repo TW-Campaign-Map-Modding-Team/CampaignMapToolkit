@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
+using System.Xml.Linq;
 using CAIME;
 using CAIME.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -15,8 +17,8 @@ namespace CAIME.Tests.Unit
     ///
     /// <para>
     /// <see cref="PreferencesViewModel"/> is a process-wide singleton backed by the user's real
-    /// preferences.json, and opening a project reads it. These tests blank the Assembly Kit path for
-    /// the game under test so no database load is attempted, and restore every value they touched
+    /// preferences.json, and opening a project reads it. These tests blank the RPFM path so no
+    /// database is read, and restore every value they touched
     /// afterwards. They keep the remembered game in step so the open path never *changes* a setting;
     /// constructing the singleton at all still rewrites the file with identical content, because
     /// <c>Load()</c> ends in a <c>Save()</c>.
@@ -28,7 +30,7 @@ namespace CAIME.Tests.Unit
         private const GameTemplate GAME = GameTemplate.Warhammer3;
 
         private string _dir;
-        private string _savedAssKitPath;
+        private string _savedRpfmPath;
         private int _savedGameIndex;
 
         [TestInitialize]
@@ -38,10 +40,10 @@ namespace CAIME.Tests.Unit
             _dir = MapHexHarness.CreateTempDir("caime_project");
 
             var prefs = PreferencesViewModel.Instance;
-            _savedAssKitPath = prefs.GetAssKitPath(GAME);
-            _savedGameIndex  = prefs.SelectedGameIndex;
+            _savedRpfmPath  = prefs.RpfmPath;
+            _savedGameIndex = prefs.SelectedGameIndex;
 
-            SetAssKitPath(GAME, null);
+            prefs.RpfmPath = null;
 
             // ProjectManager.Open persists the preferences when the remembered game changes. Matching
             // it up front keeps this suite from writing to the user's real preferences file.
@@ -52,7 +54,7 @@ namespace CAIME.Tests.Unit
         public void Cleanup()
         {
             var prefs = PreferencesViewModel.Instance;
-            SetAssKitPath(GAME, _savedAssKitPath);
+            prefs.RpfmPath = _savedRpfmPath;
             prefs.SelectedGameIndex = _savedGameIndex;
 
             MapHexHarness.DeleteTempDir(_dir);
@@ -92,20 +94,47 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(new Project().Open(path), "A map at an unsupported version must not open.");
         }
 
-        // The hook is how the RPFM workflow prepares temporary database tables; refusing must abort
-        // the open rather than continuing against the untouched Assembly Kit.
+        // The database is read through RPFM after the map opens, so the map must be editable without it.
         [TestMethod]
-        public void Open_WhenTheBeforeDatabaseHookRefuses_Aborts()
+        public void Open_OpensTheMapWithoutItsDatabase()
         {
-            var path = CreateMap();
+            var project = OpenNewProject();
 
-            GameTemplate seen = GameTemplate.Invalid;
-            var project = new Project();
+            Assert.IsFalse(project.IsDatabaseLoaded, "Open must not load the database itself.");
+            Assert.IsNull(project.RpfmTables, "No tables have been read yet.");
+            Assert.IsNotNull(project.MapHexEditor, "The map must be editable without its database.");
+        }
 
-            Assert.IsFalse(project.Open(path, game => { seen = game; return false; }),
-                "A refused pre-database hook must abort the open.");
-            Assert.AreEqual(GAME, seen, "The hook must be told which game was detected.");
-            Assert.IsNull(project.MapHexEditor, "Nothing downstream of the hook may have been built.");
+        // Tables that can't be loaded must leave the project as it opened, without a database, so the
+        // steps that need one stay unavailable rather than running against a half-loaded one.
+        [TestMethod]
+        public void LoadDatabase_WithTablesThatCannotBeLoaded_LeavesTheProjectWithoutADatabase()
+        {
+            var project = OpenNewProject();
+
+            Assert.IsFalse(project.LoadDatabase(new Dictionary<string, Rpfm.RpfmTable>()),
+                "Tables missing every required table must not load.");
+            Assert.IsFalse(project.IsDatabaseLoaded, "A failed load must leave no database.");
+            Assert.IsNull(project.RpfmTables, "A failed load must not keep the tables.");
+        }
+
+        // Without an RPFM path there is nothing to read: the CLI must not wait on it, and must learn
+        // that the steps needing the database can't run.
+        [TestMethod]
+        public void ManagerOpen_WithoutAnRpfmPath_ReadsNoDatabase()
+        {
+            var manager = new ProjectManager();
+
+            var loaded = false;
+            manager.OnDatabaseLoaded += (sender, e) => loaded = true;
+
+            var project = manager.Open(CreateMap());
+
+            Assert.IsNotNull(project, "Precondition: the map should open.");
+            Assert.IsFalse(manager.IsReadingDatabase, "No read may be started without an RPFM path.");
+            Assert.IsFalse(manager.WaitForDatabase(), "With nothing read, no database is loaded.");
+            Assert.IsFalse(project.IsDatabaseLoaded, "No database can have been loaded.");
+            Assert.IsFalse(loaded, "OnDatabaseLoaded must not be raised.");
         }
 
         [TestMethod]
@@ -175,23 +204,13 @@ namespace CAIME.Tests.Unit
         [TestMethod]
         public void CreateNew_PharaohDynasties_ProducesAReopenableDynastiesProject()
         {
-            var saved = PreferencesViewModel.Instance.GetAssKitPath(GameTemplate.Pharaoh_Dynasties);
-            SetAssKitPath(GameTemplate.Pharaoh_Dynasties, null);
+            Project.CreateNew(_dir + "\\", GameTemplate.Pharaoh_Dynasties, "dynasties_map", 6, 4);
 
-            try
-            {
-                Project.CreateNew(_dir + "\\", GameTemplate.Pharaoh_Dynasties, "dynasties_map", 6, 4);
-
-                var reopened = new Project();
-                Assert.IsTrue(reopened.Open(Path.Combine(_dir, "map.hex")),
-                    "A new Pharaoh Dynasties project must be reopenable.");
-                Assert.AreEqual(GameTemplate.Pharaoh_Dynasties, reopened.Game,
-                    "A Dynasties map must be recognised as Dynasties, not vanilla Pharaoh.");
-            }
-            finally
-            {
-                SetAssKitPath(GameTemplate.Pharaoh_Dynasties, saved);
-            }
+            var reopened = new Project();
+            Assert.IsTrue(reopened.Open(Path.Combine(_dir, "map.hex")),
+                "A new Pharaoh Dynasties project must be reopenable.");
+            Assert.AreEqual(GameTemplate.Pharaoh_Dynasties, reopened.Game,
+                "A Dynasties map must be recognised as Dynasties, not vanilla Pharaoh.");
         }
 
         [TestMethod]
@@ -248,12 +267,38 @@ namespace CAIME.Tests.Unit
             new ProjectManager().CloseProject();
         }
 
+        // No game's map is saved without its database: Pharaoh Dynasties' map.hex is written in the
+        // database's region order, and every game follows the same rule.
+        [TestMethod]
+        public void ManagerSave_WithoutTheDatabase_WritesNothing()
+        {
+            var manager = new ProjectManager();
+            Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+
+            manager.Project.MapHexFile.SetDirty();
+
+            var sideDir = Path.Combine(_dir, "elsewhere") + "\\";
+            Directory.CreateDirectory(sideDir);
+
+            manager.Save(new SaveParameters
+            {
+                IsAutoSave     = true,
+                CustomSavePath = sideDir,
+                CustomFileName = "autosave",
+                Flags          = SaveParameters.SaveFlags.MapHexFile,
+            });
+
+            Assert.IsFalse(File.Exists(Path.Combine(sideDir, "autosave.hex")), "The map must not be saved without its database.");
+            Assert.IsTrue(manager.Project.HasUnsavedChanges, "A refused save must leave the changes unsaved.");
+        }
+
         // A save to a different name or location is a "save as": the project follows the file.
         [TestMethod]
         public void ManagerSave_ToANewNameAndPath_MovesTheProjectAndReportsTheChange()
         {
             var manager = new ProjectManager();
             Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+            LoadEmptyDatabase(manager.Project);
 
             var sideDir = Path.Combine(_dir, "elsewhere") + "\\";
             Directory.CreateDirectory(sideDir);
@@ -285,6 +330,7 @@ namespace CAIME.Tests.Unit
         {
             var manager = new ProjectManager();
             Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+            LoadEmptyDatabase(manager.Project);
 
             manager.Project.MapHexFile.SetDirty();
 
@@ -401,17 +447,23 @@ namespace CAIME.Tests.Unit
             return Path.Combine(_dir, "map.hex");
         }
 
+        // Every table the game needs, with no rows: enough for the project to count as having its database.
+        private static void LoadEmptyDatabase(Project project)
+        {
+            var tables = new Dictionary<string, Rpfm.RpfmTable>();
+            foreach (var table in Rpfm.DatabaseTableProvider.GetRequiredTables(project.Game))
+            {
+                tables[table] = new Rpfm.RpfmTable(new XmlSchema(new List<XmlSchemaField>()), new XDocument(new XElement("dataroot")));
+            }
+
+            Assert.IsTrue(project.LoadDatabase(tables), "Precondition: the empty tables should load.");
+        }
+
         private Project OpenNewProject()
         {
             var project = new Project();
             Assert.IsTrue(project.Open(CreateMap()), "Precondition: the map should open.");
             return project;
-        }
-
-        private static void SetAssKitPath(GameTemplate game, string path)
-        {
-            var dirs = (string[])MapHexHarness.GetPrivateField(PreferencesViewModel.Instance, "asskitDirs");
-            dirs[(int)game] = path;
         }
     }
 }

@@ -1,6 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Xml.Linq;
+using CAIME.Classes.Importers;
 using CAIME.Exporters;
 using CAIME.TradeNetwork;
 using Microsoft.WindowsAPICodePack.Dialogs;
@@ -101,9 +105,11 @@ namespace CAIME
         public DatabaseViewModel    Database        { get; private set; }
         public ColourTable          ColourTable     { get; private set; }
 
-        // Non-null only while an RPFM database source workflow is active for this project. Owns the
-        // temporary Assembly Kit changes and is responsible for restoring them (see CleanupRpfmSession).
-        public Rpfm.RpfmWorkflowSession RpfmSession { get; set; }
+        // The database tables read through RPFM, by table name; null until they have been read and
+        // loaded (see LoadDatabase), and for good when no RPFM path is configured.
+        public IReadOnlyDictionary<string, Rpfm.RpfmTable> RpfmTables { get; private set; }
+
+        public bool IsDatabaseLoaded => RpfmTables != null;
 
         public string MapName
         {
@@ -151,11 +157,11 @@ namespace CAIME
             Database    = new DatabaseViewModel();
         }
 
-        /// <param name="onBeforeDatabaseInit">
-        /// Optional hook run once the game is known but before the database is initialised. Returning
-        /// false aborts the open. The RPFM workflow uses this to prepare temporary database tables.
-        /// </param>
-        public bool Open(string filename, Func<GameTemplate, bool> onBeforeDatabaseInit = null)
+        /// <summary>
+        /// Opens the map, ready to view and edit, without its database: that is read through RPFM
+        /// afterwards (see <see cref="ProjectManager"/>) and handed to <see cref="LoadDatabase"/>.
+        /// </summary>
+        public bool Open(string filename)
         {
             if (MapHexFile.Load(filename) == false)
             {
@@ -170,39 +176,6 @@ namespace CAIME
             MapHexFileName  = Path.GetFileNameWithoutExtension(filename);
             Game            = ProjectManager.GetGameFromName(MapHexFile.GameName, MapHexFile.MinorFileVersion);
 
-            if (onBeforeDatabaseInit != null && onBeforeDatabaseInit(Game) == false)
-            {
-                return false;
-            }
-
-            var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(Game);
-            if (string.IsNullOrEmpty(asskitPath) || Directory.Exists(asskitPath) == false)
-            {
-                LoggerViewModel.Log(
-                    $"No Assembly Kit is configured for {Game}, so database-driven data (ground type names/costs, " +
-                    "region names, campaign data) can't be loaded. Opening the map read-only for this session - set " +
-                    "the Assembly Kit path in Settings > Preferences and reopen the project for full editing.",
-                    LogLevel.Warning);
-            }
-            else
-            {
-                try
-                {
-                    if (Database.Initialise(Game, ProjectPath, MapHexFile) == false)
-                    {
-                        return false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LoggerViewModel.Log(
-                        $"Could not load database tables for {Game} from the configured Assembly Kit ({ex.Message}). " +
-                        "Opening the map read-only for this session.",
-                        LogLevel.Warning);
-                    Database.ShutDown();
-                }
-            }
-
             ColourTable     = new ColourTable(MapHexFile);
             MapHexEditor    = new MapHexEditor(MapHexFile, ColourTable);
 
@@ -210,16 +183,35 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Restores any temporary Assembly Kit changes made by the RPFM workflow and releases the
-        /// session. Safe to call when no RPFM session is active.
+        /// Loads the database from <paramref name="tables"/>, read through RPFM. Returns false, leaving
+        /// the project without a database, when they can't be loaded or don't fit the map.
         /// </summary>
-        public void CleanupRpfmSession()
+        public bool LoadDatabase(IReadOnlyDictionary<string, Rpfm.RpfmTable> tables)
         {
-            if (RpfmSession != null)
+            try
             {
-                RpfmSession.Cleanup();
-                RpfmSession = null;
+                if (Database.Initialise(Game, ProjectPath, MapHexFile, tables))
+                {
+                    RpfmTables = tables;
+                    return true;
+                }
+
+                // Only Pharaoh Dynasties checks the database against the map; the mismatches are logged.
+                LoggerViewModel.Log(
+                    $"The region indices in {Game}'s database don't match the map's (see the log). " +
+                    "The map can't be edited, saved or processed this session.",
+                    LogLevel.ErrorMessageBox);
             }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log(
+                    $"Could not load database tables for {Game} ({ex.Message}). " +
+                    "The map can't be edited, saved or processed this session.",
+                    LogLevel.ErrorMessageBox);
+            }
+
+            Database.ShutDown();
+            return false;
         }
 
         public bool Save(SaveParameters.SaveFlags flags, string mapHexName, string savePath, bool clearDirtyFlag = true)
@@ -294,14 +286,12 @@ namespace CAIME
         private readonly object _saveLock = new object();
 
         public ProjectEventHandler  OnOpenProject;
+        public ProjectEventHandler  OnDatabaseLoaded;
         public ProjectEventHandler  OnSaveProject;
         public ProjectEventHandler  OnMapRenamed;
         public RoutedEventHandler   OnCloseProject;
         public RoutedEventHandler   OnMapResized;
         public FilePathEventHandler OnFilePathChanged;
-
-        private string _campaignMapExportPath;
-        private string _campaignMapDebugPath;
 
         public string   RootPath        { get; private set; }
         public string   ProjectsDir     { get; private set; }
@@ -310,6 +300,12 @@ namespace CAIME
         public Project  Project         { get; private set; }
 
         public bool     IsProjectOpen   => Project != null;
+
+        // The open project's database read (see StartReadingDatabase); null when none was started.
+        // Its result says whether the tables were loaded into the project.
+        private Task<bool> _databaseRead;
+
+        public bool     IsReadingDatabase => _databaseRead != null && !_databaseRead.IsCompleted;
 
         public ProjectManager()
         {
@@ -343,7 +339,7 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Folder containing the native tools (MapDataBuilder), split into Debug and Release subfolders.
+        /// Folder containing MapDataBuilder, for Assembly Kit Integration, split into Debug and Release subfolders.
         /// </summary>
         public static string GetToolsPath()
         {
@@ -367,37 +363,17 @@ namespace CAIME
 
         public Project CreateProject(string mapName, uint mapWidth, uint mapHeight, GameTemplate game, string template)
         {
-            var newProjectPath = $@"{ProjectsDir}{mapName}\";
-            
-            bool canWrite = true;
-            if (Directory.Exists(newProjectPath))
-            {
-                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
-                canWrite = res == MessageBoxResult.Yes;
-
-                if (canWrite)
-                {
-                    Directory.Delete(newProjectPath, true);
-                }
-            }
-
-            if (canWrite == false)
+            var newProjectPath = CreateProjectDirectory(mapName);
+            if (newProjectPath == null)
             {
                 return null;
             }
-
-            Directory.CreateDirectory(newProjectPath);
 
             if (template == TEMPLATE_NONE)
             {
-                var project = Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
-                if (project.Open($"{newProjectPath}map.hex", g => PrepareRpfmDatabaseIfNeeded(project, g)))
-                {
-                    return project;
-                }
-
-                project.CleanupRpfmSession();
-                return null;
+                // Writes the empty map.hex, which is then opened like any other.
+                Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
+                return Open($"{newProjectPath}map.hex");
             }
             else
             {
@@ -413,6 +389,76 @@ namespace CAIME
             }
         }
 
+        /// <summary>
+        /// Creates a project from any game's map_data.esf by rebuilding the map.hex it was built
+        /// from. The map is named after the folder the file is in, which for a file taken from a
+        /// pack's campaign_maps folder is the campaign map's name. Several games share each of
+        /// the older layouts, so <paramref name="chooseGame"/> picks one of them, or returns null
+        /// to cancel; it is not asked when the file fits only one game.
+        /// </summary>
+        public Project ImportMapData(string mapDataEsfPath, Func<GameTemplate[], GameTemplate?> chooseGame)
+        {
+            var mapName = StringHelper.NameFixup(Path.GetFileName(Path.GetDirectoryName(Path.GetFullPath(mapDataEsfPath))));
+            if (string.IsNullOrEmpty(mapName))
+            {
+                // An empty name would make the Projects folder itself the project folder.
+                LoggerViewModel.Log($"{mapDataEsfPath} is not in a folder to name the map after. Put it in a folder named after the campaign map and import it again.", LogLevel.ErrorMessageBox);
+                return null;
+            }
+
+            try
+            {
+                var contents    = MapDataReader.Read(mapDataEsfPath);
+                var games       = MapDataReader.Games(contents);
+                var game        = games.Length == 1 ? games[0] : chooseGame(games);
+                if (game == null)
+                {
+                    return null;
+                }
+
+                var newProjectPath = CreateProjectDirectory(mapName);
+                if (newProjectPath == null)
+                {
+                    return null;
+                }
+
+                var mapHexFile = MapHexFile.CreateMapHex(newProjectPath, "map", GetGameNameFromGame(game.Value), mapName, contents.Width, contents.Height, GetMapHexVersion(game.Value));
+                MapDataImporter.Import(contents, mapHexFile);
+                mapHexFile.Save(newProjectPath, "map");
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log($"EXCEPTION: {ex}", LogLevel.Debug);
+                LoggerViewModel.Log($"{mapDataEsfPath} could not be imported.\n\nReason: {ex.Message}", LogLevel.ErrorMessageBox);
+                return null;
+            }
+
+            LoggerViewModel.Log($"Imported {mapDataEsfPath} as campaign map '{mapName}'. Trade routes and restriction levels are not in map_data.esf and have been left empty.", LogLevel.Info);
+
+            return Open($@"{ProjectsDir}{mapName}\map.hex");
+        }
+
+        /// <returns>The new project's folder, or null when the user declines to overwrite an existing one.</returns>
+        private string CreateProjectDirectory(string mapName)
+        {
+            var newProjectPath = $@"{ProjectsDir}{mapName}\";
+
+            if (Directory.Exists(newProjectPath))
+            {
+                var res = MessageBox.Show("Project with the specified name already exists. Overwrite?", "Project name conflict", MessageBoxButton.YesNo);
+                if (res != MessageBoxResult.Yes)
+                {
+                    return null;
+                }
+
+                Directory.Delete(newProjectPath, true);
+            }
+
+            Directory.CreateDirectory(newProjectPath);
+
+            return newProjectPath;
+        }
+
         public void Save(SaveParameters saveParams)
         {
             var mapHexName  = string.IsNullOrEmpty(saveParams.CustomFileName) ? Project.MapHexFileName  : saveParams.CustomFileName;
@@ -421,6 +467,19 @@ namespace CAIME
             // Auto-saves and backups write to a side file - the project itself still has
             // unsaved changes, so its dirty flag must survive.
             var clearDirtyFlag = !saveParams.IsAutoSave && !saveParams.IsAutoBackup;
+
+            // No game's map.hex is written without its database. Pharaoh Dynasties' is written in
+            // the database's region order (see Project.Save); the rest follow the same rule.
+            if (!Project.IsDatabaseLoaded && (saveParams.Flags & SaveParameters.SaveFlags.MapHexFile) != 0)
+            {
+                var reason = IsReadingDatabase
+                    ? "until its database has been read through RPFM. Try again in a moment."
+                    : "without its database, which was not read (see the log). Fix that, then reopen the project.";
+
+                LoggerViewModel.Log($"The map can't be saved {reason}",
+                    clearDirtyFlag ? LogLevel.ErrorMessageBox : LogLevel.Warning);
+                return;
+            }
 
             lock (_saveLock)
             {
@@ -468,14 +527,10 @@ namespace CAIME
             try
             {
                 project = new Project();
-                if (project.Open(filename, g => PrepareRpfmDatabaseIfNeeded(project, g)) == false)
+                if (project.Open(filename) == false)
                 {
-                    project.CleanupRpfmSession();
                     return null;
                 }
-
-                // Release any lingering RPFM session from a previously open project before replacing it.
-                Project?.CleanupRpfmSession();
 
                 Project = project;
 
@@ -487,36 +542,15 @@ namespace CAIME
                     PreferencesViewModel.Instance.Save();
                 }
 
-                var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(project.Game);
-                if (string.IsNullOrEmpty(asskitPath))
-                {
-                    // Without an assembly kit path the export target is unknown - building a path
-                    // from an empty string would be rooted and create junk directories at the
-                    // drive root. Exporters re-check the path before running.
-                    _campaignMapExportPath = null;
-                    _campaignMapDebugPath  = null;
-                    LoggerViewModel.Log($"No assembly kit path is configured for {project.Game}. " +
-                                        "Exports are unavailable until it is set in Settings > Preferences.", LogLevel.Warning);
-                }
-                else
-                {
-                    _campaignMapExportPath = $"{asskitPath}\\working_data\\campaign_maps\\{project.MapName}\\";
-                    Directory.CreateDirectory(_campaignMapExportPath);
-
-                    _campaignMapDebugPath = $"{_campaignMapExportPath}debug\\";
-                    Directory.CreateDirectory(_campaignMapDebugPath);
-                }
-
                 var projectLoadedArgs = new ProjectEventArgs(project);
                 OnOpenProject?.Invoke(this, projectLoadedArgs);
+
+                StartReadingDatabase(project);
 
                 return project;
             }
             catch (Exception ex)
             {
-                // Roll back any partial RPFM preparation so the Assembly Kit is left untouched.
-                project?.CleanupRpfmSession();
-
                 // Open() reports failure by returning null, so nothing here must be left as if it
                 // succeeded - Project is set well before this point (needed so OnOpenProject
                 // subscribers can see the new project), so a throw anywhere after that but before the
@@ -535,78 +569,112 @@ namespace CAIME
 
         public void CloseProject()
         {
-            // Restore any temporary Assembly Kit changes made by the RPFM workflow.
-            Project?.CleanupRpfmSession();
-
             Project = null;
+            _databaseRead = null;
 
             OnCloseProject?.Invoke(this, new RoutedEventArgs());
         }
 
         /// <summary>
-        /// When the active database source is RPFM, prepares the required database tables from the
-        /// configured vanilla pack, layering the project's modded packs over it when any are recorded.
-        /// Returns false to abort opening. For the Assembly Kit source this is a no-op returning true.
+        /// Blocks until the open project's database read has ended, and returns whether its database
+        /// was loaded: false when the read failed, or when there was nothing to read. For the CLI
+        /// only: on the UI thread this deadlocks, since the read ends by loading the tables there.
         /// </summary>
-        private bool PrepareRpfmDatabaseIfNeeded(Project project, GameTemplate game)
+        public bool WaitForDatabase()
         {
-            var prefs = PreferencesViewModel.Instance;
-            if (prefs.DatabaseSource != DatabaseSource.RPFM)
-            {
-                return true;
-            }
+            return _databaseRead != null && _databaseRead.Result;
+        }
 
-            if (!Rpfm.GameMappingProvider.IsSupported(game))
-            {
-                LoggerViewModel.Log($"The RPFM database source workflow does not support {game}.", LogLevel.ErrorMessageBox);
-                return false;
-            }
+        /// <summary>
+        /// Starts reading the required database tables through RPFM, from the game's own packs with
+        /// the project's mod layered over them when one is recorded. Starting the RPFM server and
+        /// reading the packs takes a while, so the read runs in the background: the map can be viewed
+        /// and edited meanwhile, and only the steps that need the database wait for it. Once read, the
+        /// tables are loaded into <paramref name="project"/> on the UI thread and
+        /// <see cref="OnDatabaseLoaded"/> is raised. Without an RPFM path nothing is read, and the
+        /// project stays without a database.
+        /// </summary>
+        private void StartReadingDatabase(Project project)
+        {
+            _databaseRead = null;
 
-            var assemblyKitPath = prefs.GetAssKitPath(game);
-            if (string.IsNullOrEmpty(assemblyKitPath))
-            {
-                LoggerViewModel.Log($"No assembly kit path is configured for {game}. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            var rpfmFolder = prefs.RpfmPath;
+            var rpfmFolder = PreferencesViewModel.Instance.RpfmPath;
             if (string.IsNullOrEmpty(rpfmFolder))
             {
-                LoggerViewModel.Log("The database source is set to RPFM but no RPFM installation path is configured. Set it in Settings > Preferences.", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            // The only hard requirement: without it, there's no RPFM data to read at all, modded pack
-            // or otherwise.
-            var vanillaPackPath = prefs.GetVanillaPackPath(game);
-            if (string.IsNullOrEmpty(vanillaPackPath) || !File.Exists(vanillaPackPath))
-            {
                 LoggerViewModel.Log(
-                    $"No vanilla pack is configured for {game}. Set it in Settings > Preferences (select {game} as " +
-                    "the Base game first - the field is per game).", LogLevel.ErrorMessageBox);
+                    $"No RPFM path is configured, so {project.Game}'s database (ground type names/costs, region names, " +
+                    "campaign data) can't be read, and the map can't be edited, saved or processed this session - set the " +
+                    "RPFM path in Settings > Preferences and reopen the project.",
+                    LogLevel.ErrorMessageBox);
+                return;
+            }
+
+            if (!Rpfm.GameMappingProvider.IsSupported(project.Game))
+            {
+                LoggerViewModel.Log($"CAIME cannot read {project.Game}'s database through RPFM.", LogLevel.ErrorMessageBox);
+                _databaseRead = Task.FromResult(false);
+                return;
+            }
+
+            // The mod is optional and per-project: if the metadata simply doesn't record one (a new
+            // project, or one that has never needed a mod override), that's a normal state, not an
+            // error - every table just comes from the game's own packs. Never prompt for it here;
+            // it's set deliberately via Settings > RPFM Workflow when wanted.
+            var modPackName = Rpfm.MetadataService.GetModPackName(project.ProjectPath);
+
+            // Built here rather than in the background: it takes the map's land and sea regions as
+            // they are now, before the first edit.
+            var session = new Rpfm.RpfmWorkflowSession(project.Game, rpfmFolder, modPackName, project.MapHexFile);
+
+            // Null in the CLI, which has no UI thread: there the tables are loaded on the reading thread.
+            var dispatcher = Application.Current?.Dispatcher;
+
+            LoggerViewModel.Log("Reading the database through RPFM. Editing, saving and processing are unavailable until it has been read.", LogLevel.Info);
+
+            _databaseRead = Task.Run(() =>
+            {
+                IReadOnlyDictionary<string, Rpfm.RpfmTable> tables = null;
+                Exception failure = null;
+
+                try
+                {
+                    tables = session.Prepare();
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+
+                return dispatcher == null
+                    ? FinishReadingDatabase(project, tables, failure)
+                    : dispatcher.Invoke(() => FinishReadingDatabase(project, tables, failure));
+            });
+        }
+
+        private bool FinishReadingDatabase(Project project, IReadOnlyDictionary<string, Rpfm.RpfmTable> tables, Exception failure)
+        {
+            // Closed, or replaced by another project, while its tables were read.
+            if (Project != project)
+            {
                 return false;
             }
 
-            // The modded packs are optional and per-project: if the metadata simply doesn't record any
-            // (a new project, or one that has never needed a mod override), that's a normal state, not
-            // an error - every table just comes from the vanilla pack. Never prompt for them here;
-            // they're set deliberately via Settings > RPFM Workflow when wanted.
-            var packPaths = Rpfm.MetadataService.GetPackFilePaths(project.ProjectPath);
-
-            try
+            if (failure != null)
             {
-                var session = new Rpfm.RpfmWorkflowSession(game, assemblyKitPath, rpfmFolder, packPaths, vanillaPackPath, project.MapHexFile);
-                session.Prepare();
-                project.RpfmSession = session;
-
-                LoggerViewModel.Log("RPFM database tables prepared successfully.", LogLevel.Info);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                LoggerViewModel.Log($"RPFM database preparation failed: {ex.Message}", LogLevel.ErrorMessageBox);
+                LoggerViewModel.Log($"Reading the database through RPFM failed: {failure.Message}\n\n" +
+                    "The map can't be edited, saved or processed this session. Fix that, then reopen the project.",
+                    LogLevel.ErrorMessageBox);
                 return false;
             }
+
+            if (!project.LoadDatabase(tables))
+            {
+                return false;
+            }
+
+            LoggerViewModel.Log("RPFM database tables read successfully. Editing, saving and processing are now available.", LogLevel.Info);
+            OnDatabaseLoaded?.Invoke(this, new ProjectEventArgs(project));
+            return true;
         }
 
         public void Backup(string backupPath, string backupName)
@@ -650,26 +718,43 @@ namespace CAIME
 
         #region Exporters
 
-        private bool EnsureExportPathAvailable()
+        /// <summary>
+        /// The folder the open project's processed files go to (see
+        /// <see cref="PreferencesViewModel.GetCampaignMapOutputPath"/>), created; null, after telling
+        /// the user, when no output folder or Assembly Kit is set.
+        /// </summary>
+        private string GetOutputPath()
         {
-            if (string.IsNullOrEmpty(_campaignMapExportPath))
+            var outputPath = PreferencesViewModel.Instance.GetCampaignMapOutputPath(Project.Game, Project.MapName);
+            if (outputPath == null)
             {
-                LoggerViewModel.Log($"Cannot export - no assembly kit path is configured for {Project.Game}. " +
-                                    "Set it in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
-                return false;
+                LoggerViewModel.Log($"Cannot export - no output folder, and no assembly kit path for {Project.Game}, is configured. " +
+                                    "Set one in Settings > Preferences.", LogLevel.ErrorMessageBox);
+                return null;
             }
 
-            return true;
+            Directory.CreateDirectory(outputPath);
+            return outputPath;
         }
 
         public bool ExportProcessedPathfindingData()
         {
-            return EnsureExportPathAvailable() && PathfindingExporter.Export(Project, _campaignMapExportPath, _campaignMapDebugPath);
+            var outputPath = GetOutputPath();
+            if (outputPath == null)
+            {
+                return false;
+            }
+
+            // Only pathfinding writes debug files.
+            var debugPath = $"{outputPath}debug\\";
+            Directory.CreateDirectory(debugPath);
+            return PathfindingExporter.Export(Project, outputPath, debugPath);
         }
 
         public bool ExportProcessedBordersData()
         {
-            return EnsureExportPathAvailable() && BordersExporter.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && BordersExporter.Export(Project, outputPath);
         }
 
         public bool ExportSVGBorders()
@@ -684,79 +769,61 @@ namespace CAIME
 
         public bool ExportProcessedTradeRoutesData()
         {
-            return EnsureExportPathAvailable() && TradeRoutesProcessor.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && TradeRoutesProcessor.Export(Project, outputPath);
         }
 
         /// <summary>
-        /// Checks the preconditions the two Assembly Kit processing steps share: an open, saved
-        /// project and a configured Assembly Kit. On success <paramref name="expectedPath"/> is the
-        /// directory the project must live in for the Assembly Kit to find it.
+        /// The output folder for the two steps that build from the saved map.hex, map_data.esf and
+        /// dynamic_resources.esf: null, after telling the user, unless a project is open and saved.
         /// </summary>
-        private bool EnsureProjectReadyForProcessing(out string expectedPath)
+        private string GetOutputPathForSavedProject()
         {
-            expectedPath = null;
-
             if (Project == null)
             {
                 LoggerViewModel.Log("No project is open.", LogLevel.ErrorMessageBox);
-                return false;
+                return null;
             }
 
             if (Project.HasUnsavedChanges)
             {
                 LoggerViewModel.Log("Please, save the project before trying to process it.", LogLevel.ErrorMessageBox);
-                return false;
+                return null;
             }
 
-            var asskitPath = PreferencesViewModel.Instance.GetAssKitPath(Project.Game);
-            if (string.IsNullOrEmpty(asskitPath))
-            {
-                LoggerViewModel.Log($"Cannot process - no assembly kit path is configured for {Project.Game}. " +
-                                    "Set it in Settings > Preferences and reopen the project.", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            expectedPath = $"{asskitPath}\\raw_data\\EmpireDesignData\\campaign_maps\\{Project.MapName}\\";
-            return true;
+            return GetOutputPath();
         }
 
         public bool ProcessMapDataEsf()
         {
-            if (EnsureProjectReadyForProcessing(out string expectedPath) == false)
+            var outputPath = GetOutputPathForSavedProject();
+            if (outputPath == null)
             {
                 return false;
             }
 
-            if (string.Equals(expectedPath, Project.ProjectPath) == false)
-            {
-                LoggerViewModel.Log($"Map Data Process denied - the project has to be named map.hex and located in {expectedPath}.\n" +
-                                    $"Current project name is {Project.MapHexFileName}.hex, located in {Project.ProjectPath}", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            return ProcessMapData.Process(Project, ToolsPath);
+            return PreferencesViewModel.Instance.IsAssemblyKitIntegrationEnabled
+                ? AssemblyKitBuilder.BuildMapData(Project, ToolsPath, outputPath)
+                : ProcessMapData.Process(Project, outputPath);
         }
 
         public bool ProcessDynamicResourcesEsf()
         {
-            if (EnsureProjectReadyForProcessing(out string expectedPath) == false)
+            var outputPath = GetOutputPathForSavedProject();
+            if (outputPath == null)
             {
                 return false;
             }
 
-            if (string.Equals(expectedPath, Project.ProjectPath) == false)
-            {
-                LoggerViewModel.Log($"Dynamic Resources Process denied - the project has to be named map.hex and located in {expectedPath}.\n" +
-                                    $"Current project name is {Project.MapHexFileName}.hex, located in {Project.ProjectPath}", LogLevel.ErrorMessageBox);
-                return false;
-            }
-
-            return ProcessDynamicResources.Process(Project, ToolsPath);
+            return PreferencesViewModel.Instance.IsAssemblyKitIntegrationEnabled
+                ? AssemblyKitBuilder.BuildDynamicResources(Project, ToolsPath, outputPath)
+                : ProcessDynamicResources.Process(Project, outputPath);
         }
 
         public bool GenerateLookupImage()
         {
-            return EnsureExportPathAvailable() && LookupImageExporter.Export(Project, _campaignMapExportPath);
+            var outputPath = GetOutputPath();
+            return outputPath != null && LookupImageExporter.Export(Project, outputPath);
         }
 
         public bool GenerateBaselineTilemap()

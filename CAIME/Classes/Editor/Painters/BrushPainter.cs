@@ -127,7 +127,7 @@ namespace CAIME.Painters
 
         private void SetColour(Layer layer, Swatch swatch, int hexIndex, bool canDisplay)
         {
-            layer.Colours[hexIndex] = swatch.Colour;
+            layer.Colours[hexIndex] = layer.ColourAfterApplying(swatch, hexIndex);
 
             if (canDisplay)
             {
@@ -199,7 +199,7 @@ namespace CAIME.Painters
 
             if (oldSwatch == null)
             {
-                oldSwatch = EraserToolCommand.CLEAR_SWATCHES[layer.Type];
+                oldSwatch = EraserToolCommand.ClearSwatchFor(layer);
             }
 
             var oldChange = new HexSnapshot()

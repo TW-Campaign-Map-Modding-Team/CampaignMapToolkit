@@ -22,6 +22,8 @@ namespace EsfLibrary
 
         public AbcaFileCodec() : base(0xABCA) { }
 
+        protected AbcaFileCodec(uint id) : base(id) { }
+
         public override EsfNode Decode(BinaryReader reader, byte typeCode)
         {
             EsfNode result;
