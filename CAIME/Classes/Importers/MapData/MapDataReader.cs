@@ -336,7 +336,7 @@ namespace CAIME.Classes.Importers
             {
                 var areaType = AreaType(regionAreaTypes, run.Region, run.Area);
 
-                if (hexIndex + run.Length > hexCount)
+                if (run.Length < 0 || hexIndex + run.Length > hexCount)
                 {
                     throw new InvalidDataException($"The region runs cover more than the map's {hexCount} hexes.");
                 }
