@@ -10,21 +10,14 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace CAIME.Tests.Integration
 {
     /// <summary>
-    /// Imports real Warhammer III map_data.esf files and compares the map.hex the import saves
+    /// Imports real map_data.esf files and compares the map.hex the import saves
     /// with the map.hex each was built from.
     ///
     /// <para>
-    /// The data lives outside the repository: set <c>CAIME_MAP_DATA_DIR</c> to a folder of
-    /// <c>&lt;map&gt;/map_data.esf</c> + <c>&lt;map&gt;/map.hex</c> pairs, such as an Assembly Kit
-    /// map.hex with the map_data.esf the Assembly Kit builds from it. Without it the test is
-    /// inconclusive.
-    /// </para>
-    ///
-    /// <para>
-    /// Areas of interest are not compared: <see cref="MapHexFile"/> reads them from a lower bit
-    /// than CA's map.hex stores them in, so the reference map would not read back correctly.
-    /// Maps without passable sea, such as wh3_main_prologue_map, are skipped: the importer can
-    /// only tell sea ground types from land ones by the ground under passable sea.
+    /// The pairs are TestData/campaign_maps' maps that have a map.hex: the game's file with its
+    /// Assembly Kit map.hex. For more, set <c>CAIME_MAP_DATA_DIR</c> to a folder of
+    /// <c>&lt;map&gt;/map_data.esf</c> + <c>&lt;map&gt;/map.hex</c> pairs. Each is imported as its
+    /// map.hex's game.
     /// </para>
     /// </summary>
     [TestClass]
@@ -54,16 +47,17 @@ namespace CAIME.Tests.Integration
             MapHexHarness.DeleteTempDir(_dir);
         }
 
+        /// <summary>TestData's pairs, then those in <c>CAIME_MAP_DATA_DIR</c> for maps TestData lacks.</summary>
         private static string[] FindMapFolders()
         {
-            var dir = Environment.GetEnvironmentVariable("CAIME_MAP_DATA_DIR");
-            if (string.IsNullOrEmpty(dir) || Directory.Exists(dir) == false)
-            {
-                return Array.Empty<string>();
-            }
+            var roots = new[] { MapDataEsfComparison.FindRepoDirectory("TestData", "campaign_maps"), Environment.GetEnvironmentVariable("CAIME_MAP_DATA_DIR") };
 
-            return Directory.GetDirectories(dir)
+            return roots
+                .Where(root => string.IsNullOrEmpty(root) == false && Directory.Exists(root))
+                .SelectMany(Directory.GetDirectories)
                 .Where(folder => File.Exists(Path.Combine(folder, "map_data.esf")) && File.Exists(Path.Combine(folder, "map.hex")))
+                .GroupBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .Select(sameMap => sameMap.First())
                 .ToArray();
         }
 
@@ -73,50 +67,40 @@ namespace CAIME.Tests.Integration
             var folders = FindMapFolders();
             if (folders.Length == 0)
             {
-                Assert.Inconclusive("No map_data.esf + map.hex pairs found. Set CAIME_MAP_DATA_DIR to enable this test.");
+                Assert.Inconclusive("No map_data.esf + map.hex pairs found in TestData or CAIME_MAP_DATA_DIR.");
             }
 
             var failures = new StringBuilder();
-            int comparedMaps = 0;
 
             foreach (var folder in folders)
             {
                 var mapName  = Path.GetFileName(folder);
                 var contents = MapDataReader.Read(Path.Combine(folder, "map_data.esf"));
 
-                if (contents.HexAreaTypes.Any(type => type == MapDataAreaType.Sea || type == MapDataAreaType.Bridge) == false)
-                {
-                    continue;
-                }
 
                 var reference = new MapHexFile();
                 Assert.IsTrue(reference.Load(Path.Combine(folder, "map.hex")), $"{mapName}: the reference map.hex did not load.");
 
-                var imported = Import(contents, mapName);
+                var imported = Import(contents, mapName, reference);
 
                 CompareLists(mapName, imported, reference, failures);
                 CompareHexes(mapName, imported, reference, failures);
                 CompareColours(mapName, imported, reference, failures);
-                ++comparedMaps;
             }
 
             if (failures.Length > 0)
             {
                 Assert.Fail(failures.ToString());
             }
-
-            if (comparedMaps == 0)
-            {
-                Assert.Inconclusive("None of the maps in CAIME_MAP_DATA_DIR has passable sea.");
-            }
         }
 
-        private MapHexFile Import(MapDataContents contents, string mapName)
+        /// <summary>Imports into a new map of the reference's game and map.hex version.</summary>
+        private MapHexFile Import(MapDataContents contents, string mapName, MapHexFile reference)
         {
             var mapDir = Path.Combine(_dir, mapName);
             Directory.CreateDirectory(mapDir);
 
-            var map = MapHexFile.CreateMapHex(mapDir, "map", "warhammer3", mapName, contents.Width, contents.Height, 0x14);
+            var map = MapHexFile.CreateMapHex(mapDir, "map", reference.GameName, mapName, contents.Width, contents.Height, reference.MinorFileVersion);
             MapDataImporter.Import(contents, map);
             Assert.IsTrue(map.Save(mapDir, "map"), $"{mapName}: the imported map did not save.");
 
@@ -140,7 +124,7 @@ namespace CAIME.Tests.Integration
 
         private static void CompareList(string mapName, string listName, List<string> imported, List<string> reference, StringBuilder failures)
         {
-            if (imported.SequenceEqual(reference) == false)
+            if ((imported ?? new List<string>()).SequenceEqual(reference ?? new List<string>()) == false)
             {
                 failures.AppendLine($"{mapName}: {listName} differ ({imported.Count} imported, {reference.Count} in map.hex).");
             }
@@ -181,6 +165,7 @@ namespace CAIME.Tests.Integration
                 Check("town sprawl",    ours.IsTownSprawl == theirs.IsTownSprawl);
                 Check("sea",            ours.IsSea == theirs.IsSea);
                 Check("region edges",   ours.RegionEdgeMask == theirs.RegionEdgeMask);
+                Check("area of interest", AreaOfInterest(imported, ours) == AreaOfInterest(reference, theirs));
 
                 bool isImpassableCoast = theirs.IsImpassable && theirs.IsSea == false && (theirs.IsBeach || theirs.IsCliff);
                 if (isImpassableCoast)
@@ -214,6 +199,11 @@ namespace CAIME.Tests.Integration
             {
                 failures.AppendLine($"{mapName}: beach or cliff matches on only {agreement:P1} of {impassableCoast} impassable coast hexes.");
             }
+        }
+
+        private static string AreaOfInterest(MapHexFile map, Hex hex)
+        {
+            return hex.InterestIndex >= 0 && map.AreasOfInterest != null && hex.InterestIndex < map.AreasOfInterest.Count ? map.AreasOfInterest[hex.InterestIndex] : null;
         }
 
         private static void CompareColours(string mapName, MapHexFile imported, MapHexFile reference, StringBuilder failures)
