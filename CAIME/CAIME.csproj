@@ -305,6 +305,8 @@
     <Compile Include="Classes\Exporters\DynamicResources\ProcessDynamicResources.cs" />
     <Compile Include="Classes\Exporters\LayerToImageExporter.cs" />
     <Compile Include="Classes\Importers\LayerImporter.cs" />
+    <Compile Include="Classes\Importers\MapData\MapDataContents.cs" />
+    <Compile Include="Classes\Importers\MapData\Wh3MapDataReader.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.Climates.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.cs" />
     <Compile Include="Classes\MapHex\MapHexEditor.AreasOfInterest.cs" />
