@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace EsfLibrary
@@ -29,9 +30,11 @@ namespace EsfLibrary
     /// </para>
     ///
     /// <para>
-    /// The string tables list each string once, by the id it was given on first use. The games list
-    /// them in the order of an internal hash map, which is not reproduced; readers look strings up by
-    /// id, so the order does not change what the file holds.
+    /// The string tables list each string once, by the id it was given on first use, in the order of
+    /// a hash map of the strings. Given its game's string hash, the writer lists them as Rome II's
+    /// and Attila's Assembly Kits do (<see cref="CaHashMapOrder"/>, <see cref="CaStringHash"/>).
+    /// The 64-bit games' map is not reproduced, and without a hash the writer lists them by id;
+    /// readers look strings up by id, so the order does not change what the file holds.
     /// </para>
     /// </summary>
     public sealed class EsfWriter
@@ -47,6 +50,7 @@ namespace EsfLibrary
         private const int  SHORT_INFO_MAX_VERSION    = 0x0F;
 
         private readonly EsfFormat                  format;
+        private readonly Func<string, uint>         stringTableHash;
         private readonly List<string>               nodeNames       = new List<string>();
         private readonly Dictionary<string, int>    nodeNameIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string>               asciiStrings    = new List<string>();
@@ -77,9 +81,11 @@ namespace EsfLibrary
             }
         }
 
-        public EsfWriter(EsfFormat format)
+        /// <param name="stringTableHash">The game's string hash, which orders the string table; null lists it by id.</param>
+        public EsfWriter(EsfFormat format, Func<string, uint> stringTableHash = null)
         {
-            this.format = format;
+            this.format             = format;
+            this.stringTableHash    = stringTableHash;
             frames.Push(root);
         }
 
@@ -384,8 +390,14 @@ namespace EsfLibrary
 
         private void WriteAsciiStrings(BinaryWriter writer)
         {
+            var ids = Enumerable.Range(0, asciiStrings.Count);
+            if (stringTableHash != null)
+            {
+                ids = CaHashMapOrder.Iterate(ids, id => stringTableHash(asciiStrings[id]));
+            }
+
             writer.Write(asciiStrings.Count);
-            for (int id = 0; id < asciiStrings.Count; ++id)
+            foreach (int id in ids)
             {
                 if (format == EsfFormat.Abca)
                 {

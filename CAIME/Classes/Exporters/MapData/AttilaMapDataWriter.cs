@@ -30,11 +30,17 @@ namespace CAIME.Exporters
 
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
+            return Write(map, theatre, timestamp, CaStringHash.Attila);
+        }
+
+        /// <param name="stringTableHash">The game's CALibs string hash, which orders the string table.</param>
+        internal static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp, Func<string, uint> stringTableHash)
+        {
             var model       = new MapDataModel(map, theatre, MapDataRadiusRounding.PerColumnAndAHalf);
             var settlements = MapDataSlotSettlement.FindAll(model);
             MapDataSlotPositions.PlaceAttila(model, settlements);
 
-            var esf = new EsfWriter(EsfFormat.Abca);
+            var esf = new EsfWriter(EsfFormat.Abca, stringTableHash);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
 
             MapDataEsfParts.WriteTheatreForUi(esf, model, SettlementPositions(model, settlements));

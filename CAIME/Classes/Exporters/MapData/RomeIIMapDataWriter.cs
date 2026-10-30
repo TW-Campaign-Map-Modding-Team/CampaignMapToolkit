@@ -1,4 +1,5 @@
 using System;
+using EsfLibrary;
 
 namespace CAIME.Exporters
 {
@@ -7,7 +8,7 @@ namespace CAIME.Exporters
     /// Templates/main_rome_map/map.hex and the Rome II Assembly Kit's builder
     /// (ToolDataBuilderDll.AssemblyKit.dll). Rome II's builder writes the same file as Attila's
     /// (<see cref="AttilaMapDataWriter"/>), but stores the playable area's maxy as given rather than
-    /// the top edge of the hex grid.
+    /// the top edge of the hex grid, and its string table follows Rome II's string hash.
     ///
     /// <para>
     /// Rome II's packs have no maxy (the playable areas table lost minx, miny and maxy after
@@ -33,7 +34,7 @@ namespace CAIME.Exporters
                 MaxY    = theatre.MaxY ?? (float)Math.Round(EstimateMaxY(theatre.MaxX, map.MapWidth, map.MapHeight), 2),
             };
 
-            return AttilaMapDataWriter.Write(map, withMaxY, timestamp);
+            return AttilaMapDataWriter.Write(map, withMaxY, timestamp, CaStringHash.RomeII);
         }
 
         /// <summary>

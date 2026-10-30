@@ -25,9 +25,10 @@ python skills/esf-dump/esf_dump.py <a.esf> --compare <b.esf>
 - 24-bit integers (`0x18`, `0x1c`) are big-endian.
 - Sizes are CAULEB128: seven bits a byte, most significant first. The games pad a size to five
   bytes (leading `0x80`s) when their 1 MiB write buffer was flushed while it was open; see
-  `EsfLibrary/Esf/AbcbWriter.cs`.
-- The games list the string tables in the order of an internal hash map that is not known;
-  ids are the order of first use in the tree. Compare string tables as id -> string maps.
+  `EsfLibrary/Esf/EsfWriter.cs`.
+- The games list the string tables in the order of a hash map of the strings; ids are the order
+  of first use in the tree. Rome II's and Attila's order is known (`EsfLibrary/Esf/CaHashMapOrder.cs`,
+  `CaStringHash.cs`); the 64-bit games' is not. Compare string tables as id -> string maps.
 - Python's numpy `float32` reproduces the games' float arithmetic when every step is cast, which
   is how the map_data.esf geometry in `CAIME/Classes/Exporters/MapData/MapDataGeometry.cs` was
   matched.
