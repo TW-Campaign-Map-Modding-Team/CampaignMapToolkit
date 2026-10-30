@@ -22,12 +22,8 @@ namespace CAIME.Rpfm
     /// </summary>
     public static class DatabaseTableConverter
     {
-        // Joins the parts of a composite primary key into a single lookup key. A character that cannot
-        // occur inside a field value, rather than "", so that neighbouring parts can never run together
-        // into the same string - ("ab","c") and ("a","bc") are different records and must not collide.
-        // Spelled as an escape, not the literal control character, so it survives being round-tripped
-        // through editors and diffs. Every lookup keyed this way must use it, or they silently stop
-        // matching each other.
+        // Joins the parts of a composite primary key. A character that cannot occur in a field value, so
+        // ("ab","c") and ("a","bc") stay different records. Every lookup keyed this way must use it.
         private const string KeySeparator = "\u0001";
 
         /// <summary>
@@ -160,8 +156,6 @@ namespace CAIME.Rpfm
 
                 foreach (var (key, record) in keyedRecords)
                 {
-                    // The earliest-sorting fragment to define a key wins; a later fragment's row for
-                    // the same key is discarded rather than overwriting it.
                     if (!recordsByKey.ContainsKey(key))
                     {
                         keyOrder.Add(key);
@@ -216,8 +210,7 @@ namespace CAIME.Rpfm
                 }
                 else
                 {
-                    // No primary key to de-duplicate by - every row is treated as unique so fragments
-                    // are effectively just concatenated, in the same order as before.
+                    // Without a primary key every row is unique, so fragments are concatenated.
                     key = $"__row_{fragmentIndex}_{rowIndex}";
                 }
 
@@ -225,9 +218,7 @@ namespace CAIME.Rpfm
 
                 if (schemaFields != null && schemaFields.Count > 0)
                 {
-                    // Collect this row's raw values by column name first, expanding the packed
-                    // colour column into synthetic "r"/"g"/"b" entries so it can be pulled out like any
-                    // other schema field below.
+                    // The packed colour column is expanded into "r"/"g"/"b" entries so it reads like any other field.
                     var rawValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     for (int i = 0; i < header.Length; ++i)
                     {
@@ -241,8 +232,6 @@ namespace CAIME.Rpfm
 
                         if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
                         {
-                            // Invariant, not the current culture: these are data values, not text shown
-                            // to the user.
                             rawValues["r"] = r.ToString(CultureInfo.InvariantCulture);
                             rawValues["g"] = g.ToString(CultureInfo.InvariantCulture);
                             rawValues["b"] = b.ToString(CultureInfo.InvariantCulture);
@@ -252,9 +241,7 @@ namespace CAIME.Rpfm
                         rawValues[columnName] = value;
                     }
 
-                    // Emit fields in the schema's own declared order, so a fragment's column order
-                    // - which can differ from the schema, especially for an older table version - does
-                    // not leak into the output. A field missing from this row gets its default.
+                    // Schema order, so an older table version's column order does not leak into the output.
                     foreach (var field in schemaFields)
                     {
                         if (rawValues.TryGetValue(field.Name, out var value))
@@ -275,8 +262,7 @@ namespace CAIME.Rpfm
                 }
                 else
                 {
-                    // No schema available (a table with no schema fields given) - fall back to the fragment's column
-                    // order.
+                    // No schema fields given: keep the fragment's column order.
                     for (int i = 0; i < header.Length; ++i)
                     {
                         var columnName = header[i];
