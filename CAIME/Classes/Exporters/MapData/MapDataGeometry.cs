@@ -20,11 +20,9 @@ namespace CAIME.Exporters
     /// <para>
     /// Every value is a float worked out in the same steps as the Assembly Kit's builder, because
     /// map_data.esf stores them and a different rounding changes the file. The hex radius is maxx
-    /// times ((2 / 3) / (columns - 1)): computing it as maxx / (columns - 1) / 1.5 differs by a unit
-    /// in the last place for some maps, such as wh3_main_chaos_map_4. Builds of maps 800, 1108,
-    /// 1440 and 1600 columns wide, each with ten values of maxx, all agree with this form. Attila's
-    /// builder computes it as maxx / ((columns - 1) * 1.5) instead, which is a unit in the last place
-    /// larger for main_attila_map (the only Attila map checked).
+    /// times ((2 / 3) / (columns - 1)); maxx / (columns - 1) / 1.5 differs by a unit in the last
+    /// place for some maps, such as wh3_main_chaos_map_4. Attila's builder computes it as
+    /// maxx / ((columns - 1) * 1.5) instead.
     /// </para>
     /// </summary>
     public sealed class MapDataGeometry

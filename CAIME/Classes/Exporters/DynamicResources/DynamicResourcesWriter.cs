@@ -55,7 +55,8 @@ namespace CAIME.Exporters
             return esf.ToArray((uint)new DateTimeOffset(buildTimeUtc, TimeSpan.Zero).ToUnixTimeSeconds());
         }
 
-        private static Func<string, uint> StringTableHash(GameTemplate game)
+        /// <summary>The game's string hash, or null for a game whose hash-map order has not been read.</summary>
+        public static Func<string, uint> StringTableHash(GameTemplate game)
         {
             switch (game)
             {

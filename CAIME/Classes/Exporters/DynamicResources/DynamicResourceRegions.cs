@@ -151,7 +151,7 @@ namespace CAIME.Exporters
         public static uint HashLevelKey(GameTemplate game, DynamicResourceType type)
         {
             var key = type.BuildingSuperchain + type.Level.ToString(CultureInfo.InvariantCulture);
-            return game == GameTemplate.Rome2 ? CaStringHash.RomeII(key) : CaStringHash.Attila(key);
+            return (DynamicResourcesWriter.StringTableHash(game) ?? CaStringHash.Attila)(key);
         }
 
         /// <summary>
