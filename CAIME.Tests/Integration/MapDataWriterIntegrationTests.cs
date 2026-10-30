@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -22,9 +21,7 @@ namespace CAIME.Tests.Integration
     /// </para>
     ///
     /// <para>
-    /// Everything before the string tables must match byte for byte, apart from the timestamp at
-    /// bytes 8-11. The string tables must hold the same strings under the same ids; their order is
-    /// the Assembly Kit's hash-map order, which the writer does not reproduce.
+    /// The file must match byte for byte, written with the reference's timestamp.
     /// </para>
     /// </summary>
     [TestClass]
@@ -32,7 +29,6 @@ namespace CAIME.Tests.Integration
     {
         private const int TIMESTAMP_OFFSET          = 8;
         private const int STRING_TABLES_OFFSET_AT   = 12;
-        private const int HEADER_SIZE               = 16;
 
         [TestInitialize]
         public void Setup()
@@ -86,57 +82,21 @@ namespace CAIME.Tests.Integration
 
         private static void Compare(string mapName, byte[] reference, byte[] written, StringBuilder failures)
         {
-            int referenceTables = (int)BitConverter.ToUInt32(reference, STRING_TABLES_OFFSET_AT);
-            int writtenTables   = (int)BitConverter.ToUInt32(written, STRING_TABLES_OFFSET_AT);
+            int stringTables = (int)BitConverter.ToUInt32(reference, STRING_TABLES_OFFSET_AT);
 
-            if (referenceTables != writtenTables)
-            {
-                failures.AppendLine($"{mapName}: the nodes take {writtenTables - HEADER_SIZE} bytes; the Assembly Kit's take {referenceTables - HEADER_SIZE}.");
-                return;
-            }
-
-            for (int i = HEADER_SIZE; i < referenceTables; ++i)
+            for (int i = 0; i < Math.Min(reference.Length, written.Length); ++i)
             {
                 if (reference[i] != written[i])
                 {
-                    failures.AppendLine($"{mapName}: the nodes first differ at byte {i}.");
+                    failures.AppendLine($"{mapName}: the {(i < stringTables ? "nodes" : "string tables")} first differ at byte {i}.");
                     return;
                 }
             }
 
-            var referenceStrings    = ReadStringTables(reference, referenceTables);
-            var writtenStrings      = ReadStringTables(written, writtenTables);
-
-            if (referenceStrings.Count != writtenStrings.Count || referenceStrings.Except(writtenStrings).Any())
+            if (reference.Length != written.Length)
             {
-                failures.AppendLine($"{mapName}: the node names or strings differ.");
+                failures.AppendLine($"{mapName}: {written.Length} bytes; the Assembly Kit's build has {reference.Length}.");
             }
-        }
-
-        /// <summary>The node names (keyed by index) and ASCII strings (keyed by id), as one set of tagged entries.</summary>
-        private static HashSet<string> ReadStringTables(byte[] file, int offset)
-        {
-            var entries = new HashSet<string>();
-
-            using (var reader = new BinaryReader(new MemoryStream(file, offset, file.Length - offset)))
-            {
-                int nodeNames = reader.ReadUInt16();
-                for (int i = 0; i < nodeNames; ++i)
-                {
-                    entries.Add($"name {i}: {Encoding.ASCII.GetString(reader.ReadBytes(reader.ReadUInt16()))}");
-                }
-
-                Assert.AreEqual(0, reader.ReadInt32(), "map_data.esf holds no UTF-16 strings.");
-
-                int strings = reader.ReadInt32();
-                for (int i = 0; i < strings; ++i)
-                {
-                    var text = Encoding.ASCII.GetString(reader.ReadBytes(reader.ReadInt32()));
-                    entries.Add($"string {reader.ReadInt32()}: {text}");
-                }
-            }
-
-            return entries;
         }
     }
 }

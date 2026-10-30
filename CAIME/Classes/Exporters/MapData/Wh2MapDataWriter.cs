@@ -1,3 +1,5 @@
+using EsfLibrary;
+
 namespace CAIME.Exporters
 {
     /// <summary>
@@ -8,7 +10,7 @@ namespace CAIME.Exporters
     {
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            return PharaohMapDataWriter.Write(map, theatre, timestamp, MapDataRadiusRounding.TwoThirdsPerColumn);
+            return PharaohMapDataWriter.Write(map, theatre, timestamp, MapDataRadiusRounding.TwoThirdsPerColumn, CaHashMap.Murmur);
         }
     }
 }

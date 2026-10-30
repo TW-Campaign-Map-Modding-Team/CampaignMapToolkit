@@ -10,7 +10,8 @@ namespace CAIME.Tests.Helpers
 {
     /// <summary>
     /// Compares a written map_data.esf with a game's own file node by node, optionally leaving out
-    /// some bytes of one array, for an input that is older than the game's.
+    /// some bytes of one array, for an input that is older than the game's, and then its node name
+    /// and string tables byte for byte.
     /// </summary>
     public sealed class MapDataEsfComparison
     {
@@ -55,6 +56,16 @@ namespace CAIME.Tests.Helpers
         {
             Compare(EsfCodecUtil.LoadEsfFile(expectedPath).RootNode, EsfCodecUtil.LoadEsfFile(actualPath).RootNode, "", null);
             Assert.AreEqual(0, Differences.Count, string.Join(Environment.NewLine, Differences));
+
+            CollectionAssert.AreEqual(StringTables(expectedPath), StringTables(actualPath), "The node name and string tables, in order.");
+        }
+
+        // Everything after the nodes: the header's last u32 is where it starts.
+        private static byte[] StringTables(string path)
+        {
+            var bytes = File.ReadAllBytes(path);
+            int start = (int)BitConverter.ToUInt32(bytes, 12);
+            return bytes.Skip(start).ToArray();
         }
 
         private void Compare(EsfNode expected, EsfNode actual, string path, string parentName)

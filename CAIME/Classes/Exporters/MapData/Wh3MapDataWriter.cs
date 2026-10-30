@@ -50,7 +50,7 @@ namespace CAIME.Exporters
                 .ToList();
             var model       = maskedModels[0].Model;
 
-            var esf = new EsfWriter(layout.Format);
+            var esf = new EsfWriter(layout.Format, CaHashMap.Murmur);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
 
             esf.BeginRecord("MAP_FILE_DATA_VERSION", 0);
