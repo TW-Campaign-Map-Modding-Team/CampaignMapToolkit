@@ -141,6 +141,7 @@ namespace CAIME
             _preferencesViewModel.OnPreferencesChanged                      += OnPreferencesChanged;
 
             ProjectManager.OnOpenProject                                    += OnProjectOpened;
+            ProjectManager.OnDatabaseLoaded                                 += OnDatabaseLoaded;
             ProjectManager.OnCloseProject                                   += OnProjectClosed;
             ProjectManager.OnSaveProject                                    += OnProjectSaved;
             ProjectManager.OnFilePathChanged                                += OnProjectPathChanged;
@@ -574,6 +575,7 @@ namespace CAIME
             _autoSavesManager.Shutdown();
             _autoBackupManager.Shutdown();
 
+            AppStateContext.Instance.SetDatabaseLoaded(false);
             AppStateContext.Instance.SetState(AppStateContext.UninitialisedState);
         }
 
@@ -786,6 +788,11 @@ namespace CAIME
             _autoBackupManager.Initialise(e.Project.ProjectPath);
 
             this.PostLoadProject();
+        }
+
+        private void OnDatabaseLoaded(object sender, ProjectEventArgs e)
+        {
+            AppStateContext.Instance.SetDatabaseLoaded(true);
         }
 
         private void OnProjectClosed(object sender, RoutedEventArgs e)

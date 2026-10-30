@@ -323,6 +323,13 @@ namespace CAIME
                 return false;
             }
 
+            // The database is read in the background once the map is open, and most tasks need it.
+            if (!projectManager.WaitForDatabase())
+            {
+                WriteError("Failed to read the map's database through RPFM. See the messages above for details.");
+                return false;
+            }
+
             return true;
         }
 

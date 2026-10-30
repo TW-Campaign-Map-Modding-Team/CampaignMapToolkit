@@ -247,8 +247,8 @@ namespace CAIME.Rpfm
         }
 
         // Ground truth for "regions.is_sea": which regions this map treats as sea. No pack's table has
-        // that field, so the open map is the source, right by construction. It is already parsed and in memory by the time a session is built: Project.Open
-        // loads the map first and only then runs the hook that prepares this workflow.
+        // that field, so the open map is the source, right by construction. It is already parsed and in memory by the time a session is built: ProjectManager
+        // builds one only once Project.Open has loaded the map, before the first edit.
         private static IReadOnlyDictionary<string, bool> BuildRegionSeaStatus(MapHexFile mapHex)
         {
             var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);

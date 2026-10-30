@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using CAIME;
@@ -92,20 +93,46 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(new Project().Open(path), "A map at an unsupported version must not open.");
         }
 
-        // The hook is how the RPFM workflow prepares temporary database tables; refusing must abort
-        // the open rather than continuing against the untouched Assembly Kit.
+        // The database is read through RPFM after the map opens, so the map must be editable without it.
         [TestMethod]
-        public void Open_WhenTheBeforeDatabaseHookRefuses_Aborts()
+        public void Open_OpensTheMapWithoutItsDatabase()
         {
-            var path = CreateMap();
+            var project = OpenNewProject();
 
-            GameTemplate seen = GameTemplate.Invalid;
-            var project = new Project();
+            Assert.IsFalse(project.IsDatabaseLoaded, "Open must not load the database itself.");
+            Assert.IsNull(project.RpfmTables, "No tables have been read yet.");
+            Assert.IsNotNull(project.MapHexEditor, "The map must be editable without its database.");
+        }
 
-            Assert.IsFalse(project.Open(path, game => { seen = game; return false; }),
-                "A refused pre-database hook must abort the open.");
-            Assert.AreEqual(GAME, seen, "The hook must be told which game was detected.");
-            Assert.IsNull(project.MapHexEditor, "Nothing downstream of the hook may have been built.");
+        // Tables that can't be loaded must leave the project as it opened, without a database, so the
+        // steps that need one stay unavailable rather than running against a half-loaded one.
+        [TestMethod]
+        public void LoadDatabase_WithTablesThatCannotBeLoaded_LeavesTheProjectWithoutADatabase()
+        {
+            var project = OpenNewProject();
+
+            Assert.IsFalse(project.LoadDatabase(new Dictionary<string, Rpfm.RpfmTable>()),
+                "Tables missing every required table must not load.");
+            Assert.IsFalse(project.IsDatabaseLoaded, "A failed load must leave no database.");
+            Assert.IsNull(project.RpfmTables, "A failed load must not keep the tables.");
+        }
+
+        // Without an RPFM path there is nothing to read: the CLI must neither wait nor fail on it.
+        [TestMethod]
+        public void ManagerOpen_WithoutAnRpfmPath_ReadsNoDatabase()
+        {
+            var manager = new ProjectManager();
+
+            var loaded = false;
+            manager.OnDatabaseLoaded += (sender, e) => loaded = true;
+
+            var project = manager.Open(CreateMap());
+
+            Assert.IsNotNull(project, "Precondition: the map should open.");
+            Assert.IsFalse(manager.IsReadingDatabase, "No read may be started without an RPFM path.");
+            Assert.IsTrue(manager.WaitForDatabase(), "Having nothing to read is not a failure.");
+            Assert.IsFalse(project.IsDatabaseLoaded, "No database can have been loaded.");
+            Assert.IsFalse(loaded, "OnDatabaseLoaded must not be raised.");
         }
 
         [TestMethod]

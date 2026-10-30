@@ -59,7 +59,7 @@ The game's definition tables — every region name, every ground type, every cli
 
 > **Think of it this way:** the game's database is its rulebook. CAIME is the referee who checks your painted map against that rulebook before allowing you to export anything.
 
-Without an RPFM path, a project opens read-only, with no database. Without an output folder or an Assembly Kit path, nothing can be processed.
+The map opens before its database has been read, so you can start editing at once; **Map Data**, **Pathfinding data** and **Lookup and Minimap images** stay greyed out until the log says the database has been read. Without an RPFM path, a project opens with no database, and those steps stay unavailable. Without an output folder or an Assembly Kit path, nothing can be processed.
 
 ---
 

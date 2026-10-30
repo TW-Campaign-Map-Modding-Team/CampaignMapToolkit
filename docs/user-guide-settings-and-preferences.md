@@ -235,22 +235,24 @@ When enabled, every time you run **Process > Map Data**, CAIME will automaticall
 
 ## 10. Database (RPFM)
 
-CAIME reads its database tables through **RPFM**, from the game's own packs and your campaign's mod, and opens the project with them, without writing anything to your Assembly Kit. Your packs, your database, and your Assembly Kit files are never modified — the workflow is read-only.
+CAIME reads its database tables through **RPFM**, from the game's own packs and your campaign's mod, without writing anything to your Assembly Kit. Your packs, your database, and your Assembly Kit files are never modified — the workflow is read-only.
+
+The map opens straight away and can be viewed and edited at once; the tables are read in the background. Until they have been read, the steps that need them are greyed out: **Process → Map Data**, **Pathfinding data** and **Lookup and Minimap images**, **Tools → Export → SVG Borders**, and the **Regions**, **Attritions**, **Climates** and **Ground types** validators. The log says when the database has been read. While it is being read, a Pharaoh Dynasties map can't be saved, since the database decides the order its regions are saved in.
 
 Each required table is **merged** from every source that has a piece of it, the same way the game itself combines table fragments — CAIME does not pick one winning source per table:
 
 1. **Your campaign's mod, if you've set one for this project, and every mod it depends on.** RPFM reads the mod's own dependency list and loads those mods too — and theirs in turn — so naming the mod at the top is enough. Any fragments of a required table found in them are merged in. Entirely optional — see below.
 2. **The game's own packs.** Fill in whatever the mods don't provide — for example, if they only override `campaigns`/`campaign_map_regions`, ground types and everything else still come from the game, live from the actual install. CAIME reads them through RPFM, from the game folder set in RPFM's own settings, so you never have to work out which `.pack` holds a game's tables.
 
-Every required table must be found in one of these. If RPFM can't find one, the project doesn't open and CAIME names the missing table — it never quietly substitutes the Assembly Kit's own copy.
+Every required table must be found in one of these. If RPFM can't find one, CAIME names the missing table and the steps that need the database stay unavailable for the session — it never quietly substitutes the Assembly Kit's own copy.
 
 When two sources both define a row for the same primary key (e.g. both a mod and the game have an entry for the same region), the conflict is resolved the same way the game resolves it: by the name of the table *fragment* each row came from (e.g. `db/campaign_map_regions_tables/data__` vs. `.../!!!my_mod`) — the earlier-sorting fragment name wins, which is why a `!!!`-prefixed fragment name (a common modding convention) beats the plain `data__` fragment the game and most exports use. This has nothing to do with what the `.pack` file is called or the order mods are listed in — only the fragment's own name inside the pack. If a mod and the game happen to use the *identical* fragment name, the mod wins; if your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
 
 **Requirements:**
 
 - **RPFM installation, version 5.3 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
-- **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, opening a project tells you so.
-- **Without an RPFM path**, a project opens read-only, with no database. CAIME uses RPFM's schema for every table; the one field it needs that no pack carries, `regions.is_sea`, comes from your map's own land and sea regions.
+- **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, CAIME tells you so once the project is open.
+- **Without an RPFM path**, a project opens with no database, and the steps that need it stay unavailable. CAIME uses RPFM's schema for every table; the one field it needs that no pack carries, `regions.is_sea`, comes from your map's own land and sea regions.
 
 **Output folder.** Processed files go to `campaign_maps\{your map name}\` inside the **Output folder**, laid out as in a pack, so the folder can be your mod's own. Leave it empty to use the game's Assembly Kit `working_data` folder; then the Assembly Kit path is what CAIME needs, and Preferences won't **Save** with neither set.
 

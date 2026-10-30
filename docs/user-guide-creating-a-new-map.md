@@ -493,14 +493,14 @@ Select a Swatch → Paint on the map canvas
 - **The Swatches panel is empty after creating my map.**
   This means CAIME could not find any entries for your map in the Assembly Kit database. Open Dave and confirm that your map name in the `campaign_map` column of `campaign_map_regions` exactly matches what you typed in the CAIME dialog (case-sensitive). Then reload the map with **File → Reload** (Ctrl+R).
 
-- **CAIME shows a "failed to load" error when opening the new map.**
-  This usually means one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both before retrying.
+- **Processing stays greyed out after opening the new map.**
+  The database is read in the background after the map opens, so give it a moment. If it stays greyed out, the log says why — usually one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both, then reload the map with **File → Reload** (Ctrl+R).
 
 - **I typed an odd number for the map width and got an error.**
   Map widths must be even numbers (e.g., 512, 1016, 1024). This is a technical requirement of the hex grid layout. Simply increase or decrease your width by 1 to make it even.
 
-- **My Pharaoh map will not open — CAIME says the region indices are mismatched.**
-  The `index` values in `campaign_map_regions` in Dave no longer match the order stored in the `map.hex` binary file. Open Dave, correct the `index` values so that land regions are numbered first and sea regions follow, with no gaps, then try opening the map again in CAIME. If you are unsure what order the binary file expects, restore your last working `map.hex` from the auto-backup folder (`Projects\YourMapName\`) and compare.
+- **CAIME says my Pharaoh map's region indices don't match, and processing stays unavailable.**
+  The `index` values in `campaign_map_regions` in Dave no longer match the order stored in the `map.hex` binary file. Open Dave, correct the `index` values so that land regions are numbered first and sea regions follow, with no gaps, then reload the map in CAIME. If you are unsure what order the binary file expects, restore your last working `map.hex` from the auto-backup folder (`Projects\YourMapName\`) and compare.
 
 - **I added or removed regions — how do I make CAIME reflect the change?**
   Always make region changes in Dave first: add or remove the rows in `regions` and `campaign_map_regions`, then switch to CAIME and reload the map with **File → Reload** (Ctrl+R). CAIME reads the database on load and will pick up whatever is currently in Dave. It never writes back to the database, so changes made only inside CAIME's interface will be lost on the next reload.

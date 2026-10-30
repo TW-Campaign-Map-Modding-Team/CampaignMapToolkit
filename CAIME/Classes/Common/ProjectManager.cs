@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Xml.Linq;
 using CAIME.Exporters;
@@ -103,8 +104,11 @@ namespace CAIME
         public DatabaseViewModel    Database        { get; private set; }
         public ColourTable          ColourTable     { get; private set; }
 
-        // The database tables read through RPFM, by table name; null when no RPFM path is configured.
-        public IReadOnlyDictionary<string, Rpfm.RpfmTable> RpfmTables { get; set; }
+        // The database tables read through RPFM, by table name; null until they have been read and
+        // loaded (see LoadDatabase), and for good when no RPFM path is configured.
+        public IReadOnlyDictionary<string, Rpfm.RpfmTable> RpfmTables { get; private set; }
+
+        public bool IsDatabaseLoaded => RpfmTables != null;
 
         public string MapName
         {
@@ -152,12 +156,11 @@ namespace CAIME
             Database    = new DatabaseViewModel();
         }
 
-        /// <param name="onBeforeDatabaseInit">
-        /// Optional hook run once the game is known but before the database is initialised. Returning
-        /// false aborts the open. The RPFM workflow uses this to read the database tables into
-        /// <see cref="RpfmTables"/>.
-        /// </param>
-        public bool Open(string filename, Func<GameTemplate, bool> onBeforeDatabaseInit = null)
+        /// <summary>
+        /// Opens the map, ready to view and edit, without its database: that is read through RPFM
+        /// afterwards (see <see cref="ProjectManager"/>) and handed to <see cref="LoadDatabase"/>.
+        /// </summary>
+        public bool Open(string filename)
         {
             if (MapHexFile.Load(filename) == false)
             {
@@ -172,42 +175,42 @@ namespace CAIME
             MapHexFileName  = Path.GetFileNameWithoutExtension(filename);
             Game            = ProjectManager.GetGameFromName(MapHexFile.GameName, MapHexFile.MinorFileVersion);
 
-            if (onBeforeDatabaseInit != null && onBeforeDatabaseInit(Game) == false)
-            {
-                return false;
-            }
-
-            if (RpfmTables == null)
-            {
-                LoggerViewModel.Log(
-                    $"No RPFM path is configured, so {Game}'s database (ground type names/costs, region names, " +
-                    "campaign data) can't be read. Opening the map read-only for this session - set the RPFM path " +
-                    "in Settings > Preferences and reopen the project for full editing.",
-                    LogLevel.Warning);
-            }
-            else
-            {
-                try
-                {
-                    if (Database.Initialise(Game, ProjectPath, MapHexFile, RpfmTables) == false)
-                    {
-                        return false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LoggerViewModel.Log(
-                        $"Could not load database tables for {Game} ({ex.Message}). " +
-                        "Opening the map read-only for this session.",
-                        LogLevel.Warning);
-                    Database.ShutDown();
-                }
-            }
-
             ColourTable     = new ColourTable(MapHexFile);
             MapHexEditor    = new MapHexEditor(MapHexFile, ColourTable);
 
             return true;
+        }
+
+        /// <summary>
+        /// Loads the database from <paramref name="tables"/>, read through RPFM. Returns false, leaving
+        /// the project without a database, when they can't be loaded or don't fit the map.
+        /// </summary>
+        public bool LoadDatabase(IReadOnlyDictionary<string, Rpfm.RpfmTable> tables)
+        {
+            try
+            {
+                if (Database.Initialise(Game, ProjectPath, MapHexFile, tables))
+                {
+                    RpfmTables = tables;
+                    return true;
+                }
+
+                // Only Pharaoh Dynasties checks the database against the map; the mismatches are logged.
+                LoggerViewModel.Log(
+                    $"The region indices in {Game}'s database don't match the map's (see the log). " +
+                    "Processing stays unavailable for this session.",
+                    LogLevel.ErrorMessageBox);
+            }
+            catch (Exception ex)
+            {
+                LoggerViewModel.Log(
+                    $"Could not load database tables for {Game} ({ex.Message}). " +
+                    "Processing stays unavailable for this session.",
+                    LogLevel.Warning);
+            }
+
+            Database.ShutDown();
+            return false;
         }
 
         public bool Save(SaveParameters.SaveFlags flags, string mapHexName, string savePath, bool clearDirtyFlag = true)
@@ -282,6 +285,7 @@ namespace CAIME
         private readonly object _saveLock = new object();
 
         public ProjectEventHandler  OnOpenProject;
+        public ProjectEventHandler  OnDatabaseLoaded;
         public ProjectEventHandler  OnSaveProject;
         public ProjectEventHandler  OnMapRenamed;
         public RoutedEventHandler   OnCloseProject;
@@ -294,6 +298,12 @@ namespace CAIME
         public Project  Project         { get; private set; }
 
         public bool     IsProjectOpen   => Project != null;
+
+        // The open project's database read (see StartReadingDatabase); null when none was started.
+        // Its result says whether the tables were loaded into the project.
+        private Task<bool> _databaseRead;
+
+        public bool     IsReadingDatabase => _databaseRead != null && !_databaseRead.IsCompleted;
 
         public ProjectManager()
         {
@@ -366,7 +376,7 @@ namespace CAIME
             if (template == TEMPLATE_NONE)
             {
                 var project = Project.CreateNew(newProjectPath, game, mapName, mapWidth, mapHeight);
-                if (project.Open($"{newProjectPath}map.hex", g => PrepareRpfmDatabase(project, g)))
+                if (project.Open($"{newProjectPath}map.hex"))
                 {
                     return project;
                 }
@@ -395,6 +405,18 @@ namespace CAIME
             // Auto-saves and backups write to a side file - the project itself still has
             // unsaved changes, so its dirty flag must survive.
             var clearDirtyFlag = !saveParams.IsAutoSave && !saveParams.IsAutoBackup;
+
+            // A Pharaoh Dynasties map.hex is written in its database's region order (see
+            // Project.Save), so it can't be written while that is still being read.
+            if (Project.Game == GameTemplate.Pharaoh_Dynasties && IsReadingDatabase
+                && (saveParams.Flags & SaveParameters.SaveFlags.MapHexFile) != 0)
+            {
+                LoggerViewModel.Log(
+                    "The map can't be saved until its database has been read through RPFM: that decides the order " +
+                    "its regions are saved in. Try again in a moment.",
+                    clearDirtyFlag ? LogLevel.ErrorMessageBox : LogLevel.Warning);
+                return;
+            }
 
             lock (_saveLock)
             {
@@ -442,7 +464,7 @@ namespace CAIME
             try
             {
                 project = new Project();
-                if (project.Open(filename, g => PrepareRpfmDatabase(project, g)) == false)
+                if (project.Open(filename) == false)
                 {
                     return null;
                 }
@@ -459,6 +481,8 @@ namespace CAIME
 
                 var projectLoadedArgs = new ProjectEventArgs(project);
                 OnOpenProject?.Invoke(this, projectLoadedArgs);
+
+                StartReadingDatabase(project);
 
                 return project;
             }
@@ -483,28 +507,50 @@ namespace CAIME
         public void CloseProject()
         {
             Project = null;
+            _databaseRead = null;
 
             OnCloseProject?.Invoke(this, new RoutedEventArgs());
         }
 
         /// <summary>
-        /// Reads the required database tables through RPFM from the game's own packs, layering the
-        /// project's mod over them when one is recorded, into <see cref="Project.RpfmTables"/>.
-        /// Returns false to abort opening. Without an RPFM path nothing is read, and
-        /// <see cref="Project.Open"/> opens the map read-only.
+        /// Blocks until the open project's database read has ended. Returns false when it failed, and
+        /// true when the tables were loaded or there was nothing to read. For the CLI only: on the UI
+        /// thread this deadlocks, since the read ends by loading the tables there.
         /// </summary>
-        private bool PrepareRpfmDatabase(Project project, GameTemplate game)
+        public bool WaitForDatabase()
         {
+            return _databaseRead == null || _databaseRead.Result;
+        }
+
+        /// <summary>
+        /// Starts reading the required database tables through RPFM, from the game's own packs with
+        /// the project's mod layered over them when one is recorded. Starting the RPFM server and
+        /// reading the packs takes a while, so the read runs in the background: the map can be viewed
+        /// and edited meanwhile, and only the steps that need the database wait for it. Once read, the
+        /// tables are loaded into <paramref name="project"/> on the UI thread and
+        /// <see cref="OnDatabaseLoaded"/> is raised. Without an RPFM path nothing is read, and the
+        /// project stays without a database.
+        /// </summary>
+        private void StartReadingDatabase(Project project)
+        {
+            _databaseRead = null;
+
             var rpfmFolder = PreferencesViewModel.Instance.RpfmPath;
             if (string.IsNullOrEmpty(rpfmFolder))
             {
-                return true;
+                LoggerViewModel.Log(
+                    $"No RPFM path is configured, so {project.Game}'s database (ground type names/costs, region names, " +
+                    "campaign data) can't be read, and processing is unavailable for this session - set the RPFM path " +
+                    "in Settings > Preferences and reopen the project to process it.",
+                    LogLevel.Warning);
+                return;
             }
 
-            if (!Rpfm.GameMappingProvider.IsSupported(game))
+            if (!Rpfm.GameMappingProvider.IsSupported(project.Game))
             {
-                LoggerViewModel.Log($"CAIME cannot read {game}'s database through RPFM.", LogLevel.ErrorMessageBox);
-                return false;
+                LoggerViewModel.Log($"CAIME cannot read {project.Game}'s database through RPFM.", LogLevel.ErrorMessageBox);
+                _databaseRead = Task.FromResult(false);
+                return;
             }
 
             // The mod is optional and per-project: if the metadata simply doesn't record one (a new
@@ -513,19 +559,57 @@ namespace CAIME
             // it's set deliberately via Settings > RPFM Workflow when wanted.
             var modPackName = Rpfm.MetadataService.GetModPackName(project.ProjectPath);
 
-            try
-            {
-                var session = new Rpfm.RpfmWorkflowSession(game, rpfmFolder, modPackName, project.MapHexFile);
-                project.RpfmTables = session.Prepare();
+            // Built here rather than in the background: it takes the map's land and sea regions as
+            // they are now, before the first edit.
+            var session = new Rpfm.RpfmWorkflowSession(project.Game, rpfmFolder, modPackName, project.MapHexFile);
 
-                LoggerViewModel.Log("RPFM database tables read successfully.", LogLevel.Info);
-                return true;
-            }
-            catch (Exception ex)
+            // Null in the CLI, which has no UI thread: there the tables are loaded on the reading thread.
+            var dispatcher = Application.Current?.Dispatcher;
+
+            LoggerViewModel.Log("Reading the database through RPFM. Processing is unavailable until it has been read.", LogLevel.Info);
+
+            _databaseRead = Task.Run(() =>
             {
-                LoggerViewModel.Log($"Reading the database through RPFM failed: {ex.Message}", LogLevel.ErrorMessageBox);
+                IReadOnlyDictionary<string, Rpfm.RpfmTable> tables = null;
+                Exception failure = null;
+
+                try
+                {
+                    tables = session.Prepare();
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+
+                return dispatcher == null
+                    ? FinishReadingDatabase(project, tables, failure)
+                    : dispatcher.Invoke(() => FinishReadingDatabase(project, tables, failure));
+            });
+        }
+
+        private bool FinishReadingDatabase(Project project, IReadOnlyDictionary<string, Rpfm.RpfmTable> tables, Exception failure)
+        {
+            // Closed, or replaced by another project, while its tables were read.
+            if (Project != project)
+            {
                 return false;
             }
+
+            if (failure != null)
+            {
+                LoggerViewModel.Log($"Reading the database through RPFM failed: {failure.Message}", LogLevel.ErrorMessageBox);
+                return false;
+            }
+
+            if (!project.LoadDatabase(tables))
+            {
+                return false;
+            }
+
+            LoggerViewModel.Log("RPFM database tables read successfully. Processing is now available.", LogLevel.Info);
+            OnDatabaseLoaded?.Invoke(this, new ProjectEventArgs(project));
+            return true;
         }
 
         public void Backup(string backupPath, string backupName)
