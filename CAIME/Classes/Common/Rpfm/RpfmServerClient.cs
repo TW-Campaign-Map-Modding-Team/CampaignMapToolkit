@@ -13,19 +13,15 @@ namespace CAIME.Rpfm
 {
     /// <summary>
     /// One session with <c>rpfm_server.exe</c>, the headless backend RPFM runs its UI on. Owns the
-    /// transport only: starting the server when none is listening, JSON-RPC 2.0 requests and their
-    /// responses, and waiting for the methods that run as jobs. It knows nothing about which methods
-    /// exist; <see cref="RpfmService"/> does. The protocol and methods are documented in RPFM's
-    /// docs/server.
-    ///
-    /// Every connection is its own server session with its own open packs, so CAIME neither sees nor
-    /// disturbs anything the user has open in the RPFM UI, even when both share one server process.
+    /// transport only: starting the server when none is listening, JSON-RPC 2.0 requests and
+    /// responses, and waiting for jobs. Which methods exist is <see cref="RpfmService"/>'s business;
+    /// the protocol is documented in RPFM's docs/server. Every connection is its own session with its
+    /// own open packs, so CAIME never touches what the user has open in the RPFM UI.
     /// </summary>
     public sealed class RpfmServerClient : IDisposable
     {
         public const string ServerExecutableName = "rpfm_server.exe";
 
-        // The address rpfm_server listens on, and the one the RPFM UI itself connects to.
         private static readonly Uri ServerUri = new Uri("ws://127.0.0.1:45127/ws");
 
         // Plain HTTP endpoints next to the WebSocket: the server's version and process id, and its sessions.
@@ -81,10 +77,10 @@ namespace CAIME.Rpfm
 
         /// <summary>
         /// Calls <paramref name="method"/> with <paramref name="parameters"/> (null for none) and returns
-        /// its result deserialized as <typeparamref name="T"/>. The result is read as a stream, so a
-        /// <typeparamref name="T"/> that declares only the members it needs never materializes the rest
-        /// of a large one. Throws <see cref="RpfmException"/>, naming <paramref name="operation"/>, when
-        /// the server answers with an error, times out, or drops the connection.
+        /// its result as <typeparamref name="T"/>. The result is streamed, so a <typeparamref name="T"/>
+        /// that declares only the members it needs never materializes the rest of a large one. Throws
+        /// <see cref="RpfmException"/>, naming <paramref name="operation"/>, on a server error, a
+        /// timeout or a dropped connection.
         /// </summary>
         public T Call<T>(string operation, string method, object parameters, TimeSpan timeout)
         {
@@ -130,10 +126,10 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Ends the session. Telling the server first makes it release the session's packs at once
-        /// rather than holding them through its five-minute reconnect grace period. When this was the
-        /// server's last session, waits for the server to exit, so the next <see cref="Connect"/>
-        /// starts a new one rather than joining one that is shutting down and losing it mid-request.
+        /// Ends the session, telling the server first so it releases the session's packs at once
+        /// instead of after its five-minute reconnect grace period. When this was the server's last
+        /// session, waits for the server to exit, so the next <see cref="Connect"/> starts a new one
+        /// rather than joining one that is shutting down.
         /// </summary>
         public void Dispose()
         {
@@ -257,8 +253,7 @@ namespace CAIME.Rpfm
             }
         }
 
-        // The server greets every new connection with a session.connected notification. Waiting for
-        // it confirms that whatever answered on the port really is an RPFM server.
+        // Waiting for the session.connected greeting confirms that what answered on the port is an RPFM server.
         private void ExpectSessionConnected()
         {
             const string Operation = "connect to the RPFM server";
@@ -296,8 +291,7 @@ namespace CAIME.Rpfm
             }
         }
 
-        // The server exits as soon as its last session ends, but keeps accepting connections for a
-        // moment while it shuts down.
+        // The server exits once its last session ends but keeps accepting connections while it shuts down.
         private void WaitForServerExitIfIdle()
         {
             if (_serverProcessId == null)
@@ -462,8 +456,7 @@ namespace CAIME.Rpfm
             };
         }
 
-        // Leaves the reader on the value of the message's top-level member called name, skipping
-        // every other member's value unread.
+        // Leaves the reader on the value of the top-level member called name, skipping the others unread.
         private static bool MoveToMember(JsonReader reader, string name)
         {
             while (reader.Read())
