@@ -86,24 +86,7 @@ namespace CAIME.Exporters
 
     /// <summary>
     /// Works out dynamic_resources.esf's regions from dynamic_resources.png, its database and the
-    /// map, as the Assembly Kit's builder does. Read from Rome II's and Attila's
-    /// ToolDataBuilderDll and checked against main_attila_map and main_rome_map, whose output this
-    /// reproduces apart from the hex order of one Attila group (see <see cref="GroupHexes"/>).
-    ///
-    /// <para>
-    /// The image has two pixels per hex column and two per row, plus one for the odd columns'
-    /// half-row offset, with row 0 at the bottom: hex (c, r) reads pixel (2c, height - 1 - (2r + c % 2)).
-    /// A hex whose pixel has a database colour gets that building level's tiles unless map_data.esf
-    /// types it as open sea; sea regions count (main_rome_map's region 177 has a tile). Where two
-    /// database rows share a colour, the first one is used.
-    /// </para>
-    ///
-    /// <para>
-    /// The builder keeps the regions, and each region's building levels, in hash maps
-    /// (<see cref="CaHashMapOrder"/>) and writes them in the maps' order. Both maps get their keys
-    /// in column-major walking order. A region hashes as its u16 xored with 0x4A545EED, a building
-    /// level as <see cref="HashLevelKey"/>.
-    /// </para>
+    /// map, as Rome II's and Attila's builders do (FileFormatDefinitions/dynamic_resources_esf.md).
     /// </summary>
     public static class DynamicResourceRegions
     {

@@ -5,22 +5,8 @@ using EsfLibrary;
 namespace CAIME.Exporters
 {
     /// <summary>
-    /// Builds an Attila map_data.esf (MAP_DATA v0, ABCA) from a map.hex. Worked out from the game's
-    /// main_attila_map file and Templates/main_attila_map/map.hex; the regions, areas, links and
-    /// geometry follow the same rules as Warhammer III (<see cref="MapDataModel"/>).
-    ///
-    /// <para>
-    /// Differences from Warhammer III: no version records; REGIONS_DATA holds empty trade_nodes and
-    /// bridges records, the theatre, the bounds and the regions directly, with no
-    /// MASKED_REGIONS_DATA, no per-hex region runs and no areas of interest; seven bytes per hex,
-    /// the first two the region and area; REGION_DATA has no REGION_INDEX; an area's touching
-    /// areas are packed u16s; and settlements have several building slots
-    /// (<see cref="MapDataSlotSettlement"/>).
-    /// </para>
-    ///
-    /// <para>
-    /// Slot positions follow the Assembly Kit's builder (<see cref="MapDataSlotPositions.PlaceAttila"/>).
-    /// </para>
+    /// Builds an Attila map_data.esf (MAP_DATA v0) from a map.hex (FileFormatDefinitions/map_data_esf.md).
+    /// Slot positions follow the builder (<see cref="MapDataSlotPositions.PlaceAttila"/>).
     /// </summary>
     public static class AttilaMapDataWriter
     {

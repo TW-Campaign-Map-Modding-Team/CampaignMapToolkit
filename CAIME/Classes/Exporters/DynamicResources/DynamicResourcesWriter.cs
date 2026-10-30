@@ -20,32 +20,9 @@ namespace CAIME.Exporters
     }
 
     /// <summary>
-    /// Writes dynamic_resources.esf (CAMPAIGN_DYNAMIC_RESOURCES), the farmland tiles that appear on
-    /// the campaign map as a region's buildings level up.
-    ///
-    /// <para>
-    /// The layout, from Attila's main_attila_map file:
-    /// <code>
-    /// CAMPAIGN_DYNAMIC_RESOURCES v0
-    ///   ascii                         build time, UTC
-    ///   REGION_RESOURCE_INFO_BLOCK v0, one entry per region with resources:
-    ///     u16                         0xFE00 | region index
-    ///     REGION_RESOURCE_INFO_AREAS_BLOCK v1, one entry per building level:
-    ///       ascii building_superchain, u32 level, ascii tile_upgrade_id
-    ///       REGION_RESOURCE_AREAS_BLOCK v0, one entry per group of hexes:
-    ///         u16[]                   column, row, column, row, ...
-    /// </code>
-    /// Warhammer III's only map with inputs, wh3_main_prologue_map, paints its whole
-    /// dynamic_resources.png one colour that no resource uses, and the Assembly Kit writes the
-    /// header with no regions; this writer reproduces that byte for byte. The regions come from
+    /// Writes dynamic_resources.esf, the farmland tiles that appear as a region's buildings level
+    /// up (FileFormatDefinitions/dynamic_resources_esf.md). The regions come from
     /// <see cref="DynamicResourceRegions"/>.
-    /// </para>
-    ///
-    /// <para>
-    /// Warhammer III's Assembly Kit writes ABCB; every other game's shipped file is ABCA. Rome II's
-    /// and Attila's string tables follow their games' string hashes (<see cref="CaStringHash"/>);
-    /// the 64-bit games' files hold only the build time, so their order cannot show.
-    /// </para>
     /// </summary>
     public static class DynamicResourcesWriter
     {

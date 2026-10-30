@@ -6,24 +6,8 @@ using EsfLibrary;
 namespace CAIME.Exporters
 {
     /// <summary>
-    /// Builds a Pharaoh map_data.esf (MAP_DATA v1, ABCA) from a map.hex. Worked out from the game's
-    /// phar_main file and Templates/phar_main/map.hex; the regions, areas, links and geometry follow
-    /// the same rules as Warhammer III (<see cref="MapDataModel"/>).
-    ///
-    /// <para>
-    /// The layout sits between Attila's and Warhammer III's: a MAP_FILE_DATA_VERSION record but no
-    /// validation record; MASKED_REGIONS_DATA and REGION_INDEX as in Warhammer III; five bytes per
-    /// hex, no areas of interest; packed area references and settlements with building slots as in
-    /// Attila (<see cref="MapDataSlotSettlement"/>); and the per-hex runs as a u16 array. A port
-    /// lists the main slot's hexes after its own, as in Warhammer III.
-    ///
-    /// The hex radius is rounded as Warhammer III rounds it, not as Attila does.
-    /// </para>
-    ///
-    /// <para>
-    /// Given the game's attrition (painted after the template was made), the output is byte for
-    /// byte the game's apart from the timestamp and the order of the string table.
-    /// </para>
+    /// Builds a Pharaoh map_data.esf (MAP_DATA v1) from a map.hex, and Warhammer's and Warhammer
+    /// II's through them. See FileFormatDefinitions/map_data_esf.md.
     /// </summary>
     public static class PharaohMapDataWriter
     {
