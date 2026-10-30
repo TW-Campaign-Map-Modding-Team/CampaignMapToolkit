@@ -68,6 +68,8 @@ namespace CAIME
 
             MapHexFile.Attritions.Sort(StringComparer.Ordinal);
 
+            WarnIfPastFileLimit(MapHexFile.Attritions.Count, MapHexFile.ATTRITION_INDEX_BITS, "attritions");
+
             var newAttritionIndex = (sbyte)MapHexFile.Attritions.IndexOf(name);
             this.UpdateAttritionIndices(newAttritionIndex, ChangeOperation.Create);
             OnAttritionCreated?.Invoke(this, new CreateAttritionEvent(name, newAttritionIndex));

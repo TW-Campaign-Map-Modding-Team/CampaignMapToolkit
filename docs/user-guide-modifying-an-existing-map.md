@@ -853,8 +853,8 @@ The sea region indices must shift up to make room for the new land region. Every
 - **"Process → Map Data fails with a path error."**
   This processor requires the map file to be located exactly at `[AKit]\raw_data\EmpireDesignData\campaign_maps\[MapName]\map.hex`. If your project is saved elsewhere, use **File → Save as...** to save a copy at that path, then open that copy and try again. The CAIME log (shown in **Tools → Show Logger**, Ctrl+L) will display the expected path in the error message.
 
-- **"Process → Map Data says 'Please close Tweak.AssemblyKit before processing'."**
-  The map data tool cannot run while the Assembly Kit's main application (Tweak.AssemblyKit) is open, because both tools access the same files. Close the Assembly Kit application completely, then retry in CAIME.
+- **"Process → Dynamic Resources says 'Please close Tweak.AssemblyKit before processing'."**
+  The dynamic resources tool cannot run while the Assembly Kit's main application (Tweak.AssemblyKit) is open, because both tools access the same files. Close the Assembly Kit application completely, then retry in CAIME.
 
 - **"My Pharaoh map opens fine, but after I added a region the map won't open anymore."**
   CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If the index values are out of sync, the load is rejected. Open Dave, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save, and try opening the map again. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.

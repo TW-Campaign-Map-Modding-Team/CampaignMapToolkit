@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -13,7 +14,7 @@ namespace CAIME
         // Bump this whenever the schema below changes, and add a migration
         // to the Migrations table that upgrades the previous version's JObject
         // to the new schema.
-        public const int CURRENT_VERSION = 3;
+        public const int CURRENT_VERSION = 4;
 
         [JsonProperty("version")]
         public int Version { get; set; } = CURRENT_VERSION;
@@ -24,13 +25,13 @@ namespace CAIME
         [JsonProperty("campaign_map_name")]
         public string CampaignMapName { get; set; }
 
-        // Paths to the .pack files used by the RPFM database source workflow. Always stored sorted
-        // alphabetically by pack file name (see MetadataService) - not a user-chosen priority, just a
-        // rare tiebreak for two packs that both define the exact same table fragment name. Independent
-        // of the map_data config fields above - do not overwrite one when writing the other (see
-        // MetadataService).
-        [JsonProperty("pack_file_paths")]
-        public List<string> PackFilePaths { get; set; } = new List<string>();
+        // File name of the mod .pack the RPFM database source workflow reads this campaign from, or
+        // null for none. A name, not a path: RPFM finds it in the game's data folder or its Steam
+        // Workshop folder, and loads the mods it depends on along with it, so one name is all a
+        // project needs. Independent of the map_data config fields above - do not overwrite one when
+        // writing the other (see MetadataService).
+        [JsonProperty("mod_pack_name")]
+        public string ModPackName { get; set; }
 
         // Converts the JObject read from disk one version forward. Keyed by
         // the version being migrated FROM. Add an entry here (and bump
@@ -57,6 +58,28 @@ namespace CAIME
                 root["pack_file_paths"] = string.IsNullOrEmpty(oldPath)
                     ? new JArray()
                     : new JArray(oldPath);
+            },
+
+            // Version 3 -> 4: replaced the "pack_file_paths" list with a single "mod_pack_name",
+            // since RPFM now locates the mod itself and loads its dependencies with it. Keeps the
+            // first old pack's file name - the list was stored sorted by file name - and logs the rest,
+            // which still load if that mod lists them as dependencies.
+            [3] = root =>
+            {
+                var oldNames = (root["pack_file_paths"]?.Values<string>() ?? Enumerable.Empty<string>())
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Select(Path.GetFileName)
+                    .ToList();
+                root.Remove("pack_file_paths");
+                root["mod_pack_name"] = oldNames.FirstOrDefault();
+
+                if (oldNames.Count > 1)
+                {
+                    LoggerViewModel.Log(
+                        $"This project listed several RPFM mod packs; CAIME now keeps one and loads its dependencies with it. " +
+                        $"Kept {oldNames[0]}; set the mod that depends on the others via Settings > RPFM Workflow if " +
+                        $"{string.Join(", ", oldNames.Skip(1))} should be read too.", LogLevel.Warning);
+                }
             },
         };
 

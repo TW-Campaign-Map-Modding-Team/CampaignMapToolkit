@@ -137,6 +137,8 @@ When you open a project, CAIME automatically reads these files from `{Assembly K
 | `region_to_province_junctions.xml` | Which province each region belongs to |
 | `campaign_map_areas_of_interest.xml` | *(Three Kingdoms and Warhammer 3 only)* Areas of interest |
 
+> **With RPFM as the Database source** (see the Settings and Preferences guide), CAIME reads these tables from the game's packs and your mod instead, and takes only their schemas — plus the few fields no pack carries — from these files.
+
 > **The region order matters.** CAIME loads land regions first, then sea regions, in the order they appear in `regions.xml`. Your painted region colours must correspond to the regions in that exact order. If you add or remove regions in the Assembly Kit database, you must reload your project so CAIME can re-synchronise.
 
 ---
@@ -167,7 +169,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.1 Map Data
 
-**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. This step uses an external tool called **MapDataBuilder** that is included with CAIME.
+**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. CAIME writes the file itself, for each supported game the same way the game's Assembly Kit does; the Assembly Kit's own tools are not run.
 
 **Special requirements (read carefully!):**
 
@@ -176,23 +178,22 @@ Access all processing features from the **Process** menu in the top menu bar:
 > {Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\map.hex
 > ```
 > If your file is saved anywhere else, the process will be blocked and you will see an error in the Logger.
+>
+> **Map Data needs RPFM as the Database source** (**Settings > Preferences**). Your map's row in `campaign_map_playable_areas` is read from your mod or the game's packs, never from the Assembly Kit's database.
 
 **How to use it:**
 
 1. Make sure your project is saved at the required path (see above).
 
-2. **Close the Assembly Kit application** (Tweak.AssemblyKit) if it is open. Running both at the same time will cause a conflict and the process will be blocked.
+2. Go to **Process > Map Data**.
 
-3. Go to **Process > Map Data**.
+3. Processing takes a few seconds. Look for the message `Processed map data file was exported to` in the Logger to confirm success. A settlement whose town slots break the game's rules is still written, without a position, and the Logger names its region.
 
-4. Processing runs automatically. The Logger will show output from the MapDataBuilder tool. Look for the message `Finished creating map` in the Logger to confirm success.
-
-5. If **Map data config auto-patch** is enabled in Preferences, CAIME will automatically apply your Map Data Editor configuration after the file is generated (see the note below).
+4. If **Map data config auto-patch** is enabled in Preferences, CAIME will automatically apply your Map Data Editor configuration after the file is generated (see the note below).
 
 **What it reads:**
-- Your painted map layers
-- All Assembly Kit database tables
-- The Assembly Kit `binaries` folder (MapDataBuilder uses this internally)
+- Your saved `map.hex`
+- Your map's first row in `campaign_map_playable_areas`, from your mod or the game: its `index` and `maxx` (Rome 2 also uses its `maxy`)
 - *(Optional)* `caime_metadata.json` + the referenced `map_data_config.xml` (if auto-patch is enabled)
 
 **Output file:** `{Assembly Kit path}\working_data\campaign_maps\{your map name}\map_data.esf`
@@ -282,7 +283,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 **What it does:** Generates the `dynamic_resources.esf` file, which defines the resource icons and positions that appear on the campaign map (things like food, wood, stone, and trade goods shown on the map overlay).
 
-**Special requirements:** Same as Map Data — your project must be saved inside the Assembly Kit folder and the Assembly Kit application must be closed.
+**Special requirements:** As for Map Data, your project must be saved inside the Assembly Kit folder. The Assembly Kit application must also be closed.
 
 **How to use it:**
 
@@ -642,7 +643,7 @@ These tools save visual representations of your map layers as image files. They 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PROCESS / EXPORT          LAYERS / DATA READ          OUTPUT FILE          │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  Map Data                  All layers + AKit DB +      map_data.esf         │
+│  Map Data                  All layers + playable area  map_data.esf         │
 │                            map_data_config.xml (opt.)                       │
 │                                                                             │
 │  Pathfinding Data          Ground Types, Regions,      pathfinding.bin      │
@@ -681,13 +682,13 @@ These tools save visual representations of your map layers as image files. They 
 The validators under **Tools > Validate** are fast and reveal problems early. A broken bridge or a region count mismatch will silently corrupt your exported files if not caught first. Make it a habit to run **Regions**, **Town Slots**, **Roads**, and **Bridges** before each export session.
 
 **"Map Data Process denied" — what it means and how to fix it.**
-If you see this message in the Logger, it means your project file is saved in the wrong location. For **Map Data** and **Dynamic Resources** to work, your project file must be named exactly `map.hex` and saved inside your Assembly Kit folder at `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`. The file must also be saved (no unsaved changes) and the Assembly Kit application must be closed. Move the file there using **File > Save as...** and try again.
+If you see this message in the Logger, it means your project file is saved in the wrong location. For **Map Data** and **Dynamic Resources** to work, your project file must be named exactly `map.hex` and saved inside your Assembly Kit folder at `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`. The file must also be saved (no unsaved changes), and for **Dynamic Resources** the Assembly Kit application must be closed. Move the file there using **File > Save as...** and try again.
 
 **"Mismatch between database regions and map.hex regions" — what it means.**
 This error means the number of regions you have painted on the map does not match the number of regions defined in your Assembly Kit database files. This can happen if you add a new region in your database but forget to paint it on the map (or vice versa). Open your Assembly Kit's `regions.xml` and `campaign_map_regions.xml` and count how many regions belong to your campaign map. The count must exactly match the number of distinct region colours you have painted in CAIME. The order of land regions and sea regions must also match — land regions are indexed first, sea regions second.
 
-**The Assembly Kit application (Tweak.AssemblyKit) must be closed before running Map Data or Dynamic Resources.**
-These two processing steps use a background tool that accesses the same database files as the Assembly Kit editor. Running both at the same time causes a file conflict and the process will be blocked. Close the Assembly Kit completely, then run the process from CAIME.
+**The Assembly Kit application (Tweak.AssemblyKit) must be closed before running Dynamic Resources.**
+This processing step uses a background tool that accesses the same database files as the Assembly Kit editor. Running both at the same time causes a file conflict and the process will be blocked. Close the Assembly Kit completely, then run the process from CAIME.
 
 **Sea regions that touch too many land regions cause campaign AI slowdowns.**
 If the Regions validator warns that a sea region has more than 5 adjacent land regions, it is worth taking seriously. More than 9 adjacent land regions will noticeably slow down the campaign AI. Split large sea regions into two or more smaller sea regions to keep adjacency counts manageable.

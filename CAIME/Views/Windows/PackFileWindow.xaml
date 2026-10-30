@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:CAIME.Windows"
         mc:Ignorable="d"
-        Title="Campaign Mod Packs"
+        Title="Campaign Mod Pack"
         Height="Auto"
         Width="Auto"
         MinWidth="500"
@@ -16,72 +16,54 @@
         Background="{StaticResource BackgroundDarkV1Brush}">
 
     <Grid Margin="10">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="180" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="2"
                    MaxWidth="700"
                    TextWrapping="Wrap"
                    Margin="0 0 0 10"
                    Foreground="White"
-                   Text="List the .pack file(s) containing THIS campaign's own data - its region list, campaign definition, and anything else it overrides. This is separate from the vanilla pack and RPFM path you set under Settings &gt; Preferences (those apply to every project); these are specific to this campaign, stored alongside it in caime_metadata.json next to map.hex." />
+                   Text="The mod containing THIS campaign's own data - its region list, campaign definition, and anything else it overrides - by .pack file name. RPFM finds it in the game's data folder, or failing that its Steam Workshop folder, so there is no path to keep up to date. Stored alongside the campaign in caime_metadata.json next to map.hex." />
 
         <TextBlock Grid.Row="1"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="2"
                    MaxWidth="700"
                    TextWrapping="Wrap"
                    Margin="0 0 0 10"
                    FontStyle="Italic"
                    Foreground="White"
-                   Text="Every pack listed here contributes its data - they are merged, not picked from. Anything none of these packs (or the vanilla pack) provide falls back to the Assembly Kit's own copy. Listed alphabetically by pack file name; that order only matters in the rare case where two packs define a table fragment with the exact same name, where the earlier one wins." />
+                   Text="Every mod it lists as a dependency is read too, and theirs in turn, so name the mod at the top. Its data is merged with the game's vanilla tables. Leave empty to read the game's tables only." />
 
-        <ListBox x:Name="packPathsList"
-                 Grid.Row="2"
-                 Grid.Column="0"
-                 Margin="0 0 5 0"
-                 Background="{StaticResource BackgroundDarkV3Brush}"
-                 Foreground="White"
-                 SelectionMode="Extended" />
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="2"
-                    Grid.Column="1"
-                    Orientation="Vertical">
+            <TextBox x:Name="modNameBox"
+                     Grid.Column="0"
+                     Margin="0 0 5 0"
+                     Style="{StaticResource DarkTextBox}"
+                     ToolTip="The mod's .pack file name, exactly as on disk, e.g. my_campaign.pack" />
 
-            <Button Content="Add..."
+            <Button Grid.Column="1"
+                    Content="Browse..."
                     Padding="10 3"
-                    Margin="0 0 0 5"
                     Style="{StaticResource DarkButton}"
-                    Click="Add_Click" />
-
-            <Button Content="Remove"
-                    Padding="10 3"
-                    Margin="0 0 0 0"
-                    Style="{StaticResource DarkButton}"
-                    Click="Remove_Click" />
-        </StackPanel>
+                    ToolTip="Pick the .pack file from disk - only its file name is kept"
+                    Click="Browse_Click" />
+        </Grid>
 
         <Separator Grid.Row="3"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="2"
                    Margin="0 10"
                    Background="{StaticResource BackgroundDarkV3Brush}" />
 
         <StackPanel Grid.Row="4"
-                    Grid.Column="0"
-                    Grid.ColumnSpan="2"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
 

@@ -153,7 +153,7 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(loaded.IsBorder,     "IsBorder without a region edge mask");
         }
 
-        // Restriction level shares byte 8 with the Area of Interest index (AoI bits 3+, restrictions
+        // Restriction level shares byte 8 with the Area of Interest index (AoI bits 4+, restrictions
         // bits 0-2), so only levels 0-7 survive a round trip.
         [TestMethod]
         public void SaveThenLoad_PreservesRestrictionLevelsZeroToSeven_AlongsideAreaOfInterest()
@@ -177,6 +177,69 @@ namespace CAIME.Tests.Unit
                 Assert.AreEqual(2, reloaded.HexData[level].InterestIndex,
                     $"Restriction level {level} corrupted the Area of Interest index sharing its byte.");
             }
+        }
+
+        // CA's tools store the Area of Interest index + 1 in bytes 8-9 up to bit 0 of byte 9:
+        // Warhammer 3 from bit 4 (bits 4-8), Three Kingdoms from bit 3 (bits 3-8). Each index here is
+        // the first whose index + 1 reaches byte 9.
+        [TestMethod]
+        [DataRow(0x14, "warhammer3",     16, 0b0001_0101, 0b0000_0001, DisplayName = "Warhammer 3: bits 4-8")]
+        [DataRow(0x13, "three_kingdoms", 32, 0b0000_1101, 0b0000_0001, DisplayName = "Three Kingdoms: bits 3-8")]
+        public void Save_WritesAreaOfInterestAtTheGamesBitPosition(int minorVersion, string gameName, int index, int expectedByte8, int expectedByte9)
+        {
+            var map = CreateAndLoad(minorVersion, gameName, width: 4, height: 4);
+            for (int i = 0; i <= index; ++i)
+                map.AreasOfInterest.Add($"aoi_{i:D2}");
+
+            map.HexData[0].InterestIndex  = (sbyte)index;
+            map.HexData[0].RestrictionLvl = 5;
+
+            Assert.IsTrue(map.Save(_dir, "map"), "Save returned false.");
+
+            // The hex records are followed by the CRC and, in Warhammer 3, one 4-byte trailing block
+            // (count, size, blob) before it.
+            var bytes    = File.ReadAllBytes(Path.Combine(_dir, "map.hex"));
+            var trailing = minorVersion == 0x14 ? 12 : 0;
+            var hex0     = bytes.Length - 4 - trailing - 16 * 16;
+
+            Assert.AreEqual(expectedByte8, bytes[hex0 + 8], "Byte 8: low bits of index + 1, and restriction 5 at bits 0-2.");
+            Assert.AreEqual(expectedByte9, bytes[hex0 + 9], "Byte 9: the top bit of index + 1.");
+
+            Assert.AreEqual(index, Load("map").HexData[0].InterestIndex, "InterestIndex");
+        }
+
+        // Only hexes are limited: a Warhammer 3 list can hold more than 31 names (Immortal Empires
+        // Expanded has 44), as long as no hex uses the ones past index 30.
+        [TestMethod]
+        public void SaveThenLoad_WarhammerThreeKeepsAreasOfInterestPastTheHexLimit()
+        {
+            var map = CreateAndLoad(0x14, "warhammer3", width: 4, height: 4);
+            for (int i = 0; i < 44; ++i)
+                map.AreasOfInterest.Add($"aoi_{i:D2}");
+
+            map.HexData[0].InterestIndex = 30;
+
+            Assert.IsTrue(map.Save(_dir, "map"), "Save returned false.");
+
+            var reloaded = Load("map");
+            CollectionAssert.AreEqual(map.AreasOfInterest, reloaded.AreasOfInterest, "Areas of interest list");
+            Assert.AreEqual(30, reloaded.HexData[0].InterestIndex, "InterestIndex");
+        }
+
+        // The Assembly Kit's map_data builder ignores byte 9 past bit 0, so Warhammer 3 hexes can use
+        // only the first 31 areas of interest. Saving past that must fail rather than lose the index.
+        [TestMethod]
+        public void Save_WarhammerThreeAreaOfInterestPastIndex30_IsRefused()
+        {
+            var map = CreateAndLoad(0x14, "warhammer3", width: 4, height: 4);
+            for (int i = 0; i < 32; ++i)
+                map.AreasOfInterest.Add($"aoi_{i:D2}");
+
+            map.HexData[0].InterestIndex = 30;
+            Assert.IsTrue(map.Save(_dir, "map"), "Index 30, the last that fits, must save.");
+
+            map.HexData[0].InterestIndex = 31;
+            Assert.ThrowsException<System.OverflowException>(() => map.Save(_dir, "map"));
         }
 
         // Rome II uses the 8-byte layout, which has no Area of Interest, trade route or region edge field.
