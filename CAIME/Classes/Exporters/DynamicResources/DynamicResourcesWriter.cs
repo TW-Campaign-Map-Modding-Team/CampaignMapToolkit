@@ -36,7 +36,7 @@ namespace CAIME.Exporters
 
         public static byte[] Write(IReadOnlyList<DynamicResourceRegion> regions, DateTime buildTimeUtc, GameTemplate game)
         {
-            var esf = new EsfWriter(game == GameTemplate.Warhammer3 ? EsfFormat.Abcb : EsfFormat.Abca, StringTableHash(game));
+            var esf = new EsfWriter(game == GameTemplate.Warhammer3 ? EsfFormat.Abcb : EsfFormat.Abca, HashMap(game));
             esf.BeginRecord("CAMPAIGN_DYNAMIC_RESOURCES", 0);
             esf.WriteAscii(BuildTimeStamp(buildTimeUtc));
 
@@ -55,15 +55,20 @@ namespace CAIME.Exporters
             return esf.ToArray((uint)new DateTimeOffset(buildTimeUtc, TimeSpan.Zero).ToUnixTimeSeconds());
         }
 
-        /// <summary>The game's string hash, or null for a game whose hash-map order has not been read.</summary>
-        public static Func<string, uint> StringTableHash(GameTemplate game)
+        /// <summary>
+        /// The game builder's hash map, which orders the string table and the regions. The games
+        /// after Warhammer ship no file with a region to check theirs against; Warhammer III's
+        /// builder is read, and the others are taken to share it, as their map_data.esf files do.
+        /// </summary>
+        public static CaHashMap HashMap(GameTemplate game)
         {
             switch (game)
             {
-                case GameTemplate.Rome2:                return CaStringHash.RomeII;
+                case GameTemplate.Rome2:                return CaHashMap.RomeII;
                 case GameTemplate.Attila:
-                case GameTemplate.Thrones_Of_Britannia: return CaStringHash.Attila;
-                default:                                return null;
+                case GameTemplate.Thrones_Of_Britannia: return CaHashMap.Attila;
+                case GameTemplate.Warhammer:            return CaHashMap.Warhammer;
+                default:                                return CaHashMap.Murmur;
             }
         }
 

@@ -47,7 +47,7 @@ namespace CAIME.Exporters
             var model       = new MapDataModel(map, theatre);
             var settlements = MapDataSettlement.FindAll(model);
 
-            var esf = new EsfWriter(layout.Format);
+            var esf = new EsfWriter(layout.Format, CaHashMap.Murmur);
             esf.BeginRecord("MAP_DATA", MAP_DATA_VERSION);
 
             esf.BeginRecord("MAP_FILE_DATA_VERSION", 0);

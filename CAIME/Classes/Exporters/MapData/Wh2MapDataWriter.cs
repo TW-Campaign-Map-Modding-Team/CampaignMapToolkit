@@ -1,4 +1,5 @@
 using System.Linq;
+using EsfLibrary;
 
 namespace CAIME.Exporters
 {
@@ -10,7 +11,7 @@ namespace CAIME.Exporters
     {
         public static byte[] Write(MapHexFile map, MapDataTheatre theatre, uint timestamp)
         {
-            return PharaohMapDataWriter.Write(map, theatre, timestamp, map.UnknownEntries.Select(mask => mask.Key).ToList(), MapDataRadiusRounding.TwoThirdsPerColumn);
+            return PharaohMapDataWriter.Write(map, theatre, timestamp, map.UnknownEntries.Select(mask => mask.Key).ToList(), MapDataRadiusRounding.TwoThirdsPerColumn, CaHashMap.Murmur);
         }
     }
 }

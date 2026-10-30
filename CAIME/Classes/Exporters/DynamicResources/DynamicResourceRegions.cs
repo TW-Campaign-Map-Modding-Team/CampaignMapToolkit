@@ -113,11 +113,12 @@ namespace CAIME.Exporters
                 regionKeys.Add(key);
             }
 
+            var hashMap = DynamicResourcesWriter.HashMap(game);
             var regions = new List<DynamicResourceRegion>();
-            foreach (int regionIndex in CaHashMapOrder.Iterate(regionsInWalkOrder, r => DynamicResourcesWriter.RegionKey(r) ^ REGION_HASH_SALT))
+            foreach (int regionIndex in hashMap.Iterate(regionsInWalkOrder, r => DynamicResourcesWriter.RegionKey(r) ^ REGION_HASH_SALT))
             {
                 var region = new DynamicResourceRegion { Region = regionIndex };
-                foreach (var key in CaHashMapOrder.Iterate(keysByRegion[regionIndex], k => HashLevelKey(game, types[k.Type])))
+                foreach (var key in hashMap.Iterate(keysByRegion[regionIndex], k => hashMap.StringHash(LevelKey(types[k.Type]))))
                 {
                     // The tile upgrade is the one of the level's first hex in the region.
                     var type = types[hexTypes[groups[key][0][0]]];
@@ -143,15 +144,10 @@ namespace CAIME.Exporters
             return regions;
         }
 
-        /// <summary>
-        /// A building level's hash: its superchain followed by its level in decimal, hashed by the
-        /// game's CALibs (<see cref="CaStringHash"/>). Later games are taken to hash as Attila does;
-        /// none of their shipped files has a region to check that against.
-        /// </summary>
-        public static uint HashLevelKey(GameTemplate game, DynamicResourceType type)
+        /// <summary>The builder's key for a building level: its superchain followed by its level in decimal.</summary>
+        private static string LevelKey(DynamicResourceType type)
         {
-            var key = type.BuildingSuperchain + type.Level.ToString(CultureInfo.InvariantCulture);
-            return (DynamicResourcesWriter.StringTableHash(game) ?? CaStringHash.Attila)(key);
+            return type.BuildingSuperchain + type.Level.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>

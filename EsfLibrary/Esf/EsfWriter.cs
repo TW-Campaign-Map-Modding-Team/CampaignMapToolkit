@@ -18,7 +18,7 @@ namespace EsfLibrary
 
     /// <summary>
     /// Writes an ABCA or ABCB file node by node, byte for byte as the games' own writer does:
-    /// where its sizes are padded, and, given the game's string hash, the string table's order.
+    /// where its sizes are padded, and, given the game's hash map, the string table's order.
     /// See FileFormatDefinitions/esf.md.
     /// </summary>
     public sealed class EsfWriter
@@ -34,7 +34,7 @@ namespace EsfLibrary
         private const int  SHORT_INFO_MAX_VERSION    = 0x0F;
 
         private readonly EsfFormat                  format;
-        private readonly Func<string, uint>         stringTableHash;
+        private readonly CaHashMap                  stringTable;
         private readonly List<string>               nodeNames       = new List<string>();
         private readonly Dictionary<string, int>    nodeNameIndices = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string>               asciiStrings    = new List<string>();
@@ -65,11 +65,11 @@ namespace EsfLibrary
             }
         }
 
-        /// <param name="stringTableHash">The game's string hash, which orders the string table; null lists it by id.</param>
-        public EsfWriter(EsfFormat format, Func<string, uint> stringTableHash = null)
+        /// <param name="stringTable">The game builder's hash map, which orders the string table; null lists it by id.</param>
+        public EsfWriter(EsfFormat format, CaHashMap stringTable = null)
         {
             this.format             = format;
-            this.stringTableHash    = stringTableHash;
+            this.stringTable        = stringTable;
             frames.Push(root);
         }
 
@@ -375,9 +375,9 @@ namespace EsfLibrary
         private void WriteAsciiStrings(BinaryWriter writer)
         {
             var ids = Enumerable.Range(0, asciiStrings.Count);
-            if (stringTableHash != null)
+            if (stringTable != null)
             {
-                ids = CaHashMapOrder.Iterate(ids, id => stringTableHash(asciiStrings[id]));
+                ids = stringTable.Iterate(ids, id => stringTable.StringHash(asciiStrings[id]));
             }
 
             writer.Write(asciiStrings.Count);
@@ -401,6 +401,7 @@ namespace EsfLibrary
         {
             if (nodeNameIndices.TryGetValue(name, out int index) == false)
             {
+                RequireAscii(name);
                 index = nodeNames.Count;
                 nodeNames.Add(name);
                 nodeNameIndices.Add(name, index);
@@ -413,12 +414,21 @@ namespace EsfLibrary
         {
             if (asciiIndices.TryGetValue(value, out int index) == false)
             {
+                RequireAscii(value);
                 index = asciiStrings.Count;
                 asciiStrings.Add(value);
                 asciiIndices.Add(value, index);
             }
 
             return index;
+        }
+
+        private static void RequireAscii(string value)
+        {
+            if (value.Any(c => c > 0x7F))
+            {
+                throw new ArgumentException($"'{value}' has a character that is not ASCII, which ESF strings must be.", nameof(value));
+            }
         }
 
         #endregion

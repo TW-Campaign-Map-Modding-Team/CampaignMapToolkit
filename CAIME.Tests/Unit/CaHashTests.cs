@@ -25,43 +25,73 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual(expected, CaStringHash.Attila(value));
         }
 
+        // One string for each tail length, and one with whole blocks and a tail.
         [TestMethod]
-        public void Hashes_TakeTheAsciiBytesTheFileHolds()
+        [DataRow("",                 0x5FE25914u)]
+        [DataRow("a",                0xBC04625Eu)]
+        [DataRow("ab",               0xB7368998u)]
+        [DataRow("abc",              0x7195E3E8u)]
+        [DataRow("abcd",             0xDF83A461u)]
+        [DataRow("wh_main_sea_lake", 0xE36BE33Au)]
+        public void Murmur_IsMurmurHash3SeededWithTheBuildersSeed(string value, uint expected)
         {
-            Assert.AreEqual(CaStringHash.Attila("a?b"), CaStringHash.Attila("aéb"));
-            Assert.AreEqual(CaStringHash.RomeII("a?b"), CaStringHash.RomeII("aéb"));
+            Assert.AreEqual(expected, CaStringHash.Murmur(value));
         }
 
         [TestMethod]
-        public void Iterate_KeepsFourBucketsThroughTheFourthKey()
+        public void Iterate_FourBucketMap_KeepsFourBucketsThroughTheFourthKey()
         {
-            var order = CaHashMapOrder.Iterate(new uint[] { 4, 8, 1, 2 }, key => key);
+            var order = CaHashMap.Attila.Iterate(new uint[] { 4, 8, 1, 2 }, key => key);
 
             CollectionAssert.AreEqual(new uint[] { 4, 8, 1, 2 }, order);
         }
 
         [TestMethod]
-        public void Iterate_RehashesToNineBucketsOnTheFifthKey()
+        public void Iterate_FourBucketMap_RehashesToNineBucketsOnTheFifthKey()
         {
-            var order = CaHashMapOrder.Iterate(new uint[] { 4, 8, 1, 2, 3 }, key => key);
+            var order = CaHashMap.Attila.Iterate(new uint[] { 4, 8, 1, 2, 3 }, key => key);
 
             CollectionAssert.AreEqual(new uint[] { 1, 2, 3, 4, 8 }, order);
         }
 
         [TestMethod]
-        public void Iterate_KeepsNineBucketsThroughTheNinthKey()
+        public void Iterate_FourBucketMap_KeepsNineBucketsThroughTheNinthKey()
         {
-            var order = CaHashMapOrder.Iterate(Enumerable.Range(1, 9).Select(i => (uint)i), key => key);
+            var order = CaHashMap.Attila.Iterate(Enumerable.Range(1, 9).Select(i => (uint)i), key => key);
 
             CollectionAssert.AreEqual(new uint[] { 9, 1, 2, 3, 4, 5, 6, 7, 8 }, order);
         }
 
         [TestMethod]
-        public void Iterate_RehashesToNineteenBucketsOnTheTenthKey()
+        public void Iterate_FourBucketMap_RehashesToNineteenBucketsOnTheTenthKey()
         {
-            var order = CaHashMapOrder.Iterate(Enumerable.Range(1, 10).Select(i => (uint)i), key => key);
+            var order = CaHashMap.Attila.Iterate(Enumerable.Range(1, 10).Select(i => (uint)i), key => key);
 
             CollectionAssert.AreEqual(Enumerable.Range(1, 10).Select(i => (uint)i).ToArray(), order);
+        }
+
+        [TestMethod]
+        public void Iterate_OneBucketMap_RehashesToThreeBucketsOnTheSecondKey()
+        {
+            var order = CaHashMap.Murmur.Iterate(new uint[] { 2, 3 }, key => key);
+
+            CollectionAssert.AreEqual(new uint[] { 3, 2 }, order);
+        }
+
+        [TestMethod]
+        public void Iterate_OneBucketMap_KeepsThreeBucketsThroughTheThirdKey()
+        {
+            var order = CaHashMap.Murmur.Iterate(new uint[] { 2, 3, 1 }, key => key);
+
+            CollectionAssert.AreEqual(new uint[] { 3, 1, 2 }, order);
+        }
+
+        [TestMethod]
+        public void Iterate_OneBucketMap_RehashesToSevenBucketsOnTheFourthKey()
+        {
+            var order = CaHashMap.Murmur.Iterate(new uint[] { 2, 3, 1, 6 }, key => key);
+
+            CollectionAssert.AreEqual(new uint[] { 1, 2, 3, 6 }, order);
         }
     }
 }
