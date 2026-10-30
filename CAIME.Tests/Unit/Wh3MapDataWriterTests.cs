@@ -1,16 +1,18 @@
+using System;
 using System.IO;
 using System.Linq;
 using CAIME.Classes.Importers;
 using CAIME.Exporters;
 using CAIME.Tests.Helpers;
+using EsfLibrary;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CAIME.Tests.Unit
 {
     /// <summary>
-    /// Builds map_data.esf for small made-up maps and reads it back with the importer's reader.
-    /// Byte-for-byte agreement with the Assembly Kit is checked against real maps by
-    /// <see cref="Integration.MapDataWriterIntegrationTests"/>.
+    /// Builds map_data.esf for small made-up maps and reads it back with the importer's reader,
+    /// and for the game's prologue and chaos_map_4 from the Assembly Kit's map.hex in TestData,
+    /// compared byte for byte with the game's own files.
     /// </summary>
     [TestClass]
     public class Wh3MapDataWriterTests
@@ -32,6 +34,25 @@ namespace CAIME.Tests.Unit
         public void Cleanup()
         {
             MapHexHarness.DeleteTempDir(_dir);
+        }
+
+        /// <summary>
+        /// The game's prologue and chaos_map_4 files were built in 2022 and 2023 as ABCA. The
+        /// builder has written ABCB since, which is all that differs: written as ABCA, they match.
+        /// </summary>
+        [TestMethod]
+        [DataRow("wh3_main_prologue_map", "1024396413", 533.74f)]
+        [DataRow("wh3_main_chaos_map_4",  "1247591265", 739.5f)]
+        public void Write_OlderAbcaBuild_MatchesTheGamesFile(string mapName, string theatreIndex, float maxX)
+        {
+            var map = new MapHexFile();
+            Assert.IsTrue(map.Load(MapDataEsfComparison.FindRepoFile("TestData", "campaign_maps", mapName, "map.hex")));
+
+            var reference   = File.ReadAllBytes(MapDataEsfComparison.FindRepoFile("TestData", "campaign_maps", mapName, "map_data.esf"));
+            var layout      = new Wh3MapDataWriter.Layout { Format = EsfFormat.Abca };
+            var written     = Wh3MapDataWriter.Write(map, new MapDataTheatre { Index = theatreIndex, MaxX = maxX }, BitConverter.ToUInt32(reference, 8), layout);
+
+            CollectionAssert.AreEqual(reference, written);
         }
 
         private static MapHexFile BuildMap(uint width, uint height, System.Action<Hex> initHex)
