@@ -722,8 +722,8 @@ namespace CAIME
 
         /// <summary>
         /// The folder the open project's processed files go to (see
-        /// <see cref="PreferencesViewModel.GetCampaignMapOutputPath"/>), created with its debug
-        /// subfolder; null, after telling the user, when no output folder or Assembly Kit is set.
+        /// <see cref="PreferencesViewModel.GetCampaignMapOutputPath"/>), created; null, after telling
+        /// the user, when no output folder or Assembly Kit is set.
         /// </summary>
         private string GetOutputPath()
         {
@@ -735,16 +735,22 @@ namespace CAIME
                 return null;
             }
 
-            Directory.CreateDirectory(DebugPath(outputPath));
+            Directory.CreateDirectory(outputPath);
             return outputPath;
         }
-
-        private static string DebugPath(string outputPath) => $"{outputPath}debug\\";
 
         public bool ExportProcessedPathfindingData()
         {
             var outputPath = GetOutputPath();
-            return outputPath != null && PathfindingExporter.Export(Project, outputPath, DebugPath(outputPath));
+            if (outputPath == null)
+            {
+                return false;
+            }
+
+            // Only pathfinding writes debug files.
+            var debugPath = $"{outputPath}debug\\";
+            Directory.CreateDirectory(debugPath);
+            return PathfindingExporter.Export(Project, outputPath, debugPath);
         }
 
         public bool ExportProcessedBordersData()
