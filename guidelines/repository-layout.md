@@ -10,6 +10,6 @@
 | `skills/` | Reusable agent skills and the scripts they drive. See [Agent skills](agent-skills.md). |
 | `.github/workflows/` | GitHub Actions workflows. |
 
-Other top-level directories — `EsfLibrary/`, `ChecksumGen/`,
+Other top-level directories — `EsfLibrary/`, `MapDataBuilder/`, `ChecksumGen/`,
 `Templates/`, `3rdParty/` — are existing components. Add to them only when the
 change genuinely belongs to that component.

@@ -41,7 +41,7 @@ The CLI relies on settings you configure **once** in the graphical editor. Make 
    The CLI writes where the editor does: the **Output folder** saved under **Settings > Preferences**, or the game's Assembly Kit `working_data` when none is set. If neither is configured, processing stops with a clear error. See [Settings & Preferences](user-guide-settings-and-preferences.md).
 
 2. **For `--map-data`, the RPFM path must be set.**
-   `--map-data` needs the project's database, read through RPFM, exactly as in the editor.
+   `--map-data` needs the project's database, read through RPFM, exactly as in the editor. With **Assembly Kit Integration** enabled in Preferences, `--map-data` and `--dynamic-resources` run the Assembly Kit's own builder, as in the editor.
 
 ---
 

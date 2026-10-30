@@ -167,7 +167,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.1 Map Data
 
-**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. CAIME writes the file itself, for each supported game the same way the game's Assembly Kit does; the Assembly Kit's own tools are not run.
+**What it does:** Generates the `map_data.esf` file — the core settlement and region data file that defines how many building slots each settlement has, whether it has a port, and the layout of the campaign map's strategic layer. CAIME writes the file itself, for each supported game the same way the game's Assembly Kit does. With **Assembly Kit Integration** enabled in **Settings > Preferences**, the Assembly Kit's own builder writes it instead (see the Settings and Preferences guide).
 
 **Special requirements (read carefully!):**
 
@@ -275,7 +275,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 ### 2.4 Dynamic Resources
 
-**What it does:** Generates the `dynamic_resources.esf` file: the farmland tiles that appear on the campaign map as a region's buildings level up. CAIME writes the file itself; the Assembly Kit's own tools are not run.
+**What it does:** Generates the `dynamic_resources.esf` file: the farmland tiles that appear on the campaign map as a region's buildings level up. CAIME writes the file itself, or, with **Assembly Kit Integration** enabled, the Assembly Kit's own builder does.
 
 **Special requirements:** As for Map Data, save your project first: the file is built from the saved `map.hex`.
 
