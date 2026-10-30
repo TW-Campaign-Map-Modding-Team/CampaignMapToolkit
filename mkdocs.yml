@@ -46,3 +46,5 @@ nav:
       - The Tools Menu: user-guide-tools-menu.md
       - Processing & Exporting: user-guide-processing-and-exporting.md
       - Command Line Interface (CLI): user-guide-command-line-interface.md
+  - Annex:
+      - The Assembly Kit (Legacy & Advanced): user-guide-assembly-kit.md

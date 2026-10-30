@@ -438,9 +438,11 @@ int main(int argc, char* argv[])
 
     std::string binPath             = std::string(asskitPath) + std::string("/binaries");
     std::string rawDataPath         = std::string(asskitPath) + std::string("/raw_data");
-    std::string workDataPath        = std::string(asskitPath) + std::string("/working_data");
-    std::string designDataPath      = std::string(rawDataPath) + std::string("/EmpireDesignData");
-    std::string dbPath              = std::string(rawDataPath) + std::string("/db");
+
+    // CAIME passes folders of its own, so that only the Assembly Kit's binaries are used.
+    std::string workDataPath        = argsMap.count("working_path") != 0 ? argsMap["working_path"] : std::string(asskitPath) + std::string("/working_data");
+    std::string designDataPath      = argsMap.count("design_path") != 0 ? argsMap["design_path"] : std::string(rawDataPath) + std::string("/EmpireDesignData");
+    std::string dbPath              = argsMap.count("db_path") != 0 ? argsMap["db_path"] : std::string(rawDataPath) + std::string("/db");
 
     // Without these, LoadLibraryA below resolves the DLL from somewhere else entirely.
     if (SetCurrentDirectoryA(binPath.c_str()) == 0 || SetDllDirectoryA(binPath.c_str()) == 0)
