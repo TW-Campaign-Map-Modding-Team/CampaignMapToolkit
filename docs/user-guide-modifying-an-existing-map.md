@@ -730,7 +730,7 @@ Every time you **add, remove, or reorder** regions for a Pharaoh Dynasties map, 
 
 1. Update the `index` values in `campaign_map_regions` in your mod.
 2. The convention is: **land regions first (1, 2, 3…), then sea regions**, all numbered sequentially with no gaps.
-3. Reload the map in CAIME after updating the indices. CAIME checks them on load: if they don't match the binary file, the map opens, but its database isn't loaded, so it can't be saved or processed.
+3. Reload the map in CAIME after updating the indices. CAIME checks them on load: if they don't match the binary file, the map opens, but its database isn't loaded, so it stays view-only: it can't be edited, saved or processed.
 
 **Example — adding a new land region to an existing Pharaoh Dynasties map:**
 
@@ -845,8 +845,8 @@ The sea region indices must shift up to make room for the new land region. Every
 - **"I moved a land region's boundary and now the Regions validator says it is split into disconnected areas."**
   A land region whose hexes form two isolated blobs (e.g., an island and a mainland both belonging to the same region) is a known startpos bug. Sea regions can legitimately be split (e.g., a sea region that wraps around a peninsula), but land regions should be contiguous. Repaint one of the isolated blobs to belong to a different region.
 
-- **"My Pharaoh Dynasties map worked fine, but after I added a region it can't be saved or processed."**
-  CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If they are out of sync, the database isn't loaded, so the map can't be saved or processed. In your mod, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save the pack, and reload the map. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.
+- **"My Pharaoh Dynasties map worked fine, but after I added a region it opens view-only."**
+  CAIME verifies the `index` values in `campaign_map_regions` against the binary map file on every load. If they are out of sync, the database isn't loaded, so the map can't be edited, saved or processed. In your mod, fix the index values in `campaign_map_regions` (land regions first, sequential, no gaps), save the pack, and reload the map. If you need to know what order the binary file expects, restore an earlier backup from your `Projects\[MapName]\` folder and compare.
 
 - **"A sea region is adjacent to more than 9 land regions and the Regions validator is flagging it."**
   This is a soft limit for AI pathfinding performance — a sea region touching more than 9 land regions causes a significant slowdown in the game's AI calculations **when the campaign features horde factions**. Split the sea region into two smaller sea regions. The validator treats more than 5 adjacencies as an informational note and more than 9 as an error.

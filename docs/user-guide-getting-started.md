@@ -136,7 +136,7 @@ Before creating or opening a map, CAIME needs two things:
 
 > You can leave **Base game** and **Assembly kit path** as they are. CAIME takes the game from the map itself, and only uses the Assembly Kit for legacy features; see [Annex: The Assembly Kit](user-guide-assembly-kit.md).
 
-When you open a map, CAIME shows it straight away and reads its database in the background. Saving and processing wait until the log says the database has been read.
+When you open a map, CAIME shows it straight away and reads its database in the background. You can look around the map at once; editing, saving and processing wait until the log says the database has been read.
 
 ---
 
