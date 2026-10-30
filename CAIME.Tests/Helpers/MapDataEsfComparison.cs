@@ -52,6 +52,24 @@ namespace CAIME.Tests.Helpers
             return null;
         }
 
+        /// <summary>Finds a folder by its path from the repository root, or null.</summary>
+        public static string FindRepoDirectory(params string[] parts)
+        {
+            var dir = AppDomain.CurrentDomain.BaseDirectory;
+            for (int i = 0; i < 10 && dir != null; ++i)
+            {
+                var candidate = Path.Combine(new[] { dir }.Concat(parts).ToArray());
+                if (Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
+
+                dir = Path.GetDirectoryName(dir);
+            }
+
+            return null;
+        }
+
         public void AssertSame(string expectedPath, string actualPath)
         {
             Compare(EsfCodecUtil.LoadEsfFile(expectedPath).RootNode, EsfCodecUtil.LoadEsfFile(actualPath).RootNode, "", null);

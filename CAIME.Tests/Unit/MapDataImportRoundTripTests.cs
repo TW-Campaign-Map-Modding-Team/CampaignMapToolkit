@@ -13,11 +13,6 @@ namespace CAIME.Tests.Unit
     /// map.hex, writes map_data.esf from it with that game's writer, and compares the result, node
     /// by node, with the file it was imported from. Whatever the import infers, the map must write
     /// the same file back.
-    ///
-    /// <para>
-    /// TestData has no Warhammer III file, so its test imports what our map_data writer builds from
-    /// Templates/wh3_main_chaos_map_2, which matches the Assembly Kit's builder.
-    /// </para>
     /// </summary>
     [TestClass]
     public class MapDataImportRoundTripTests
@@ -48,18 +43,8 @@ namespace CAIME.Tests.Unit
         [TestMethod] public void RoundTrip_TroyMythic()      => AssertGameFileRoundTrip(GameTemplate.Troy, "troy_mythic");
         [TestMethod] public void RoundTrip_Pharaoh()         => AssertGameFileRoundTrip(GameTemplate.Pharaoh, "phar_main");
         [TestMethod] public void RoundTrip_ThreeKingdoms()   => AssertGameFileRoundTrip(GameTemplate.Three_Kingdoms, "3k_dlc07_main_map");
-
-        [TestMethod]
-        public void RoundTrip_WarhammerIII()
-        {
-            var map = new MapHexFile();
-            Assert.IsTrue(map.Load(MapDataEsfComparison.FindRepoFile("Templates", "wh3_main_chaos_map_2", "map.hex")));
-
-            var source = Path.Combine(_dir, "source_map_data.esf");
-            File.WriteAllBytes(source, Wh3MapDataWriter.Write(map, new MapDataTheatre { Index = "1", MaxX = 1000f }, 0));
-
-            AssertRoundTrip(GameTemplate.Warhammer3, source);
-        }
+        [TestMethod] public void RoundTrip_WarhammerIII()    => AssertGameFileRoundTrip(GameTemplate.Warhammer3, "wh3_main_prologue_map");
+        [TestMethod] public void RoundTrip_WarhammerIIIBig() => AssertGameFileRoundTrip(GameTemplate.Warhammer3, "wh3_main_chaos_map_4");
 
         private void AssertGameFileRoundTrip(GameTemplate game, string mapName)
         {
@@ -92,8 +77,13 @@ namespace CAIME.Tests.Unit
                 MaxY    = game == GameTemplate.Rome2 ? contents.MaxY : (float?)null,
             };
 
+            // The game's Warhammer III files are older builds, written as ABCA.
+            var bytes = game == GameTemplate.Warhammer3
+                ? Wh3MapDataWriter.Write(map, theatre, 0, new Wh3MapDataWriter.Layout { Format = EsfFormat.Abca })
+                : MapDataWriter.Write(game, map, theatre, 0);
+
             var written = Path.Combine(_dir, "map_data.esf");
-            File.WriteAllBytes(written, MapDataWriter.Write(game, map, theatre, 0));
+            File.WriteAllBytes(written, bytes);
 
             var comparison = new MapDataEsfComparison
             {
