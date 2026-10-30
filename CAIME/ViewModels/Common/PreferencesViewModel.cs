@@ -129,6 +129,30 @@ namespace CAIME
             }
         }
 
+        // The last path RPFM's server answered from. A saved path is one, since no other is saved.
+        private string validRpfmPath;
+
+        /// <summary>
+        /// Whether <paramref name="rpfmFolder"/> holds a working RPFM, which is asked of its server
+        /// and takes seconds; the path last found working is not asked again.
+        /// </summary>
+        public bool ValidateRpfmPath(string rpfmFolder, out string error)
+        {
+            error = null;
+            if (string.Equals(rpfmFolder, validRpfmPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (RpfmService.ValidateInstallation(rpfmFolder, out error) == false)
+            {
+                return false;
+            }
+
+            validRpfmPath = rpfmFolder;
+            return true;
+        }
+
         // Where processed files go, laid out as in a pack (campaign_maps/<map>/); null for the
         // Assembly Kit's working_data.
         private string outputFolder;
@@ -195,7 +219,7 @@ namespace CAIME
             }
 
             // Never store an invalid RPFM installation path.
-            if (!RpfmService.ValidateInstallation(RpfmPath, out var rpfmError))
+            if (!ValidateRpfmPath(RpfmPath, out var rpfmError))
             {
                 RpfmPath = null;
                 var msg = $"The provided RPFM installation path is not valid and was not saved.\n\n{rpfmError}\n\n" +
@@ -311,6 +335,7 @@ namespace CAIME
                 {
                     string rpfmPathValue = rpfmPathToken.ToString();
                     RpfmPath = string.IsNullOrEmpty(rpfmPathValue) ? null : rpfmPathValue;
+                    validRpfmPath = RpfmPath;
                 }
 
                 if (json.TryGetValue(nameof(OutputFolder), out var outputFolderToken))
