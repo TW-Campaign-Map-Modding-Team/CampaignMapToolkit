@@ -184,9 +184,13 @@ rebuilds them from the entries' runs. Every vanilla map writes the same file as 
 ## To investigate
 
 ### Our map_data writer
-- [ ] Masked builds of a Warhammer and a Pharaoh map. Only Warhammer II's and Warhammer III's
-      builders were run on a masked map (Warhammer's pops a console window). Three Kingdoms'
-      maps cannot hold masks.
+- Warhammer's and Pharaoh's handling of a painted mask is read from their builders only (see
+  "Masks in the older builders"); only Warhammer II's and Warhammer III's builders were run on a
+  masked map. No vanilla map paints a mask, so every vanilla file matches either way.
+
+### The game, not the file
+These do not change what the writers produce; they are what a modder painting masks would want
+to know.
 - [ ] What the game does with an entry's run triples (whether it closes those hexes in the
       campaign pathfinder), and whether a run's end column is exclusive.
 - [ ] What the Warhammer game does when a campaign's mask names no entry in its
