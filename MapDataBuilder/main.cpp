@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <new>
 #include <string>
 #include <map>
 #include <future>
@@ -13,6 +14,8 @@
 
 namespace CA
 {
+    // The {size, capacity, pointer} layout most games use. It is only the fallback for a game whose
+    // CALibs exports no String constructor; see GameString.
     struct String
     {
     public:
@@ -161,6 +164,102 @@ namespace CA_STD
     };
 }
 
+#ifdef _WIN64
+typedef void* (*StringConstructor)(void* self, const char* value);
+typedef void (*StringDestructor)(void* self);
+const char* const StringConstructorSymbol = "??0String@CA@@QEAA@PEBD@Z";
+const char* const StringDestructorSymbol  = "??1String@CA@@QEAA@XZ";
+#else
+// The exports are __thiscall: this in ECX, the rest on the stack, popped by the callee. A pointer to
+// a free function cannot be __thiscall, but __fastcall with an unused EDX parameter passes and pops
+// the same way.
+typedef void* (__fastcall *StringConstructor)(void* self, void* unused, const char* value);
+typedef void (__fastcall *StringDestructor)(void* self, void* unused);
+const char* const StringConstructorSymbol = "??0String@CA@@QAE@PBD@Z";
+const char* const StringDestructorSymbol  = "??1String@CA@@QAE@XZ";
+#endif
+
+StringConstructor g_constructString = nullptr;
+StringDestructor  g_destroyString   = nullptr;
+
+/// Finds the String constructor and destructor in the CALibs DLL the data builder has loaded.
+/// Its file name differs between games.
+void FindGameStringExports()
+{
+    for (const char* calibsName : { "CALibs.modder.x64.dll", "CALibs.AssemblyKit.x64.dll", "CALibs.AssemblyKit.dll" })
+    {
+        HMODULE calibs = ::GetModuleHandleA(calibsName);
+        if (calibs == NULL)
+        {
+            continue;
+        }
+
+        g_constructString = (StringConstructor)::GetProcAddress(calibs, StringConstructorSymbol);
+        g_destroyString   = (StringDestructor)::GetProcAddress(calibs, StringDestructorSymbol);
+
+        if (g_constructString != nullptr && g_destroyString != nullptr)
+        {
+            return;
+        }
+    }
+
+    g_constructString = nullptr;
+    g_destroyString   = nullptr;
+    std::cout << "The game's CALibs exports no CA::String constructor; passing strings in the common layout." << std::endl;
+}
+
+/// A CA::String argument for the data builder, in the layout the game itself uses. That layout is
+/// not the same in every game: Pharaoh keeps a string of up to 11 characters inline, so a hand-built
+/// CA::String hands it garbage for a short map name such as phar_main, and the export then quietly
+/// processes no map at all. The game's own exported constructor always gets it right.
+class GameString
+{
+public:
+    explicit GameString(const char* value)
+    {
+        if (g_constructString != nullptr)
+        {
+#ifdef _WIN64
+            g_constructString(m_storage, value);
+#else
+            g_constructString(m_storage, nullptr, value);
+#endif
+        }
+        else
+        {
+            new (m_storage) CA::String(value);
+        }
+    }
+
+    ~GameString()
+    {
+        if (g_destroyString != nullptr)
+        {
+#ifdef _WIN64
+            g_destroyString(m_storage);
+#else
+            g_destroyString(m_storage, nullptr);
+#endif
+        }
+        else
+        {
+            reinterpret_cast<CA::String*>(m_storage)->~String();
+        }
+    }
+
+    GameString(GameString const&) = delete;
+    GameString& operator=(GameString const&) = delete;
+
+    CA::String const& get() const
+    {
+        return *reinterpret_cast<CA::String const*>(m_storage);
+    }
+
+private:
+    // Every game's CA::String is 12 (x86) or 16 (x64) bytes.
+    alignas(16) unsigned char m_storage[32];
+};
+
 namespace TOOLDATABUILDER
 {
     typedef bool(__cdecl *do_campaign_maps_regions_process)(struct CA::String const&, struct CA::String const&, struct CA::String const&, struct CA::String const&);
@@ -272,20 +371,21 @@ ReturnCodes DynResExport(HMODULE hToolDataBuilderDll, const char* szDesignDataPa
         return ReturnCodes::DynResourcesFuncNotFound;
     }
 
-    CA::String pMapName(szMapName);
-    CA::String pDesignDataPath(szDesignDataPath);
+    GameString pMapName(szMapName);
+    GameString pDesignDataPath(szDesignDataPath);
 
     std::string dynResEsfPath = std::string(szWorkingDataPath) + "/campaign_maps/" + std::string(szMapName) + "/dynamic_resources.esf";
     std::string dynResPngPath = std::string(szDesignDataPath) + "/campaign_maps/" + std::string(szMapName) + "/dynamic_resources.png";
     std::string dynResXmlPath = std::string(szDesignDataPath) + "/campaign_maps/" + std::string(szMapName) + "/dynamic_resources_database.xml";
     std::string mapHexPath = std::string(szDesignDataPath) + "/campaign_maps/" + std::string(szMapName) + "/map.hex";
 
-    CA::String pDynResEsfFile(dynResEsfPath.c_str());
-    CA::String pDynResPngFile(dynResPngPath.c_str());
-    CA::String pDynResXmlFile(dynResXmlPath.c_str());
-    CA::String pMapHexFile(mapHexPath.c_str());
-    
-    bool isDynResourcesProcessSuccess = do_dynamic_resources_process_fn(pMapName, pDynResPngFile, pDynResXmlFile, pMapHexFile, pDesignDataPath, pDynResEsfFile);
+    GameString pDynResEsfFile(dynResEsfPath.c_str());
+    GameString pDynResPngFile(dynResPngPath.c_str());
+    GameString pDynResXmlFile(dynResXmlPath.c_str());
+    GameString pMapHexFile(mapHexPath.c_str());
+
+    bool isDynResourcesProcessSuccess = do_dynamic_resources_process_fn(
+        pMapName.get(), pDynResPngFile.get(), pDynResXmlFile.get(), pMapHexFile.get(), pDesignDataPath.get(), pDynResEsfFile.get());
     if (isDynResourcesProcessSuccess == false)
     {
         return ReturnCodes::ExportDynResFuncFailed;
@@ -330,15 +430,12 @@ ReturnCodes MapDataExport(HMODULE hToolDataBuilderDll, const char* szDesignDataP
         return ReturnCodes::ExportMapDataFuncNotFound;
     }
 
-    std::string mapHexPath = std::string(szDesignDataPath) + "/campaign_maps/" + std::string(szMapName) + "/map.hex";
+    GameString pMapName(szMapName);
+    GameString pDbPath(szDbPath);
+    GameString pDesignDataPath(szDesignDataPath);
+    GameString pWorkDataPath(szWorkingDataPath);
 
-    CA::String pMapName(szMapName);
-    CA::String pDbPath(szDbPath);
-    CA::String pDesignDataPath(szDesignDataPath);
-    CA::String pWorkDataPath(szWorkingDataPath);
-    CA::String pMapHexFile(mapHexPath.c_str());
-    
-    bool isMapDataProcessSuccess = do_campaign_maps_regions_process_fn(pMapName, pDbPath, pDesignDataPath, pWorkDataPath);
+    bool isMapDataProcessSuccess = do_campaign_maps_regions_process_fn(pMapName.get(), pDbPath.get(), pDesignDataPath.get(), pWorkDataPath.get());
     if (isMapDataProcessSuccess == false)
     {
         return ReturnCodes::ExportMapDataFuncFailed;
@@ -466,6 +563,8 @@ int main(int argc, char* argv[])
     {
         return (int)ReturnCodes::LoadLibraryFailed;
     }
+
+    FindGameStringExports();
 
     if (std::find(processes.begin(), processes.end(), "map_data") != processes.end())
     {
