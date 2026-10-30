@@ -71,14 +71,14 @@ The diagram below maps every control in the Preferences window to its purpose.
 
 CAIME reads its database tables through **RPFM**, from the game's own packs and your campaign's mod. Your packs and your database are never modified — the workflow is read-only.
 
-The map opens straight away and can be viewed and edited at once; the tables are read in the background. Until they have been read, the map can't be saved, and the steps that need the database are greyed out: **Process → Map Data**, **Pathfinding data** and **Lookup and Minimap images**, **Tools → Export → SVG Borders**, and the **Regions**, **Attritions**, **Climates** and **Ground types** validators. The log says when the database has been read. If it can't be read, the map stays unsaveable and those steps stay unavailable for the session; the log says why.
+The map opens straight away and can be viewed at once (panned and zoomed); the tables are read in the background. Until they have been read, the map can't be edited or saved: the toolbar, the sidebar, **Edit → Resize** and **Rename map**, **File → Save** and **Tools → Import → Layer data** are greyed out. So are the steps that need the database: **Process → Map Data**, **Pathfinding data** and **Lookup and Minimap images**, **Tools → Export → SVG Borders**, and the **Regions**, **Attritions**, **Climates** and **Ground types** validators. The log says when the database has been read. If it can't be read, an error message says why, and the map stays view-only for the session.
 
 Each required table is **merged** from every source that has a piece of it, the same way the game itself combines table fragments — CAIME does not pick one winning source per table:
 
 1. **Your campaign's mod, if you've set one for this project, and every mod it depends on.** RPFM reads the mod's own dependency list and loads those mods too — and theirs in turn — so naming the mod at the top is enough. Any fragments of a required table found in them are merged in. Entirely optional — see below.
 2. **The game's own packs.** Fill in whatever the mods don't provide — for example, if they only override `campaigns`/`campaign_map_regions`, ground types and everything else still come from the game, live from the actual install. CAIME reads them through RPFM, from the game folder set in RPFM's own settings, so you never have to work out which `.pack` holds a game's tables.
 
-Every required table must be found in one of these. If RPFM can't find one, CAIME names the missing table, and saving and the steps that need the database stay unavailable for the session.
+Every required table must be found in one of these. If RPFM can't find one, CAIME names the missing table, and the map stays view-only for the session.
 
 When two sources both define a row for the same primary key (e.g. both a mod and the game have an entry for the same region), the conflict is resolved the same way the game resolves it: by the name of the table *fragment* each row came from (e.g. `db/campaign_map_regions_tables/data__` vs. `.../!!!my_mod`) — the earlier-sorting fragment name wins, which is why a `!!!`-prefixed fragment name (a common modding convention) beats the plain `data__` fragment the game and most exports use. This has nothing to do with what the `.pack` file is called or the order mods are listed in — only the fragment's own name inside the pack. If a mod and the game happen to use the *identical* fragment name, the mod wins; if your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
 
@@ -86,7 +86,7 @@ When two sources both define a row for the same primary key (e.g. both a mod and
 
 - **RPFM installation, version 5.3 or later.** Set the **RPFM path** to the folder containing `rpfm_server.exe`. CAIME won't let you **Save** preferences without it, and validates the folder (by connecting to its RPFM server) before saving. CAIME talks to RPFM through that server: if RPFM is already running it uses the same server in a session of its own, without touching the packs you have open there; otherwise it starts the server in the background, and the server exits by itself once CAIME is done with it.
 - **The game's folder set in RPFM.** RPFM finds the game's packs, and your mod, through the game folder in RPFM's own settings — the same one RPFM itself needs to work with the game. If it isn't set, CAIME tells you so once the project is open.
-- **Without an RPFM path**, a project opens with no database: it can't be saved, and the steps that need the database stay unavailable. CAIME uses RPFM's schema for every table; the one field it needs that no pack carries, `regions.is_sea`, comes from your map's own land and sea regions.
+- **Without an RPFM path**, a project opens with no database, view-only. CAIME uses RPFM's schema for every table; the one field it needs that no pack carries, `regions.is_sea`, comes from your map's own land and sea regions.
 
 **Output folder.** Processed files go to `campaign_maps\{your map name}\` inside the **Output folder**, laid out as in a pack, so the folder can be your mod's own. If you leave it empty, CAIME falls back to the Assembly Kit (see Section 9), and Preferences won't **Save** with neither set.
 
@@ -265,11 +265,8 @@ You do not normally need to open or edit this file manually — CAIME manages it
 - **"The provided RPFM installation path is not valid" when saving.**
   The selected folder does not contain a working `rpfm_server.exe`. Point the **RPFM path** at the folder where you installed RPFM 5.3 or later (the one containing `rpfm_server.exe`); older versions of RPFM speak a different protocol, which CAIME does not use. Invalid paths are never stored.
 
-- **"The map can't be saved until its database has been read through RPFM."**
-  The database is still being read in the background. Wait for the log to say it has been read, then save again.
-
-- **"The map can't be saved without its database."**
-  The database could not be read; the log says why (usually one of the messages below, or no RPFM path). Fix that, then reopen the project.
+- **The map opened, but I can't paint, and Save is greyed out.**
+  The database is still being read in the background. Wait for the log to say it has been read. If it couldn't be read, an error message said why (usually one of the messages below, or no RPFM path): fix that, then reopen the project.
 
 - **"RPFM has no schema for this game" when opening a project.**
   RPFM needs its schema for a game to read that game's tables, and downloads it the first time you use the game in RPFM. Open RPFM, select the game, then open the project in CAIME again.

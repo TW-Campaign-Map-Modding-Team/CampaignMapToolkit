@@ -293,7 +293,7 @@ The map file (`map.hex`) is completely empty at this stage. Every hex on the gri
 - No attrition assigned
 - No roads, bridges, rivers, or other features
 
-CAIME reads the database through RPFM in the background as soon as the map opens; the log says when it is done. Until then the map can't be saved or processed.
+CAIME reads the database through RPFM in the background as soon as the map opens; the log says when it is done. Until then you can look around the map, but not edit, save or process it.
 
 ### Pointing the Project at Your Mod
 
@@ -418,7 +418,7 @@ This has two consequences:
 
 **1. CAIME reads each region's `index` from `campaign_map_regions`.**
 
-When adding your regions to your mod, each row needs an `index` value — a whole number starting from 1. CAIME checks them against the order stored in the binary file every time the map opens. If they don't match, the map still opens, but its database isn't loaded: it can't be saved or processed, and the Swatches panel stays empty. The convention is: **land regions first, then sea regions**, each numbered sequentially with no gaps.
+When adding your regions to your mod, each row needs an `index` value — a whole number starting from 1. CAIME checks them against the order stored in the binary file every time the map opens. If they don't match, the map still opens, but its database isn't loaded: it stays view-only, and can't be edited, saved or processed. The convention is: **land regions first, then sea regions**, each numbered sequentially with no gaps.
 
 | Example | Region type | index |
 |---|---|---|
@@ -509,13 +509,13 @@ Select a Swatch → Paint on the map canvas
 - **The Swatches panel is empty after creating my map.**
   Either the database hasn't been read yet, or it has no rows for your map. Check that your mod is set under **Settings → RPFM Workflow**, that you saved the pack in RPFM, and that the `campaign_map` column of your `campaign_map_regions` rows exactly matches what you typed in the CAIME dialog (case-sensitive). Then reload the map with **File → Reload** (Ctrl+R).
 
-- **Processing stays greyed out, or the map can't be saved, after opening the new map.**
+- **I can't paint, and Save and Processing stay greyed out, after opening the new map.**
   The database is read in the background after the map opens, so give it a moment. If it stays unavailable, the log says why — usually one of two things: (a) the RPFM path is not set in **Settings → Preferences**, or (b) one of the required tables (such as `regions` or `campaign_map_regions`) has no valid entries in your mod or the game's packs. Check both, then reload the map with **File → Reload** (Ctrl+R).
 
 - **I typed an odd number for the map width and got an error.**
   Map widths must be even numbers (e.g., 512, 1016, 1024). This is a technical requirement of the hex grid layout. Simply increase or decrease your width by 1 to make it even.
 
-- **CAIME says my Pharaoh Dynasties map's region indices don't match, and saving and processing stay unavailable.**
+- **CAIME says my Pharaoh Dynasties map's region indices don't match, and the map stays view-only.**
   The `index` values in your mod's `campaign_map_regions` no longer match the order stored in the `map.hex` binary file. In RPFM, correct the `index` values so that land regions are numbered first and sea regions follow, with no gaps, then reload the map in CAIME. If you are unsure what order the binary file expects, restore your last working `map.hex` from the auto-backup folder (`Projects\YourMapName\`) and compare.
 
 - **I added or removed regions — how do I make CAIME reflect the change?**
