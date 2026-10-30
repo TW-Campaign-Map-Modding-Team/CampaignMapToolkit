@@ -67,7 +67,7 @@ namespace CAIME.Tests.Unit
                 new[] { "brownlands", "80", "true", "false" },
                 new[] { "deep_sea", "1800", "false", "true" });
 
-            var doc     = MergeWithoutSchemaFields(fragment, "test_table", TestSchema());
+            var doc     = Merge(new[] { fragment }, null);
             var records = doc.Root.Elements("test_table").ToList();
 
             Assert.AreEqual("dataroot", doc.Root.Name.LocalName, "Root element must be dataroot.");
@@ -86,16 +86,16 @@ namespace CAIME.Tests.Unit
         }
 
         [TestMethod]
-        public void MergeFragments_ExpandsRpfmColourColumnIntoRgb_AndSkipsUnmappableNames()
+        public void MergeFragments_ExpandsRpfmColourColumnIntoRgb()
         {
             // Mirrors the real RPFM "regions" table: a colour packed into a single hex column whose
-            // name is not a valid XML name. Row 2 has an empty colour (must not emit r/g/b).
+            // name is not a valid XML name. Row 2 has an empty colour, so r/g/b keep their default.
+            var columns  = new[] { Column("key", "StringU8", isKey: true), Column("is_sea", "Boolean"), Column("unnamed colour group_1", "ColourRGB") };
             var fragment = Fragment("rom_regions", new[] { "key", "is_sea", "unnamed colour group_1" },
                 new[] { "reg_a", "false", "B66216" },
                 new[] { "reg_b", "true", "" });
 
-            var schema  = DatabaseTableConverter.SchemaFromRpfm(new[] { Column("key", "StringU8", isKey: true), Column("is_sea", "Boolean") }, null);
-            var records = MergeWithoutSchemaFields(fragment, "regions", schema).Root.Elements("regions").ToList();
+            var records = MergeWithRpfmColumns(fragment, "regions", columns).Root.Elements("regions").ToList();
             Assert.AreEqual(2, records.Count);
 
             // B66216 -> r=182 (0xB6), g=98 (0x62), b=22 (0x16).
@@ -105,8 +105,21 @@ namespace CAIME.Tests.Unit
             Assert.IsFalse(records[0].Elements().Any(e => e.Name.LocalName.Contains(" ")),
                 "No element with an invalid (space-containing) name should be emitted.");
 
-            // Empty colour: no r/g/b emitted; the loader falls back to the schema default (0).
-            Assert.IsNull(records[1].Element("r"));
+            Assert.AreEqual("0", records[1].Element("r").Value);
+        }
+
+        // Only RPFM's schema says which columns are colours: a text column named like one, holding
+        // what looks like a hex colour, keeps its value.
+        [TestMethod]
+        public void MergeFragments_TextColumnNamedLikeAColour_KeepsItsValue()
+        {
+            var columns  = new[] { Column("key", "StringU8", isKey: true), Column("colour_name", "StringU8") };
+            var fragment = Fragment("data__", new[] { "key", "colour_name" }, new[] { "reg_a", "abcdef" });
+
+            var record = MergeWithRpfmColumns(fragment, "regions", columns).Root.Elements("regions").Single();
+
+            Assert.AreEqual("abcdef", record.Element("colour_name").Value);
+            Assert.IsNull(record.Element("r"));
         }
 
         [TestMethod]
@@ -185,14 +198,17 @@ namespace CAIME.Tests.Unit
         {
             var schema = TestSchema();
             return DatabaseTableConverter.MergeFragments(fragments, "test_table",
-                DatabaseTableConverter.GetBooleanColumns(schema), DatabaseTableConverter.GetPrimaryKeyColumns(schema), schema.Fields, null, rowFilter);
+                DatabaseTableConverter.GetBooleanColumns(schema), DatabaseTableConverter.GetColourColumns(TestTableColumns),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schema), schema.Fields, null, rowFilter);
         }
 
-        // One fragment, in its own column order, with the schema giving only its yes/no columns.
-        private static XDocument MergeWithoutSchemaFields(TableFragment fragment, string recordElementName, XmlSchema schema)
+        // One fragment, under the schema RPFM's columns make, as RpfmWorkflowSession merges a table.
+        private static XDocument MergeWithRpfmColumns(TableFragment fragment, string recordElementName, RpfmColumn[] columns)
         {
+            var schema = DatabaseTableConverter.SchemaFromRpfm(columns, null);
             return DatabaseTableConverter.MergeFragments(new[] { fragment }, recordElementName,
-                DatabaseTableConverter.GetBooleanColumns(schema), Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null);
+                DatabaseTableConverter.GetBooleanColumns(schema), DatabaseTableConverter.GetColourColumns(columns),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schema), schema.Fields, null);
         }
 
         private static RpfmColumn Column(string name, string type, bool isKey = false, string defaultValue = null)

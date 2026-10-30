@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -45,9 +44,9 @@ namespace CAIME.Rpfm
 
             foreach (var column in columns)
             {
-                var type = column.FieldType?.Type == Newtonsoft.Json.Linq.JTokenType.String ? (string)column.FieldType : null;
+                var type = RpfmType(column);
 
-                if (type == "ColourRGB")
+                if (type == ColourType)
                 {
                     foreach (var channel in new[] { "r", "g", "b" })
                     {
@@ -71,6 +70,24 @@ namespace CAIME.Rpfm
             }
 
             return new XmlSchema(fields);
+        }
+
+        /// <summary>
+        /// The columns RPFM's schema gives as colours, each packed into one RRGGBB column, which
+        /// <see cref="MergeFragments"/> expands into the r, g and b fields.
+        /// </summary>
+        public static ISet<string> GetColourColumns(IReadOnlyList<RpfmColumn> columns)
+        {
+            return new HashSet<string>(columns.Where(column => RpfmType(column) == ColourType).Select(column => column.Name),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private const string ColourType = "ColourRGB";
+
+        // A column's type name, like "I32"; null for a sequence, whose type is an object.
+        private static string RpfmType(RpfmColumn column)
+        {
+            return column.FieldType?.Type == Newtonsoft.Json.Linq.JTokenType.String ? (string)column.FieldType : null;
         }
 
         /// <summary>The yes/no columns of <paramref name="schema"/>, whose true/false become 1/0.</summary>
@@ -132,13 +149,15 @@ namespace CAIME.Rpfm
         ///
         /// Every row gets every field of <paramref name="schemaFields"/>, in order: a field an older
         /// fragment lacks gets its default, and "is_sea", which no pack has, comes from
-        /// <paramref name="regionIsSeaByKey"/>. <paramref name="rowFilter"/>, when given, drops rows
-        /// before merging.
+        /// <paramref name="regionIsSeaByKey"/>. Each of <paramref name="colourColumns"/> (see
+        /// <see cref="GetColourColumns"/>) fills the r, g and b fields. <paramref name="rowFilter"/>,
+        /// when given, drops rows before merging.
         /// </summary>
         public static XDocument MergeFragments(
             IReadOnlyList<TableFragment> fragments,
             string recordElementName,
             ISet<string> booleanColumns,
+            ISet<string> colourColumns,
             IReadOnlyList<string> primaryKeyColumns,
             IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
@@ -152,7 +171,7 @@ namespace CAIME.Rpfm
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
                 var keyedRecords = ToKeyedRecords(
-                    ordered[fragmentIndex], recordElementName, booleanColumns, primaryKeyColumns, schemaFields, regionIsSeaByKey, rowFilter, fragmentIndex);
+                    ordered[fragmentIndex], recordElementName, booleanColumns, colourColumns, primaryKeyColumns, schemaFields, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
@@ -171,7 +190,7 @@ namespace CAIME.Rpfm
         }
 
         private static List<(string Key, XElement Record)> ToKeyedRecords(
-            TableFragment fragment, string recordElementName, ISet<string> booleanColumns,
+            TableFragment fragment, string recordElementName, ISet<string> booleanColumns, ISet<string> colourColumns,
             IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey, RowFilter rowFilter, int fragmentIndex)
         {
@@ -216,89 +235,44 @@ namespace CAIME.Rpfm
 
                 var record = new XElement(recordElementName);
 
-                if (schemaFields != null && schemaFields.Count > 0)
+                // A colour column is expanded into "r"/"g"/"b" entries so it reads like any other field.
+                var rawValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; ++i)
                 {
-                    // The packed colour column is expanded into "r"/"g"/"b" entries so it reads like any other field.
-                    var rawValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    for (int i = 0; i < header.Length; ++i)
+                    var columnName = header[i];
+                    var value      = i < cells.Count ? cells[i] : string.Empty;
+
+                    if (colourColumns != null && colourColumns.Contains(columnName))
                     {
-                        var columnName = header[i];
-                        if (string.IsNullOrEmpty(columnName))
-                        {
-                            continue;
-                        }
-
-                        var value = i < cells.Count ? cells[i] : string.Empty;
-
-                        if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
+                        if (TryExpandColour(value, out int r, out int g, out int b))
                         {
                             rawValues["r"] = r.ToString(CultureInfo.InvariantCulture);
                             rawValues["g"] = g.ToString(CultureInfo.InvariantCulture);
                             rawValues["b"] = b.ToString(CultureInfo.InvariantCulture);
-                            continue;
                         }
 
-                        rawValues[columnName] = value;
+                        continue;
                     }
 
-                    // Schema order, so an older table version's column order does not leak into the output.
-                    foreach (var field in schemaFields)
-                    {
-                        if (rawValues.TryGetValue(field.Name, out var value))
-                        {
-                            var isBoolean = booleanColumns != null && booleanColumns.Contains(field.Name);
-                            record.Add(new XElement(field.Name, isBoolean ? ToXmlBoolean(value) : value));
-                        }
-                        else if (string.Equals(field.Name, "is_sea", StringComparison.OrdinalIgnoreCase)
-                            && regionIsSeaByKey != null && regionIsSeaByKey.TryGetValue(key, out var isSea))
-                        {
-                            record.Add(new XElement(field.Name, isSea ? "1" : "0"));
-                        }
-                        else
-                        {
-                            record.Add(new XElement(field.Name, FormatDefaultValue(field)));
-                        }
-                    }
+                    rawValues[columnName] = value;
                 }
-                else
+
+                // Schema order, so an older table version's column order does not leak into the output.
+                foreach (var field in schemaFields)
                 {
-                    // No schema fields given: keep the fragment's column order.
-                    for (int i = 0; i < header.Length; ++i)
+                    if (rawValues.TryGetValue(field.Name, out var value))
                     {
-                        var columnName = header[i];
-                        if (string.IsNullOrEmpty(columnName))
-                        {
-                            continue;
-                        }
-
-                        var value = i < cells.Count ? cells[i] : string.Empty;
-
-                        if (booleanColumns != null && booleanColumns.Contains(columnName))
-                        {
-                            record.Add(new XElement(columnName, ToXmlBoolean(value)));
-                            continue;
-                        }
-
-                        // RPFM packs an RGB colour into a single hex column (e.g. "B66216") under a
-                        // name that is no XML name ("unnamed colour group_1"). CAIME reads separate
-                        // decimal r/g/b integer fields, so expand it.
-                        if (IsColourColumn(columnName) && TryExpandColour(value, out int r, out int g, out int b))
-                        {
-                            record.Add(new XElement("r", r));
-                            record.Add(new XElement("g", g));
-                            record.Add(new XElement("b", b));
-                            continue;
-                        }
-
-                        // Skip columns whose names are not valid XML element names and that we cannot
-                        // map. CAIME's loader reads fields by name, so pack columns it does not know
-                        // about are irrelevant to it.
-                        if (!IsValidXmlName(columnName))
-                        {
-                            continue;
-                        }
-
-                        record.Add(new XElement(columnName, value));
+                        var isBoolean = booleanColumns != null && booleanColumns.Contains(field.Name);
+                        record.Add(new XElement(field.Name, isBoolean ? ToXmlBoolean(value) : value));
+                    }
+                    else if (string.Equals(field.Name, "is_sea", StringComparison.OrdinalIgnoreCase)
+                        && regionIsSeaByKey != null && regionIsSeaByKey.TryGetValue(key, out var isSea))
+                    {
+                        record.Add(new XElement(field.Name, isSea ? "1" : "0"));
+                    }
+                    else
+                    {
+                        record.Add(new XElement(field.Name, FormatDefaultValue(field)));
                     }
                 }
 
@@ -307,20 +281,6 @@ namespace CAIME.Rpfm
             }
 
             return results;
-        }
-
-        // XML element names must be NCNames: start with a letter/underscore, no spaces. RPFM column
-        // names are ASCII identifiers, so this simple check is sufficient to spot the odd ones out
-        // (such as "unnamed colour group_1").
-        private static readonly Regex ValidXmlName = new Regex(@"^[A-Za-z_][A-Za-z0-9_.\-]*$", RegexOptions.Compiled);
-
-        private static bool IsValidXmlName(string name) => ValidXmlName.IsMatch(name);
-
-        private static bool IsColourColumn(string name)
-        {
-            return !IsValidXmlName(name)
-                || name.IndexOf("colour", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("color", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // Parses an RPFM "RRGGBB" hex colour into its decimal r/g/b components. Returns false for
