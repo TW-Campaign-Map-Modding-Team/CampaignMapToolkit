@@ -34,31 +34,26 @@ namespace CAIME.Exporters
         private const string PlaceholderValue = "unused";
 
         /// <summary>
-        /// The tables for <paramref name="mapName"/>, keyed by table name, made from its rows in
+        /// The tables for <paramref name="mapName"/>, keyed by table name, made from its first row in
         /// <paramref name="playableAreas"/>, an Assembly Kit campaign_map_playable_areas document.
         /// Throws <see cref="InvalidOperationException"/> when that has no row for the map, or the
         /// row has no maxx.
         /// </summary>
         public static IReadOnlyDictionary<string, XDocument> Build(string mapName, uint hexColumns, uint hexRows, XDocument playableAreas)
         {
-            var playableAreaRows = playableAreas.Root
+            // Every game's data builder uses only the map's first row, as the native writers do.
+            var bounds = playableAreas.Root
                 .Elements(Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS)
-                .Where(row => string.Equals((string)row.Element("mapname"), mapName, StringComparison.OrdinalIgnoreCase))
-                .Select(row => new XElement(row))
-                .ToList();
+                .FirstOrDefault(row => string.Equals((string)row.Element("mapname"), mapName, StringComparison.OrdinalIgnoreCase));
 
-            if (playableAreaRows.Count == 0)
+            if (bounds == null)
             {
                 throw new InvalidOperationException(
                     $"{Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS} has no row for {mapName}, and map_data.esf cannot be built without one.");
             }
 
-            foreach (var row in playableAreaRows)
-            {
-                CompleteBounds(row, mapName, hexColumns, hexRows);
-            }
-
-            var bounds = playableAreaRows[0];
+            bounds = new XElement(bounds);
+            CompleteBounds(bounds, mapName, hexColumns, hexRows);
 
             return new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase)
             {
@@ -68,7 +63,7 @@ namespace CAIME.Exporters
                     new XElement("miny", bounds.Element("miny").Value),
                     new XElement("maxx", bounds.Element("maxx").Value),
                     new XElement("maxy", bounds.Element("maxy").Value))),
-                [Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS] = Table(playableAreaRows.ToArray()),
+                [Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS] = Table(bounds),
                 [Constants.TABLE_REGIONS]                     = PlaceholderTable(Constants.TABLE_REGIONS, "key"),
                 [Constants.TABLE_CAMPAIGN_MAP_SETTLEMENTS]    = PlaceholderTable(Constants.TABLE_CAMPAIGN_MAP_SETTLEMENTS, "settlement_id"),
                 [Constants.TABLE_CAMPAIGN_GROUND_TYPES]       = PlaceholderTable(Constants.TABLE_CAMPAIGN_GROUND_TYPES, "type"),
