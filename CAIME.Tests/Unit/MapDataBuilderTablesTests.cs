@@ -51,6 +51,20 @@ namespace CAIME.Tests.Unit
             Assert.AreEqual("555.09", (string)rows[0].Element("maxy"), "A maxy the database has must be kept as it is.");
         }
 
+        // Every game's data builder uses only the map's first row, as the native writers do, so a
+        // later one must neither be staged nor stop the build.
+        [TestMethod]
+        public void Build_KeepsOnlyTheMapsFirstPlayableAreaRow()
+        {
+            var tables = MapDataBuilderTables.Build(MapName, 1016, 720, PlayableAreas(
+                PlayableArea(MapName, index: "1564135515", maxX: "678.5", maxY: "555.09"),
+                PlayableArea(MapName, index: "2", maxX: "0", maxY: "0")));
+
+            var row = tables[Constants.TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS].Root.Elements().Single();
+
+            Assert.AreEqual("1564135515", (string)row.Element("index"));
+        }
+
         [TestMethod]
         public void Build_WorksOutMaxY_WhenTheRowHasNone()
         {
