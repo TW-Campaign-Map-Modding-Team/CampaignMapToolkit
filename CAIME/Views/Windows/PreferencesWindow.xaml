@@ -303,6 +303,9 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Separator Grid.Row="0"
@@ -390,6 +393,47 @@
                        Foreground="Gray"
                        TextWrapping="Wrap"
                        Text="Processed files go to campaign_maps\&lt;map&gt;\ inside this folder, laid out as in a pack. Leave it empty to use the Assembly Kit's working_data folder." />
+
+            <Separator Grid.Row="5"
+                       Grid.Column="0"
+                       Grid.ColumnSpan="3"
+                       Margin="0 10"
+                       Background="{StaticResource BackgroundDarkV3Brush}" />
+
+            <TextBlock Grid.Row="6"
+                       Grid.Column="0"
+                       Margin="0 0 10 0"
+                       Text="Assembly Kit Integration:"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
+
+            <StackPanel Grid.Row="6"
+                        Grid.Column="1"
+                        Grid.ColumnSpan="2"
+                        Orientation="Horizontal">
+
+                <RadioButton Content="Enabled"
+                             Margin="5"
+                             IsChecked="{Binding IsAssemblyKitIntegrationEnabled}"
+                             Foreground="White"
+                             VerticalAlignment="Center" />
+
+                <RadioButton Content="Disabled"
+                             Margin="5"
+                             IsChecked="{Binding IsAssemblyKitIntegrationEnabled, Converter={StaticResource InverseBoolConverter}}"
+                             Foreground="White"
+                             VerticalAlignment="Center" />
+
+            </StackPanel>
+
+            <TextBlock Grid.Row="7"
+                       Grid.Column="0"
+                       Grid.ColumnSpan="3"
+                       Margin="0 3 0 0"
+                       FontStyle="Italic"
+                       Foreground="Gray"
+                       TextWrapping="Wrap"
+                       Text="When enabled, Process &gt; Map Data and Process &gt; Dynamic Resources run the Assembly Kit's own builder instead of CAIME's, with the database read through RPFM. Needs the Assembly Kit path for the project's game." />
         </Grid>
 
         <Separator Grid.Row="11"

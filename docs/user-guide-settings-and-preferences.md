@@ -22,8 +22,9 @@ The Preferences window is CAIME's control panel — the one place where you conf
 8. [Auto-Backup](#8-auto-backup)
 9. [Map Data Config Auto-Patch](#9-map-data-config-auto-patch)
 10. [Database (RPFM)](#10-database-rpfm)
-11. [Saving or Discarding Your Changes](#11-saving-or-discarding-your-changes)
-12. [Pro-Tips & Troubleshooting](#12-pro-tips--troubleshooting)
+11. [Assembly Kit Integration](#11-assembly-kit-integration)
+12. [Saving or Discarding Your Changes](#12-saving-or-discarding-your-changes)
+13. [Pro-Tips & Troubleshooting](#13-pro-tips--troubleshooting)
 
 ---
 
@@ -61,6 +62,8 @@ The diagram below maps every control in the Preferences window to its purpose.
 │  RPFM path:                  [C:\...\rpfm                  ] [Browse]        │◄─ RPFM, which reads the database
 │  Output folder:              [C:\...\my_mod                ] [Browse]        │◄─ Where processed files go
 ├──────────────────────────────────────────────────────────────────────────────┤
+│  Assembly Kit Integration:   ○ Enabled   ● Disabled                          │◄─ Build with the AK's own builder
+├──────────────────────────────────────────────────────────────────────────────┤
 │                                              [  Save  ] [Cancel]             │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -94,7 +97,7 @@ The **Base game** dropdown tells CAIME which Total War game you are creating a m
 
 ## 4. Setting the Assembly Kit Path
 
-The Assembly Kit is a folder that Creative Assembly provides with its modding tools. CAIME writes processed files to its `working_data` folder when no **Output folder** is set (see Section 10), so you only need this path if you don't set one.
+The Assembly Kit is a folder that Creative Assembly provides with its modding tools. CAIME writes processed files to its `working_data` folder when no **Output folder** is set (see Section 10), so you only need this path if you don't set one, or if you turn on **Assembly Kit Integration** (see Section 11).
 
 **How to set it:**
 
@@ -268,7 +271,19 @@ The project records the name in its `caime_metadata.json` companion file (next t
 
 ---
 
-## 11. Saving or Discarding Your Changes
+## 11. Assembly Kit Integration
+
+An optional add-on, **Disabled** by default. CAIME writes `map_data.esf` and `dynamic_resources.esf` itself. When **Assembly Kit Integration** is **Enabled**, **Process → Map Data** and **Process → Dynamic Resources** instead run the Assembly Kit's own builder, through the `MapDataBuilder` tool that ships with CAIME. Use it to compare CAIME's output with Creative Assembly's, or as a fallback if CAIME's writer rejects a map.
+
+- **Needs the Assembly Kit path** for the project's game (see Section 4): only the Assembly Kit's `binaries` are used.
+- **Needs the database read through RPFM**, as the normal processing does. CAIME writes the tables the builder reads, made from your map's row in `campaign_map_playable_areas`, to a temporary folder along with your saved `map.hex` (and, for Dynamic Resources, `dynamic_resources.png` and `dynamic_resources_database.xml` from the project folder). Nothing in the Assembly Kit is changed, and your project can be saved anywhere.
+- The result goes to the same place as CAIME's own output (see **Output folder** in Section 10).
+
+The builder's own messages, and its log files, appear in the Logger.
+
+---
+
+## 12. Saving or Discarding Your Changes
 
 At the bottom of the Preferences window you will find two buttons:
 
@@ -285,7 +300,7 @@ You do not normally need to open or edit this file manually — CAIME manages it
 
 ---
 
-## 12. Pro-Tips & Troubleshooting
+## 13. Pro-Tips & Troubleshooting
 
 - **"Please, provide an output folder or a path to the assembly_kit folder!" — Save button does nothing.**
   Processed files go to the **Output folder**, or to the Assembly Kit's `working_data` when none is set, so CAIME needs one of them. Set an **Output folder**, or click **Browse** next to **Assembly kit path** and select your game's `assembly_kit` folder, then click **Save** again.

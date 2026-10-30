@@ -296,6 +296,7 @@ namespace CAIME
         public string   RootPath        { get; private set; }
         public string   ProjectsDir     { get; private set; }
         public string   TemplatesPath   { get; private set; }
+        public string   ToolsPath       { get; private set; }
         public Project  Project         { get; private set; }
 
         public bool     IsProjectOpen   => Project != null;
@@ -311,6 +312,7 @@ namespace CAIME
             RootPath        = GetRootPath();
             ProjectsDir     = $@"{RootPath}Projects\";
             TemplatesPath   = GetTemplatesPath();
+            ToolsPath       = GetToolsPath();
 
             LoggerViewModel.Log($"App root path is {RootPath}", LogLevel.Info);
         }
@@ -334,6 +336,14 @@ namespace CAIME
         public static string GetTemplatesPath()
         {
             return GetBundledFolderPath("Templates", @"..\Templates\");
+        }
+
+        /// <summary>
+        /// Folder containing MapDataBuilder, for Assembly Kit Integration, split into Debug and Release subfolders.
+        /// </summary>
+        public static string GetToolsPath()
+        {
+            return GetBundledFolderPath("Tools", @"Tools\");
         }
 
         /// <summary>
@@ -782,13 +792,27 @@ namespace CAIME
         public bool ProcessMapDataEsf()
         {
             var outputPath = GetOutputPathForSavedProject();
-            return outputPath != null && ProcessMapData.Process(Project, outputPath);
+            if (outputPath == null)
+            {
+                return false;
+            }
+
+            return PreferencesViewModel.Instance.IsAssemblyKitIntegrationEnabled
+                ? AssemblyKitBuilder.BuildMapData(Project, ToolsPath, outputPath)
+                : ProcessMapData.Process(Project, outputPath);
         }
 
         public bool ProcessDynamicResourcesEsf()
         {
             var outputPath = GetOutputPathForSavedProject();
-            return outputPath != null && ProcessDynamicResources.Process(Project, outputPath);
+            if (outputPath == null)
+            {
+                return false;
+            }
+
+            return PreferencesViewModel.Instance.IsAssemblyKitIntegrationEnabled
+                ? AssemblyKitBuilder.BuildDynamicResources(Project, ToolsPath, outputPath)
+                : ProcessDynamicResources.Process(Project, outputPath);
         }
 
         public bool GenerateLookupImage()

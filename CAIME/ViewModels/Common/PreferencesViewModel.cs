@@ -118,6 +118,19 @@ namespace CAIME
             }
         }
 
+        // Assembly Kit Integration: Map Data and Dynamic Resources run the Assembly Kit's own builder
+        // instead of CAIME's writers.
+        private bool bAssemblyKitIntegration;
+        public bool IsAssemblyKitIntegrationEnabled
+        {
+            get => bAssemblyKitIntegration;
+            set
+            {
+                bAssemblyKitIntegration = value;
+                OnPropertyChanged(nameof(IsAssemblyKitIntegrationEnabled));
+            }
+        }
+
         private string rpfmPath;
         public string RpfmPath
         {
@@ -258,6 +271,7 @@ namespace CAIME
             json[nameof(IsAutoBackup)] = IsAutoBackup;
             json[nameof(AutoBackupsToKeep)] = AutoBackupsToKeep;
             json[nameof(IsMapDataConfigPostProcessEnabled)] = IsMapDataConfigPostProcessEnabled;
+            json[nameof(IsAssemblyKitIntegrationEnabled)] = IsAssemblyKitIntegrationEnabled;
             json[nameof(RpfmPath)] = RpfmPath ?? "";
             json[nameof(OutputFolder)] = OutputFolder ?? "";
             json[nameof(SelectedGameIndex)] = SelectedGameIndex;
@@ -329,6 +343,11 @@ namespace CAIME
                 if (json.TryGetValue(nameof(IsMapDataConfigPostProcessEnabled), out var postProcessToken) && bool.TryParse(postProcessToken.ToString(), out bool postProcess))
                 {
                     IsMapDataConfigPostProcessEnabled = postProcess;
+                }
+
+                if (json.TryGetValue(nameof(IsAssemblyKitIntegrationEnabled), out var akIntegrationToken) && bool.TryParse(akIntegrationToken.ToString(), out bool akIntegration))
+                {
+                    IsAssemblyKitIntegrationEnabled = akIntegration;
                 }
 
                 if (json.TryGetValue(nameof(RpfmPath), out var rpfmPathToken))
@@ -441,6 +460,7 @@ namespace CAIME
             IsAutoSave                          = true;
             IsAutoBackup                        = true;
             IsMapDataConfigPostProcessEnabled   = false;
+            IsAssemblyKitIntegrationEnabled     = false;
             RpfmPath                            = null;
             OutputFolder                        = null;
         }
