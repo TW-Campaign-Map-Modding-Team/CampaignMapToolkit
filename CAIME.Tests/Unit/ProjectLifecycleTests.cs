@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows;
+using System.Xml.Linq;
 using CAIME;
 using CAIME.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -117,7 +118,8 @@ namespace CAIME.Tests.Unit
             Assert.IsNull(project.RpfmTables, "A failed load must not keep the tables.");
         }
 
-        // Without an RPFM path there is nothing to read: the CLI must neither wait nor fail on it.
+        // Without an RPFM path there is nothing to read: the CLI must not wait on it, and must learn
+        // that the steps needing the database can't run.
         [TestMethod]
         public void ManagerOpen_WithoutAnRpfmPath_ReadsNoDatabase()
         {
@@ -130,7 +132,7 @@ namespace CAIME.Tests.Unit
 
             Assert.IsNotNull(project, "Precondition: the map should open.");
             Assert.IsFalse(manager.IsReadingDatabase, "No read may be started without an RPFM path.");
-            Assert.IsTrue(manager.WaitForDatabase(), "Having nothing to read is not a failure.");
+            Assert.IsFalse(manager.WaitForDatabase(), "With nothing read, no database is loaded.");
             Assert.IsFalse(project.IsDatabaseLoaded, "No database can have been loaded.");
             Assert.IsFalse(loaded, "OnDatabaseLoaded must not be raised.");
         }
@@ -265,12 +267,38 @@ namespace CAIME.Tests.Unit
             new ProjectManager().CloseProject();
         }
 
+        // No game's map is saved without its database: Pharaoh Dynasties' map.hex is written in the
+        // database's region order, and every game follows the same rule.
+        [TestMethod]
+        public void ManagerSave_WithoutTheDatabase_WritesNothing()
+        {
+            var manager = new ProjectManager();
+            Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+
+            manager.Project.MapHexFile.SetDirty();
+
+            var sideDir = Path.Combine(_dir, "elsewhere") + "\\";
+            Directory.CreateDirectory(sideDir);
+
+            manager.Save(new SaveParameters
+            {
+                IsAutoSave     = true,
+                CustomSavePath = sideDir,
+                CustomFileName = "autosave",
+                Flags          = SaveParameters.SaveFlags.MapHexFile,
+            });
+
+            Assert.IsFalse(File.Exists(Path.Combine(sideDir, "autosave.hex")), "The map must not be saved without its database.");
+            Assert.IsTrue(manager.Project.HasUnsavedChanges, "A refused save must leave the changes unsaved.");
+        }
+
         // A save to a different name or location is a "save as": the project follows the file.
         [TestMethod]
         public void ManagerSave_ToANewNameAndPath_MovesTheProjectAndReportsTheChange()
         {
             var manager = new ProjectManager();
             Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+            LoadEmptyDatabase(manager.Project);
 
             var sideDir = Path.Combine(_dir, "elsewhere") + "\\";
             Directory.CreateDirectory(sideDir);
@@ -302,6 +330,7 @@ namespace CAIME.Tests.Unit
         {
             var manager = new ProjectManager();
             Assert.IsNotNull(manager.Open(CreateMap()), "Precondition: the map should open.");
+            LoadEmptyDatabase(manager.Project);
 
             manager.Project.MapHexFile.SetDirty();
 
@@ -416,6 +445,18 @@ namespace CAIME.Tests.Unit
         {
             MapHexFile.CreateMapHex(_dir, "map", "warhammer3", "test_campaign", 8, 6, 0x14);
             return Path.Combine(_dir, "map.hex");
+        }
+
+        // Every table the game needs, with no rows: enough for the project to count as having its database.
+        private static void LoadEmptyDatabase(Project project)
+        {
+            var tables = new Dictionary<string, Rpfm.RpfmTable>();
+            foreach (var table in Rpfm.DatabaseTableProvider.GetRequiredTables(project.Game))
+            {
+                tables[table] = new Rpfm.RpfmTable(new XmlSchema(new List<XmlSchemaField>()), new XDocument(new XElement("dataroot")));
+            }
+
+            Assert.IsTrue(project.LoadDatabase(tables), "Precondition: the empty tables should load.");
         }
 
         private Project OpenNewProject()

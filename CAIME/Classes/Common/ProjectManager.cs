@@ -199,14 +199,14 @@ namespace CAIME
                 // Only Pharaoh Dynasties checks the database against the map; the mismatches are logged.
                 LoggerViewModel.Log(
                     $"The region indices in {Game}'s database don't match the map's (see the log). " +
-                    "Processing stays unavailable for this session.",
+                    "Saving and processing stay unavailable for this session.",
                     LogLevel.ErrorMessageBox);
             }
             catch (Exception ex)
             {
                 LoggerViewModel.Log(
                     $"Could not load database tables for {Game} ({ex.Message}). " +
-                    "Processing stays unavailable for this session.",
+                    "Saving and processing stay unavailable for this session.",
                     LogLevel.Warning);
             }
 
@@ -472,14 +472,15 @@ namespace CAIME
             // unsaved changes, so its dirty flag must survive.
             var clearDirtyFlag = !saveParams.IsAutoSave && !saveParams.IsAutoBackup;
 
-            // A Pharaoh Dynasties map.hex is written in its database's region order (see
-            // Project.Save), so it can't be written while that is still being read.
-            if (Project.Game == GameTemplate.Pharaoh_Dynasties && IsReadingDatabase
-                && (saveParams.Flags & SaveParameters.SaveFlags.MapHexFile) != 0)
+            // No game's map.hex is written without its database. Pharaoh Dynasties' is written in
+            // the database's region order (see Project.Save); the rest follow the same rule.
+            if (!Project.IsDatabaseLoaded && (saveParams.Flags & SaveParameters.SaveFlags.MapHexFile) != 0)
             {
-                LoggerViewModel.Log(
-                    "The map can't be saved until its database has been read through RPFM: that decides the order " +
-                    "its regions are saved in. Try again in a moment.",
+                var reason = IsReadingDatabase
+                    ? "until its database has been read through RPFM. Try again in a moment."
+                    : "without its database, which was not read (see the log). Fix that, then reopen the project.";
+
+                LoggerViewModel.Log($"The map can't be saved {reason}",
                     clearDirtyFlag ? LogLevel.ErrorMessageBox : LogLevel.Warning);
                 return;
             }
@@ -579,13 +580,13 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Blocks until the open project's database read has ended. Returns false when it failed, and
-        /// true when the tables were loaded or there was nothing to read. For the CLI only: on the UI
-        /// thread this deadlocks, since the read ends by loading the tables there.
+        /// Blocks until the open project's database read has ended, and returns whether its database
+        /// was loaded: false when the read failed, or when there was nothing to read. For the CLI
+        /// only: on the UI thread this deadlocks, since the read ends by loading the tables there.
         /// </summary>
         public bool WaitForDatabase()
         {
-            return _databaseRead == null || _databaseRead.Result;
+            return _databaseRead != null && _databaseRead.Result;
         }
 
         /// <summary>
@@ -606,8 +607,8 @@ namespace CAIME
             {
                 LoggerViewModel.Log(
                     $"No RPFM path is configured, so {project.Game}'s database (ground type names/costs, region names, " +
-                    "campaign data) can't be read, and processing is unavailable for this session - set the RPFM path " +
-                    "in Settings > Preferences and reopen the project to process it.",
+                    "campaign data) can't be read, and the map can't be saved or processed this session - set the RPFM " +
+                    "path in Settings > Preferences and reopen the project.",
                     LogLevel.Warning);
                 return;
             }
@@ -632,7 +633,7 @@ namespace CAIME
             // Null in the CLI, which has no UI thread: there the tables are loaded on the reading thread.
             var dispatcher = Application.Current?.Dispatcher;
 
-            LoggerViewModel.Log("Reading the database through RPFM. Processing is unavailable until it has been read.", LogLevel.Info);
+            LoggerViewModel.Log("Reading the database through RPFM. Saving and processing are unavailable until it has been read.", LogLevel.Info);
 
             _databaseRead = Task.Run(() =>
             {
@@ -673,7 +674,7 @@ namespace CAIME
                 return false;
             }
 
-            LoggerViewModel.Log("RPFM database tables read successfully. Processing is now available.", LogLevel.Info);
+            LoggerViewModel.Log("RPFM database tables read successfully. Saving and processing are now available.", LogLevel.Info);
             OnDatabaseLoaded?.Invoke(this, new ProjectEventArgs(project));
             return true;
         }
