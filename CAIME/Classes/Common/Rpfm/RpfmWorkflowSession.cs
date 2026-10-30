@@ -66,10 +66,6 @@ namespace CAIME.Rpfm
             }
         }
 
-        // -----------------------------------------------------------------
-        // Pipeline steps
-        // -----------------------------------------------------------------
-
         private void ValidatePreconditions()
         {
             if (!GameMappingProvider.IsSupported(_game))
@@ -77,15 +73,12 @@ namespace CAIME.Rpfm
                 throw new NotSupportedException($"The RPFM workflow does not support {_game}.");
             }
 
-            // Everything about RPFM itself - its schema for the game, where the game is installed - is
-            // checked by RpfmService.Open, since only the server knows it.
+            // RPFM's own schema and install folder for the game are checked by RpfmService.Open.
         }
 
-        // Reads every fragment of each required table, the mods' first, then the game's, and groups
-        // them by table in that order. The order is what makes a mod win over the game when both use
-        // the exact same fragment name (see the class summary). A failure reading the game propagates
-        // and aborts the workflow; a failure reading the mods only drops them. Every required table
-        // must turn up in one or the other.
+        // Reads every fragment of each required table, the mods' first, then the game's: that order
+        // makes a mod win over the game on the same fragment name. A failure reading the game aborts
+        // the workflow; one reading the mods only drops them. Every required table must turn up.
         private Dictionary<string, List<TableFragment>> ReadFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
             var fragmentsByTable = new Dictionary<string, List<TableFragment>>(StringComparer.OrdinalIgnoreCase);
@@ -119,9 +112,7 @@ namespace CAIME.Rpfm
             return fragmentsByTable;
         }
 
-        // The mod is optional and per-project - none configured at all is a normal state, and one
-        // RPFM cannot find or read shouldn't be able to block the session either, so both just leave
-        // the mods out rather than throwing.
+        // The mod is optional: none configured, or one RPFM cannot find or read, leaves the mods out.
         private IReadOnlyList<TableFragment> ReadModFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
             if (string.IsNullOrEmpty(_modPackName))
@@ -234,9 +225,7 @@ namespace CAIME.Rpfm
             }
         }
 
-        // Ground truth for "regions.is_sea": which regions this map treats as sea. No pack's table has
-        // that field, so the open map is the source, right by construction. It is already parsed and in memory by the time a session is built: ProjectManager
-        // builds one only once Project.Open has loaded the map, before the first edit.
+        // Which regions this map treats as sea; no pack's table has "regions.is_sea", so the open map is the source.
         private static IReadOnlyDictionary<string, bool> BuildRegionSeaStatus(MapHexFile mapHex)
         {
             var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
