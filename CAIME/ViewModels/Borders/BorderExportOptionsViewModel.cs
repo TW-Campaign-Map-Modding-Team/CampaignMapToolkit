@@ -335,6 +335,19 @@ namespace CAIME
 
         public BorderExportOptionsViewModel(Project project)
         {
+            SeedGameDefaults(project);
+        }
+
+        public static void SeedGameDefaultsIfUnset(Project project)
+        {
+            if (ExportOptions == null)
+            {
+                SeedGameDefaults(project);
+            }
+        }
+
+        private static void SeedGameDefaults(Project project)
+        {
             ExportOptions = new ObservableCollection<BorderExportOption>();
 
             // SourceRegion_TargetRegion
