@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.WindowsAPICodePack.Dialogs;
-using Microsoft.Win32;
 
 namespace CAIME.Windows
 {
@@ -58,25 +59,11 @@ namespace CAIME.Windows
         private void BaseGame_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             viewModel.AssKitPath = viewModel.GetAssKitPath((GameTemplate)viewModel.SelectedGameIndex);
-            viewModel.VanillaPackPath = viewModel.GetVanillaPackPath((GameTemplate)viewModel.SelectedGameIndex);
         }
 
-        private void BrowseVanillaPack_Click(object sender, RoutedEventArgs e)
+        private async void BrowseRpfm_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Pack file (*.pack)|*.pack",
-                Title  = "Select the vanilla .pack file containing this game's database tables",
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                viewModel.VanillaPackPath = dialog.FileName;
-            }
-        }
-
-        private void BrowseRpfm_Click(object sender, RoutedEventArgs e)
-        {
+            string folder;
             using (var dialog = new CommonOpenFileDialog())
             {
                 dialog.IsFolderPicker = true;
@@ -86,17 +73,36 @@ namespace CAIME.Windows
                     return;
                 }
 
-                // Validate immediately so an invalid installation is never assigned to the setting.
-                if (CAIME.Rpfm.RpfmService.ValidateInstallation(dialog.FileName, out var error))
-                {
-                    viewModel.RpfmPath = dialog.FileName;
-                }
-                else
-                {
-                    MessageBox.Show(
-                        $"The selected folder is not a valid RPFM installation.\n\n{error}",
-                        "Invalid RPFM path");
-                }
+                folder = dialog.FileName;
+            }
+
+            // Validate immediately so an invalid installation is never assigned to the setting.
+            // Asking RPFM's server takes seconds, which the window waits out without freezing.
+            string error = null;
+            bool valid;
+
+            IsEnabled               = false;
+            Mouse.OverrideCursor    = Cursors.Wait;
+            try
+            {
+                valid = await Task.Run(() => viewModel.ValidateRpfmPath(folder, out error));
+            }
+            finally
+            {
+                Mouse.OverrideCursor    = null;
+                IsEnabled               = true;
+            }
+
+            if (valid)
+            {
+                viewModel.RpfmPath = folder;
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"The selected folder is not a valid RPFM installation.\n\n{error}\n\n" +
+                    "Pick an RPFM 5.3 or later folder, or switch the database source back to Assembly Kit.",
+                    "Invalid RPFM path");
             }
         }
     }

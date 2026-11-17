@@ -9,6 +9,9 @@ namespace CAIME
         public const string TABLE_CAMPAIGN_MAP_PLAYABLE_AREAS       = "campaign_map_playable_areas";
         public const string TABLE_CAMPAIGN_MAP_REGIONS              = "campaign_map_regions";
         public const string TABLE_CAMPAIGN_MAP_ROADS                = "campaign_map_roads";
+        public const string TABLE_CAMPAIGN_MAP_SETTLEMENTS          = "campaign_map_settlements";
+        public const string TABLE_CAMPAIGN_MAP_SLOTS                = "campaign_map_slots";
+        public const string TABLE_CAMPAIGN_MAPS                     = "campaign_maps";
         public const string TABLE_CAMPAIGNS                         = "campaigns";
         public const string TABLE_CLIMATES                          = "climates";
         public const string TABLE_REGIONS                           = "regions";

@@ -10,9 +10,10 @@ namespace CAIME.Tests.Unit
 {
     /// <summary>
     /// Unit tests for <see cref="RpfmRecoveryJournal"/>, the record that lets CAIME put the Assembly
-    /// Kit back after the process was killed mid-session (End Task, Stop Debugging) with no managed
-    /// handler able to run. It is the only recovery path for that case, and one that never executes
-    /// in normal use - so it is exactly the code most likely to be broken when finally needed.
+    /// Kit back after an earlier version's RPFM session, which swapped the Assembly Kit's tables for
+    /// its own, was killed mid-session (End Task, Stop Debugging) with no managed handler able to run.
+    /// It is the only recovery path for that case, and one that never executes in normal use - so it
+    /// is exactly the code most likely to be broken when finally needed.
     ///
     /// <para>
     /// The replay itself is exercised through the private <c>Recover(journalFile)</c> rather than the
@@ -55,9 +56,8 @@ namespace CAIME.Tests.Unit
             var original = Path.Combine(_dbRoot, "campaign_regions.xml");
             File.WriteAllText(original, "original contents");
 
-            // What a session does before it is killed: back the original up, write a replacement.
-            var backup = new BackupService(_dbRoot, _backupRoot);
-            backup.Backup(original);
+            // What a session did before it was killed: back the original up, write a replacement.
+            BackUp(original);
             File.WriteAllText(original, "generated contents");
 
             Directory.CreateDirectory(_tempExtract);
@@ -89,7 +89,7 @@ namespace CAIME.Tests.Unit
             var original = Path.Combine(_dbRoot, "campaign_regions.xml");
             File.WriteAllText(original, "original contents");
 
-            new BackupService(_dbRoot, _backupRoot).Backup(original);
+            BackUp(original);
 
             var journalFile = WriteJournal(new RpfmRecoveryJournal
             {
@@ -141,7 +141,7 @@ namespace CAIME.Tests.Unit
             var original = Path.Combine(_dbRoot, "campaign_regions.xml");
             File.WriteAllText(original, "original contents");
 
-            new BackupService(_dbRoot, _backupRoot).Backup(original);
+            BackUp(original);
 
             // Occupy the restore target with a directory of the same name, so the move cannot land.
             Directory.CreateDirectory(original);
@@ -163,44 +163,12 @@ namespace CAIME.Tests.Unit
                 "The backed-up original must survive a failed restore.");
         }
 
-        // Save/Delete are covered against the real %AppData% directory because the path is fixed. A
-        // GUID session id keeps this test's file from colliding with a genuine pending recovery.
-        [TestMethod]
-        public void SaveThenDelete_WritesAndRemovesTheJournalFile()
+        // What an earlier version's session did with each table it replaced: move the original into
+        // its backup folder, under the same name.
+        private void BackUp(string original)
         {
-            var journal = new RpfmRecoveryJournal
-            {
-                SessionId      = "caime_test_" + Guid.NewGuid().ToString("N"),
-                DbRootPath     = _dbRoot,
-                BackupRootPath = _backupRoot,
-                TempExtractDir = _tempExtract,
-                GeneratedFiles = new List<string> { Path.Combine(_dbRoot, "generated.xml") },
-            };
-
-            var expected = Path.Combine(RpfmRecoveryJournal.RecoveryDirectory, journal.SessionId + ".json");
-
-            try
-            {
-                journal.Save();
-                Assert.IsTrue(File.Exists(expected), "Save did not write the journal.");
-
-                var reread = JsonConvert.DeserializeObject<RpfmRecoveryJournal>(File.ReadAllText(expected));
-                Assert.AreEqual(journal.SessionId,  reread.SessionId,      "SessionId");
-                Assert.AreEqual(_dbRoot,            reread.DbRootPath,     "DbRootPath");
-                Assert.AreEqual(_backupRoot,        reread.BackupRootPath, "BackupRootPath");
-                Assert.AreEqual(_tempExtract,       reread.TempExtractDir, "TempExtractDir");
-                CollectionAssert.AreEqual(journal.GeneratedFiles, reread.GeneratedFiles, "GeneratedFiles");
-
-                journal.Delete();
-                Assert.IsFalse(File.Exists(expected), "Delete did not remove the journal.");
-
-                journal.Delete();
-            }
-            finally
-            {
-                if (File.Exists(expected))
-                    File.Delete(expected);
-            }
+            Directory.CreateDirectory(_backupRoot);
+            File.Move(original, Path.Combine(_backupRoot, Path.GetFileName(original)));
         }
 
         private string WriteJournal(RpfmRecoveryJournal journal)

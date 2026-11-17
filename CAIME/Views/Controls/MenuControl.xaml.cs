@@ -273,13 +273,13 @@ namespace CAIME
         }
 
         /// <summary>
-        /// Opens the RPFM pack file settings window for the currently open project.
+        /// Opens the RPFM mod window for the currently open project.
         /// </summary>
         private void PackFile_Click(object sender, RoutedEventArgs e)
         {
             if (_projectManager?.Project == null)
             {
-                MessageBox.Show("Open a project first to set its RPFM pack file.", "No project open");
+                MessageBox.Show("Open a project first to set its RPFM mod.", "No project open");
                 return;
             }
 
