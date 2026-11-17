@@ -114,6 +114,8 @@ namespace CAIME
                 return Hex.INVALID_REGION_INDEX;
             }
 
+            WarnIfPastFileLimit(MapHexFile.LandRegions.Count + MapHexFile.SeaRegions.Count, MapHexFile.REGION_INDEX_BITS, "regions");
+
             this.UpdateRegionIndices(newRegionIndex, ChangeOperation.Create);
             OnRegionCreated?.Invoke(this, new CreateRegionEvent(name, newRegionIndex, isSea));
 
