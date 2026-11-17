@@ -99,7 +99,7 @@ namespace CAIME.Rpfm
 
         /// <summary>
         /// Derives the full field list from a TWaD_*.xml Assembly Kit schema, in schema order. Used to
-        /// backfill columns a fragment's TSV doesn't have (see <see cref="MergeTsvToXml"/>).
+        /// backfill columns a fragment's TSV doesn't have (see <see cref="MergeTsv"/>).
         /// </summary>
         public static IReadOnlyList<XmlSchemaField> GetFields(string twadSchemaPath)
         {
@@ -107,12 +107,12 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
-        /// Reads an existing Assembly Kit data XML file (e.g. the file the RPFM workflow is about to
-        /// replace, before it's overwritten) into a lookup by primary key. Used to source fields RPFM
-        /// has no way to supply at all - some Assembly Kit fields (e.g. "regions.is_sea") are computed/
-        /// maintained by the Assembly Kit itself and never appear in any pack's raw table data, at any
-        /// version - so a schema type default (e.g. "false") is often simply wrong for an existing
-        /// record, whereas the Assembly Kit's own last-known value for it is correct by construction.
+        /// Reads an existing Assembly Kit data XML file (the Assembly Kit's own copy of a table) into a
+        /// lookup by primary key. Used to source fields RPFM has no way to supply at all - some
+        /// Assembly Kit fields (e.g. "regions.is_sea") are computed/maintained by the Assembly Kit
+        /// itself and never appear in any pack's raw table data, at any version - so a schema type
+        /// default (e.g. "false") is often simply wrong for an existing record, whereas the Assembly
+        /// Kit's own last-known value for it is correct by construction.
         /// Returns an empty lookup if the file does not exist or fails to parse (e.g. a table that is
         /// new to this Assembly Kit installation) rather than throwing - this is a best-effort source,
         /// not a required one.
@@ -157,6 +157,39 @@ namespace CAIME.Rpfm
         }
 
         /// <summary>
+        /// Reads an RPFM TSV file's data rows, each as its values by column name, skipping the
+        /// metadata line. For a caller that needs a table's raw values rather than its XML.
+        /// </summary>
+        public static IEnumerable<IReadOnlyDictionary<string, string>> ReadTsvRows(string tsvPath)
+        {
+            string[] header = null;
+
+            foreach (var line in File.ReadLines(tsvPath))
+            {
+                if (line.Length == 0 || line[0] == '#')
+                {
+                    continue;
+                }
+
+                var cells = line.Split('\t');
+
+                if (header == null)
+                {
+                    header = cells;
+                    continue;
+                }
+
+                var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < header.Length; ++i)
+                {
+                    row[header[i]] = i < cells.Length ? cells[i] : string.Empty;
+                }
+
+                yield return row;
+            }
+        }
+
+        /// <summary>
         /// Converts one RPFM TSV file into an Assembly Kit data XML file.
         /// </summary>
         /// <param name="tsvPath">Source .tsv file.</param>
@@ -165,14 +198,15 @@ namespace CAIME.Rpfm
         /// <param name="outputXmlPath">Destination .xml file.</param>
         public static void TsvToXml(string tsvPath, string recordElementName, ISet<string> booleanColumns, string outputXmlPath)
         {
-            MergeTsvToXml(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null, outputXmlPath);
+            var document = MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
+            WriteAssemblyKitXml(document, outputXmlPath);
         }
 
         /// <summary>
-        /// Like <see cref="TsvToXml"/> but merges the records of several TSV fragments of the same
-        /// table into a single Assembly Kit data XML file. A table can be split across multiple
-        /// fragment files both within one pack and across several packs (e.g. the vanilla pack and one
-        /// or more modded packs), exactly the way the game itself combines them.
+        /// Merges the records of several TSV fragments of the same table into a single Assembly Kit
+        /// data XML document. A table can be split across multiple fragment files both within one pack
+        /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
+        /// the game itself combines them.
         ///
         /// Fragments are processed in ascending fragment-name order, and when two fragments contain a
         /// row for the same primary key, the one from the earlier-sorting fragment name wins - the
@@ -186,19 +220,19 @@ namespace CAIME.Rpfm
         /// The sort here is by fragment name only, never by which pack a fragment came from - two
         /// fragments named identically but from different packs sort as ties, which a stable sort
         /// resolves using <paramref name="fragments"/>'s incoming order. Callers are expected to place
-        /// fragments from earlier-sorting pack file names first for that case (see
-        /// RpfmWorkflowSession), since fragment name is otherwise silent on which pack wins.
+        /// the fragments that should win that case first (RpfmWorkflowSession puts mods before the
+        /// game), since fragment name is otherwise silent on which pack wins.
         ///
         /// A fragment's TSV only has the columns its table version was saved with, which can be older
         /// than <paramref name="schemaFields"/> (RPFM's schema lags newer game patches). A schema field
         /// missing from a row is backfilled - preferably from <paramref name="existingRecords"/> (the
         /// Assembly Kit's own last-known value for that primary key, when there is one), falling back to
         /// the field's schema type default only for a key that has no existing record at all - rather
-        /// than left out of the record entirely. The Assembly Kit loader expects every field to be
-        /// present (e.g. "regions.is_sea" is required for map data reprocessing) in the schema's exact
-        /// declared order, and some such fields (again "is_sea") are never present in any pack's raw
-        /// table data at all, at any version, because the Assembly Kit computes/maintains them itself -
-        /// so a blind type default (e.g. "false") is often simply wrong where an existing record exists.
+        /// than left out of the record entirely. CAIME's table loader expects every field to be present
+        /// (e.g. "regions.is_sea", which tells land regions from sea) in the schema's exact declared
+        /// order, and some such fields (again "is_sea") are never present in any pack's raw table data
+        /// at all, at any version, because the Assembly Kit computes/maintains them itself - so a blind
+        /// type default (e.g. "false") is often simply wrong where an existing record exists.
         ///
         /// "is_sea" specifically is instead sourced from <paramref name="regionIsSeaByKey"/> when the
         /// row's key is in it - the open map itself is ground truth for which regions are sea (it is
@@ -206,8 +240,11 @@ namespace CAIME.Rpfm
         /// <paramref name="existingRecords"/> since that may be stale relative to the currently open map.
         /// A row whose key <paramref name="regionIsSeaByKey"/> does not recognise falls through to
         /// <paramref name="existingRecords"/>/the schema default same as any other field.
+        ///
+        /// When <paramref name="rowFilter"/> is given, only the rows it keeps are written; every other
+        /// row of every fragment is dropped before merging.
         /// </summary>
-        public static void MergeTsvToXml(
+        public static XDocument MergeTsv(
             IReadOnlyList<(string TsvPath, string FragmentName)> fragments,
             string recordElementName,
             ISet<string> booleanColumns,
@@ -215,7 +252,7 @@ namespace CAIME.Rpfm
             IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, XElement> existingRecords,
             IReadOnlyDictionary<string, bool> regionIsSeaByKey,
-            string outputXmlPath)
+            TsvRowFilter rowFilter = null)
         {
             var ordered = fragments.OrderBy(f => f.FragmentName, StringComparer.OrdinalIgnoreCase).ToList();
 
@@ -225,7 +262,7 @@ namespace CAIME.Rpfm
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
                 var keyedRecords = TsvToKeyedRecords(
-                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, fragmentIndex);
+                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
@@ -242,23 +279,28 @@ namespace CAIME.Rpfm
             var records = keyOrder.Select(k => recordsByKey[k]).ToList();
 
             var root = new XElement("dataroot", records);
-            var document = new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
+            return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
+        }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(outputXmlPath));
-
-            // Must be written WITHOUT a UTF-8 BOM. The Assembly Kit's own XML reader does not skip
-            // one - it faults on the leading bytes and takes the whole ToolDataBuilder DLL down with
-            // an access violation, which surfaces as MapDataBuilder.exe crashing rather than as a
-            // parse error. Every XML file the Assembly Kit ships is BOM-less, and XDocument.Save(path)
-            // writes one, so the writer's encoding has to be set explicitly (same reason XmlToTsv uses
-            // a BOM-less UTF8Encoding).
+        /// <summary>
+        /// Writes an Assembly Kit data XML file the way the Assembly Kit's own tools can read it: UTF-8
+        /// without a byte order mark. Their XML reader does not skip one - it faults on the leading
+        /// bytes and takes the whole ToolDataBuilder DLL down with an access violation, which surfaces
+        /// as MapDataBuilder.exe crashing rather than as a parse error. Every XML file the Assembly Kit
+        /// ships is BOM-less, and XDocument.Save(path) writes one, so the writer's encoding has to be
+        /// set explicitly (same reason XmlToTsv uses a BOM-less UTF8Encoding).
+        /// </summary>
+        public static void WriteAssemblyKitXml(XDocument document, string path)
+        {
             var writerSettings = new XmlWriterSettings
             {
                 Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                 Indent   = true,
             };
 
-            using (var writer = XmlWriter.Create(outputXmlPath, writerSettings))
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+
+            using (var writer = XmlWriter.Create(path, writerSettings))
             {
                 document.Save(writer);
             }
@@ -268,11 +310,12 @@ namespace CAIME.Rpfm
             string tsvPath, string recordElementName, ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns, IReadOnlyList<XmlSchemaField> schemaFields,
             IReadOnlyDictionary<string, XElement> existingRecords,
-            IReadOnlyDictionary<string, bool> regionIsSeaByKey, int fragmentIndex)
+            IReadOnlyDictionary<string, bool> regionIsSeaByKey, TsvRowFilter rowFilter, int fragmentIndex)
         {
             var lines = File.ReadAllLines(tsvPath);
 
             string[] header = null;
+            int filterColumnIndex = -1;
             var results = new List<(string, XElement)>();
             int rowIndex = 0;
 
@@ -294,6 +337,21 @@ namespace CAIME.Rpfm
                 if (header == null)
                 {
                     header = cells;
+
+                    if (rowFilter != null)
+                    {
+                        filterColumnIndex = Array.IndexOf(header, rowFilter.Column);
+                        if (filterColumnIndex < 0)
+                        {
+                            throw new InvalidDataException($"'{tsvPath}' has no {rowFilter.Column} column to select rows by.");
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (rowFilter != null && !rowFilter.Keeps(filterColumnIndex < cells.Length ? cells[filterColumnIndex] : string.Empty))
+                {
                     continue;
                 }
 
@@ -521,7 +579,7 @@ namespace CAIME.Rpfm
         }
 
         // XmlSchemaField.DefaultValue is already typed (bool/int/float/double/string) by XmlSchema's
-        // own parsing - just needs formatting to match how MergeTsvToXml writes each type to XML.
+        // own parsing - just needs formatting to match how MergeTsv writes each type to XML.
         // Formatted invariantly: a float default written on a machine whose culture uses a comma
         // decimal separator would otherwise land in the file as "0,5" and be misread downstream.
         private static string FormatDefaultValue(XmlSchemaField field)
@@ -550,5 +608,24 @@ namespace CAIME.Rpfm
 
             return value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ");
         }
+    }
+
+    /// <summary>
+    /// Selects the rows of a table to convert: those whose <see cref="Column"/> holds one of the
+    /// given values, compared ignoring case.
+    /// </summary>
+    public sealed class TsvRowFilter
+    {
+        private readonly HashSet<string> _values;
+
+        public TsvRowFilter(string column, IEnumerable<string> values)
+        {
+            Column = column;
+            _values = new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public string Column { get; }
+
+        public bool Keeps(string value) => _values.Contains(value);
     }
 }

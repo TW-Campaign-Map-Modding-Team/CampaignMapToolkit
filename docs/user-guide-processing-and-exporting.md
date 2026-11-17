@@ -137,6 +137,8 @@ When you open a project, CAIME automatically reads these files from `{Assembly K
 | `region_to_province_junctions.xml` | Which province each region belongs to |
 | `campaign_map_areas_of_interest.xml` | *(Three Kingdoms and Warhammer 3 only)* Areas of interest |
 
+> **With RPFM as the Database source** (see the Settings and Preferences guide), CAIME reads these tables from the game's packs and your mod instead, and takes only their schemas — plus the few fields no pack carries — from these files.
+
 > **The region order matters.** CAIME loads land regions first, then sea regions, in the order they appear in `regions.xml`. Your painted region colours must correspond to the regions in that exact order. If you add or remove regions in the Assembly Kit database, you must reload your project so CAIME can re-synchronise.
 
 ---
@@ -191,7 +193,7 @@ Access all processing features from the **Process** menu in the top menu bar:
 
 **What it reads:**
 - Your painted map layers
-- All Assembly Kit database tables
+- The Assembly Kit database tables `campaign_maps`, `campaign_map_playable_areas`, `regions`, `campaign_map_settlements` and `campaign_ground_types` (Rome 2 also reads `campaign_map_slots`) — or, with **RPFM** as the Database source, versions of them CAIME makes for your map from the project's own database, leaving the Assembly Kit's untouched
 - The Assembly Kit `binaries` folder (MapDataBuilder uses this internally)
 - *(Optional)* `caime_metadata.json` + the referenced `map_data_config.xml` (if auto-patch is enabled)
 
@@ -682,6 +684,9 @@ The validators under **Tools > Validate** are fast and reveal problems early. A 
 
 **"Map Data Process denied" — what it means and how to fix it.**
 If you see this message in the Logger, it means your project file is saved in the wrong location. For **Map Data** and **Dynamic Resources** to work, your project file must be named exactly `map.hex` and saved inside your Assembly Kit folder at `{Assembly Kit path}\raw_data\EmpireDesignData\campaign_maps\{your map name}\`. The file must also be saved (no unsaved changes) and the Assembly Kit application must be closed. Move the file there using **File > Save as...** and try again.
+
+**"Map data file was not created" even though MapDataBuilder reported success.**
+The Assembly Kit's map data builder writes nothing, without reporting an error, when `campaign_maps` has no row for your map. Add one for it in the Assembly Kit database — only its `mapname` matters to the map data. With RPFM as the Database source, CAIME writes that row itself.
 
 **"Mismatch between database regions and map.hex regions" — what it means.**
 This error means the number of regions you have painted on the map does not match the number of regions defined in your Assembly Kit database files. This can happen if you add a new region in your database but forget to paint it on the map (or vice versa). Open your Assembly Kit's `regions.xml` and `campaign_map_regions.xml` and count how many regions belong to your campaign map. The count must exactly match the number of distinct region colours you have painted in CAIME. The order of land regions and sea regions must also match — land regions are indexed first, sea regions second.
