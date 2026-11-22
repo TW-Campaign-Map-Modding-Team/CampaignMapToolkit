@@ -168,7 +168,7 @@ namespace CAIME.Tests.Unit
             var schemaFields      = DatabaseTableConverter.GetFields(schemaPath);
 
             var merged = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvFromFirstPack, "!!!mod"), (tsvFromSecondPack, "!!!mod") },
+                new[] { (tsvFromFirstPack, "!!!mod", true), (tsvFromSecondPack, "!!!mod", true) },
                 "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
             var records = merged.Root.Elements("test_table").ToList();
@@ -179,11 +179,80 @@ namespace CAIME.Tests.Unit
             // Reversing the listed order must reverse the winner - proves the tiebreak really tracks
             // input order rather than, say, file path or an unstable sort.
             var reversed = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvFromSecondPack, "!!!mod"), (tsvFromFirstPack, "!!!mod") },
+                new[] { (tsvFromSecondPack, "!!!mod", true), (tsvFromFirstPack, "!!!mod", true) },
                 "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
             var reversedRecords = reversed.Root.Elements("test_table").ToList();
             Assert.AreEqual("222", reversedRecords[0].Element("movement_cost").Value);
+        }
+
+        [TestMethod]
+        public void MergeTsv_ModRowForAGameKey_ReplacesTheGameValuesInTheGameRowsPlace()
+        {
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            File.WriteAllText(schemaPath, TwadSchema);
+
+            var gameTsv = Path.Combine(_dir, "game.tsv");
+            File.WriteAllText(gameTsv,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/campaign_ground_types\t\t\t\n" +
+                "dense_forest\t240\ttrue\tfalse\n" +
+                "river\t2160\tfalse\tfalse\n" +
+                "tundra\t96\ttrue\tfalse\n");
+
+            var modTsv = Path.Combine(_dir, "mod.tsv");
+            File.WriteAllText(modTsv,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/rom_campaign_ground_types\t\t\t\n" +
+                "brownlands\t80\ttrue\tfalse\n" +
+                "river\t1580\tfalse\tfalse\n");
+
+            var merged = DatabaseTableConverter.MergeTsv(
+                new[] { (modTsv, "rom_campaign_ground_types", true), (gameTsv, "campaign_ground_types", false) },
+                "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null);
+
+            var records = merged.Root.Elements("test_table").ToList();
+            CollectionAssert.AreEqual(
+                new[] { "dense_forest", "river", "tundra", "brownlands" },
+                records.Select(r => r.Element("type").Value).ToArray(),
+                "The overridden row must keep the game row's place and must not be duplicated.");
+            Assert.AreEqual("1580", records[1].Element("movement_cost").Value,
+                "The mod's row must replace the game's values for the same key.");
+        }
+
+        [TestMethod]
+        public void MergeTsv_GameRowForAModKey_DoesNotReplaceTheModValues()
+        {
+            var schemaPath = Path.Combine(_dir, "TWaD_test_table.xml");
+            File.WriteAllText(schemaPath, TwadSchema);
+
+            var modTsv = Path.Combine(_dir, "mod.tsv");
+            File.WriteAllText(modTsv,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/!!!mod\t\t\t\n" +
+                "river\t1580\tfalse\tfalse\n");
+
+            var gameTsv = Path.Combine(_dir, "game.tsv");
+            File.WriteAllText(gameTsv,
+                "type\tmovement_cost\tcan_ambush\tis_sea\n" +
+                "#test_table_tables;7;db/test_table_tables/data__\t\t\t\n" +
+                "river\t2160\tfalse\tfalse\n");
+
+            var merged = DatabaseTableConverter.MergeTsv(
+                new[] { (modTsv, "!!!mod", true), (gameTsv, "data__", false) },
+                "test_table",
+                DatabaseTableConverter.GetBooleanColumns(schemaPath),
+                DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
+                DatabaseTableConverter.GetFields(schemaPath),
+                null, null);
+
+            var records = merged.Root.Elements("test_table").ToList();
+            Assert.AreEqual(1, records.Count);
+            Assert.AreEqual("1580", records[0].Element("movement_cost").Value);
         }
 
         [TestMethod]
@@ -202,7 +271,7 @@ namespace CAIME.Tests.Unit
                 "aa_kept\t3\tfalse\ttrue\n");
 
             var merged = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvPath, "rom_test") }, "test_table",
+                new[] { (tsvPath, "rom_test", true) }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),
@@ -223,7 +292,7 @@ namespace CAIME.Tests.Unit
             File.WriteAllText(tsvPath, Tsv);
 
             Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsv(
-                new[] { (tsvPath, "rom_test") }, "test_table",
+                new[] { (tsvPath, "rom_test", true) }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),

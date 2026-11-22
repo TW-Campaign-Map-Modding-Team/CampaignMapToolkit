@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using CAIME.Models;
 
 namespace CAIME.Validators
 {
@@ -104,7 +106,7 @@ namespace CAIME.Validators
             //Ground type database mismatch check
             if (project.Database != null && project.Database.CachedGroundTypes.Count > 0)
             {
-                if (!ValidateDatabaseGroundTypeMismatch(project, mapHexFile, totalGroundTypes))
+                if (!MatchesDatabase(mapHexFile.LandGroundTypes, mapHexFile.SeaGroundTypes, project.Database.CachedGroundTypes))
                 {
                     Interlocked.Exchange(ref failed, 1);
                 }
@@ -131,54 +133,43 @@ namespace CAIME.Validators
             return r * width + q;
         }
 
-        private static bool ValidateDatabaseGroundTypeMismatch(Project project, MapHexFile mapHexFile, int totalMapGroundTypes)
+        internal static bool MatchesDatabase(IReadOnlyList<string> landGroundTypes, IReadOnlyList<string> seaGroundTypes, IReadOnlyList<DBGroundType> databaseGroundTypes)
         {
-            var databaseGroundTypes = project.Database.CachedGroundTypes;
-            var failed              = false;
-
-            //Check if counts match
-            if (databaseGroundTypes.Count != totalMapGroundTypes)
+            var isSeaByKey = new Dictionary<string, bool>();
+            foreach (var groundType in databaseGroundTypes)
             {
-                LoggerViewModel.Log($"Ground types validation: Database ground type count ({databaseGroundTypes.Count}) does not match map ground type count ({totalMapGroundTypes}).", LogLevel.Error);
-                failed = true;
-            }
-
-            //Check each ground type for key mismatches
-            for (int i = 0; i < databaseGroundTypes.Count; ++i)
-            {
-                var dbGroundType = databaseGroundTypes[i];
-                string mapGroundTypeName;
-
-                if (i < mapHexFile.LandGroundTypes.Count)
+                if (groundType.Key != null && !isSeaByKey.ContainsKey(groundType.Key))
                 {
-                    mapGroundTypeName = mapHexFile.LandGroundTypes[i];
-                }
-                else if (i - mapHexFile.LandGroundTypes.Count < mapHexFile.SeaGroundTypes.Count)
-                {
-                    mapGroundTypeName = mapHexFile.SeaGroundTypes[i - mapHexFile.LandGroundTypes.Count];
-                }
-                else
-                {
-                    //Database has more ground types than the map; already reported via the count mismatch above
-                    break;
-                }
-
-                if (dbGroundType.Key != mapGroundTypeName)
-                {
-                    LoggerViewModel.Log($"Ground types validation: Ground type name mismatch at index {i}. Database: '{dbGroundType.Key}', Map: '{mapGroundTypeName}'.", LogLevel.Error);
-                    failed = true;
-                }
-
-                //Check if IsSea property matches the expected category
-                bool isSeaInMap = i >= mapHexFile.LandGroundTypes.Count;
-                if (dbGroundType.IsSea != isSeaInMap)
-                {
-                    LoggerViewModel.Log($"Ground types validation: Ground type '{dbGroundType.Key}' at index {i} has IsSea={dbGroundType.IsSea} in database but is in the {(isSeaInMap ? "sea" : "land")} category in the map.", LogLevel.Error);
-                    failed = true;
+                    isSeaByKey.Add(groundType.Key, groundType.IsSea);
                 }
             }
 
-            return !failed;
+            var landMatches = CategoryMatchesDatabase(landGroundTypes, isSea: false, isSeaByKey);
+            var seaMatches  = CategoryMatchesDatabase(seaGroundTypes, isSea: true, isSeaByKey);
+
+            return landMatches && seaMatches;
+        }
+
+        private static bool CategoryMatchesDatabase(IReadOnlyList<string> mapGroundTypes, bool isSea, IReadOnlyDictionary<string, bool> isSeaByKey)
+        {
+            var matches  = true;
+            var category = isSea ? "sea" : "land";
+
+            foreach (var groundType in mapGroundTypes)
+            {
+                if (!isSeaByKey.TryGetValue(groundType, out var isSeaInDatabase))
+                {
+                    LoggerViewModel.Log($"Ground types validation: The map's {category} ground type '{groundType}' is not in the database.", LogLevel.Error);
+                    matches = false;
+                }
+                else if (isSeaInDatabase != isSea)
+                {
+                    LoggerViewModel.Log($"Ground types validation: Ground type '{groundType}' is a {category} ground type in the map but has is_sea={isSeaInDatabase} in the database.", LogLevel.Error);
+                    matches = false;
+                }
+            }
+
+            return matches;
         }
     }
 }

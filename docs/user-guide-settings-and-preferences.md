@@ -246,7 +246,12 @@ Each required table is **merged** from every source that has a piece of it, the 
 
 Every required table must be found in one of these. If RPFM can't find one, the project doesn't open and CAIME names the missing table — it never quietly substitutes the Assembly Kit's own copy.
 
-When two sources both define a row for the same primary key (e.g. both a mod and the game have an entry for the same region), the conflict is resolved the same way the game resolves it: by the name of the table *fragment* each row came from (e.g. `db/campaign_map_regions_tables/data__` vs. `.../!!!my_mod`) — the earlier-sorting fragment name wins, which is why a `!!!`-prefixed fragment name (a common modding convention) beats the plain `data__` fragment the game and most exports use. This has nothing to do with what the `.pack` file is called or the order mods are listed in — only the fragment's own name inside the pack. If a mod and the game happen to use the *identical* fragment name, the mod wins; if your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
+When two sources both define a row for the same primary key, the merged table still has that row only once, the same way the game resolves it:
+
+- **A mod and the game** (e.g. a mod's `rom_campaign_ground_types` fragment redefines the game's `river`): the mod's values replace the game's. The row is not duplicated, and when the game's fragment name sorts first (as `campaign_ground_types` does before `rom_campaign_ground_types`) it keeps the game row's place in the table.
+- **Two mod fragments, or two game fragments**: the row from the earlier-sorting *fragment* name wins (e.g. `db/campaign_map_regions_tables/!!!my_mod` before `.../data__`), whatever the `.pack` file is called or the order mods are listed in. If your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
+
+Each row sits where its key first appears when the fragments are taken in name order.
 
 | Option | What it does |
 |--------|-------------|

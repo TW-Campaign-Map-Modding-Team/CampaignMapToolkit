@@ -198,7 +198,7 @@ namespace CAIME.Rpfm
         /// <param name="outputXmlPath">Destination .xml file.</param>
         public static void TsvToXml(string tsvPath, string recordElementName, ISet<string> booleanColumns, string outputXmlPath)
         {
-            var document = MergeTsv(new[] { (tsvPath, string.Empty) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
+            var document = MergeTsv(new[] { (tsvPath, string.Empty, false) }, recordElementName, booleanColumns, Array.Empty<string>(), Array.Empty<XmlSchemaField>(), null, null);
             WriteAssemblyKitXml(document, outputXmlPath);
         }
 
@@ -208,20 +208,19 @@ namespace CAIME.Rpfm
         /// and across several packs (e.g. the game's own packs and one or more mods), exactly the way
         /// the game itself combines them.
         ///
-        /// Fragments are processed in ascending fragment-name order, and when two fragments contain a
-        /// row for the same primary key, the one from the earlier-sorting fragment name wins - the
-        /// same rule the game uses to resolve conflicts between table fragments. This is why a plain
-        /// "data"/"data__" fragment (the vanilla default) loses to almost any distinctly-named mod
-        /// fragment sorting ahead of it. Rows with no primary-key counterpart in another fragment are
-        /// all kept. If the table has no primary key (<paramref name="primaryKeyColumns"/> is empty),
-        /// fragments are simply concatenated, since there is then no way to tell whether two rows refer
-        /// to the same record.
+        /// Fragments are processed in ascending fragment-name order, and a primary key keeps the place
+        /// where it first appears in that order, so one key never yields two records. Which row's
+        /// values that record takes depends on where the rows came from: a mod fragment's row
+        /// (IsFromMod) replaces a game fragment's row for the same key, the way a mod overrides a
+        /// game row without moving or duplicating it. Between two rows from the same side, the one
+        /// from the earlier-sorting fragment name wins. Rows with no primary-key counterpart in
+        /// another fragment are all kept. If the table has no primary key
+        /// (<paramref name="primaryKeyColumns"/> is empty), fragments are simply concatenated, since
+        /// there is then no way to tell whether two rows refer to the same record.
         ///
-        /// The sort here is by fragment name only, never by which pack a fragment came from - two
-        /// fragments named identically but from different packs sort as ties, which a stable sort
-        /// resolves using <paramref name="fragments"/>'s incoming order. Callers are expected to place
-        /// the fragments that should win that case first (RpfmWorkflowSession puts mods before the
-        /// game), since fragment name is otherwise silent on which pack wins.
+        /// The sort is by fragment name only - two fragments named identically sort as ties, which a
+        /// stable sort resolves using <paramref name="fragments"/>'s incoming order, so the fragment
+        /// listed first keeps both the place and, on the same side, the values.
         ///
         /// A fragment's TSV only has the columns its table version was saved with, which can be older
         /// than <paramref name="schemaFields"/> (RPFM's schema lags newer game patches). A schema field
@@ -245,7 +244,7 @@ namespace CAIME.Rpfm
         /// row of every fragment is dropped before merging.
         /// </summary>
         public static XDocument MergeTsv(
-            IReadOnlyList<(string TsvPath, string FragmentName)> fragments,
+            IReadOnlyList<(string TsvPath, string FragmentName, bool IsFromMod)> fragments,
             string recordElementName,
             ISet<string> booleanColumns,
             IReadOnlyList<string> primaryKeyColumns,
@@ -256,27 +255,30 @@ namespace CAIME.Rpfm
         {
             var ordered = fragments.OrderBy(f => f.FragmentName, StringComparer.OrdinalIgnoreCase).ToList();
 
-            var recordsByKey = new Dictionary<string, XElement>();
+            var recordsByKey = new Dictionary<string, (XElement Record, bool IsFromMod)>();
             var keyOrder = new List<string>();
 
             for (int fragmentIndex = 0; fragmentIndex < ordered.Count; ++fragmentIndex)
             {
+                var fragment = ordered[fragmentIndex];
                 var keyedRecords = TsvToKeyedRecords(
-                    ordered[fragmentIndex].TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, rowFilter, fragmentIndex);
+                    fragment.TsvPath, recordElementName, booleanColumns, primaryKeyColumns, schemaFields, existingRecords, regionIsSeaByKey, rowFilter, fragmentIndex);
 
                 foreach (var (key, record) in keyedRecords)
                 {
-                    // The earliest-sorting fragment to define a key wins; a later fragment's row for
-                    // the same key is discarded rather than overwriting it.
-                    if (!recordsByKey.ContainsKey(key))
+                    if (!recordsByKey.TryGetValue(key, out var kept))
                     {
                         keyOrder.Add(key);
-                        recordsByKey[key] = record;
+                        recordsByKey[key] = (record, fragment.IsFromMod);
+                    }
+                    else if (fragment.IsFromMod && !kept.IsFromMod)
+                    {
+                        recordsByKey[key] = (record, true);
                     }
                 }
             }
 
-            var records = keyOrder.Select(k => recordsByKey[k]).ToList();
+            var records = keyOrder.Select(k => recordsByKey[k].Record).ToList();
 
             var root = new XElement("dataroot", records);
             return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);

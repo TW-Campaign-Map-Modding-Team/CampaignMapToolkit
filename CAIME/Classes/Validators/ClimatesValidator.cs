@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using CAIME.Models;
 
 namespace CAIME.Validators
 {
@@ -10,24 +13,9 @@ namespace CAIME.Validators
             var mapHexFile = project.MapHexFile;
             var climatesCount = mapHexFile.Climates.Count;
 
-            //Database/map.hex count mismatch
-            if (climatesCount != project.Database.CachedClimates.Count)
+            if (!MatchesDatabase(mapHexFile.Climates, project.Database.CachedClimates))
             {
-                LoggerViewModel.Log($"Climates validation: There is a mismatch between database climates (count = {project.Database.CachedClimates.Count}) and map.hex climates (count = {climatesCount}).", LogLevel.Error);
                 isSuccess = false;
-            }
-
-            //Climate name mismatches with database
-            for (int i = 0; i < climatesCount; ++i)
-            {
-                var db_climate = project.Database.CachedClimates[i];
-                var hex_climate_key = mapHexFile.Climates[i];
-
-                if (db_climate.Key != hex_climate_key)
-                {
-                    LoggerViewModel.Log($"Climates validation: Climate names mismatch. Climate index was {i}. DB climate key was {db_climate.Key}. Map.hex climate key was {hex_climate_key}.", LogLevel.Error);
-                    isSuccess = false;
-                }
             }
 
             //Invalid climate index (out of range)
@@ -47,6 +35,23 @@ namespace CAIME.Validators
             }
 
             return isSuccess;
+        }
+
+        internal static bool MatchesDatabase(IReadOnlyList<string> mapClimates, IReadOnlyList<DBClimate> databaseClimates)
+        {
+            var databaseKeys = new HashSet<string>(databaseClimates.Select(climate => climate.Key));
+            var matches      = true;
+
+            foreach (var climate in mapClimates)
+            {
+                if (!databaseKeys.Contains(climate))
+                {
+                    LoggerViewModel.Log($"Climates validation: The map's climate '{climate}' is not in the database.", LogLevel.Error);
+                    matches = false;
+                }
+            }
+
+            return matches;
         }
     }
 }
