@@ -37,7 +37,7 @@ namespace CAIME.Validators
             return isSuccess;
         }
 
-        internal static bool MatchesDatabase(IReadOnlyList<string> mapClimates, IReadOnlyList<DBClimate> databaseClimates)
+        private static bool MatchesDatabase(IReadOnlyList<string> mapClimates, IReadOnlyList<DBClimate> databaseClimates)
         {
             var databaseKeys = new HashSet<string>(databaseClimates.Select(climate => climate.Key));
             var matches      = true;

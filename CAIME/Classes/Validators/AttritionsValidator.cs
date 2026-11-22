@@ -32,7 +32,7 @@ namespace CAIME.Validators
             return isSuccess;
         }
 
-        internal static bool MatchesDatabase(IReadOnlyList<string> mapAttritions, IReadOnlyList<DBAttrition> databaseAttritions)
+        private static bool MatchesDatabase(IReadOnlyList<string> mapAttritions, IReadOnlyList<DBAttrition> databaseAttritions)
         {
             var databaseKeys = new HashSet<string>(databaseAttritions.Select(attrition => attrition.Key));
             var matches      = true;

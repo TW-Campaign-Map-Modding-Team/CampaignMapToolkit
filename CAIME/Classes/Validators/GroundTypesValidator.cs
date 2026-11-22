@@ -133,7 +133,7 @@ namespace CAIME.Validators
             return r * width + q;
         }
 
-        internal static bool MatchesDatabase(IReadOnlyList<string> landGroundTypes, IReadOnlyList<string> seaGroundTypes, IReadOnlyList<DBGroundType> databaseGroundTypes)
+        private static bool MatchesDatabase(IReadOnlyList<string> landGroundTypes, IReadOnlyList<string> seaGroundTypes, IReadOnlyList<DBGroundType> databaseGroundTypes)
         {
             var isSeaByKey = new Dictionary<string, bool>();
             foreach (var groundType in databaseGroundTypes)
