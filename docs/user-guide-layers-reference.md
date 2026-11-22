@@ -366,8 +366,7 @@ Each validator checks for a specific set of rules. The table below explains what
 
 | Issue | Severity | What it means | How to fix |
 |---|---|---|---|
-| Attrition count mismatch between database and map | Error | The number of attrition types in the map does not match the database. | Synchronise the attrition list in the database with the map. |
-| Attrition name mismatch | Error | An attrition type in the map has a different name than the database entry. | Ensure both lists are in the same order and use matching names. |
+| Map attrition not in the database | Error | The map lists an attrition type whose key the database does not have. The order of the database table does not matter, and database attritions the map does not use are fine. | Add the attrition to the database, or rename the map's swatch to match the database key. |
 | Hex has an invalid attrition index | Error | A hex is painted with an attrition type that no longer exists. | Repaint the hex with a valid attrition type. |
 
 ---
@@ -376,8 +375,7 @@ Each validator checks for a specific set of rules. The table below explains what
 
 | Issue | Severity | What it means | How to fix |
 |---|---|---|---|
-| Climate count mismatch between database and map | Error | The map references more or fewer climate types than the database defines. | Align the database climate list with the map. |
-| Climate name mismatch | Error | A climate type in the map does not match the expected database name at that position. | Ensure the climate lists are in the same order. |
+| Map climate not in the database | Error | The map lists a climate whose key the database does not have. The order of the database table does not matter, and database climates the map does not use are fine. | Add the climate to the database, or rename the map's swatch to match the database key. |
 | Hex with no climate set | Warning | A hex has not been assigned any climate. | Paint every hex with a climate type. |
 | Hex has an invalid climate index | Error | A hex references a climate that does not exist in the current list. | Repaint the hex with a valid climate. |
 
@@ -394,8 +392,8 @@ Each validator checks for a specific set of rules. The table below explains what
 | Ground type contradicts the hex's land/sea flag | Warning | The hex is flagged as land but has a sea ground type, or vice versa. | Align the ground type with the hex's land/sea assignment. |
 | Lone land hex surrounded entirely by sea | Warning | A single land hex is completely encircled by sea hexes, with no land neighbour. | This is usually a painting mistake. Remove the stray hex or add surrounding land. |
 | Lone sea hex surrounded entirely by land | Info | A single sea hex (a tiny lake) is entirely inside land. Possibly intentional. | Remove it if it is not intentional. |
-| Ground type count mismatch with database | Error | The total number of ground types in the map does not match the database. | Synchronise the ground type list in the database. |
-| Ground type name or sea/land category mismatch | Error | A named ground type in the database does not match what the map expects at the same index. | Ensure the lists are in the same order and the sea/land categories match. |
+| Map ground type not in the database | Error | The map lists a ground type whose key the database does not have. The order of the database table does not matter, and database ground types the map does not use are fine. | Add the ground type to the database, or rename the map's swatch to match the database key. |
+| Ground type in the wrong sea/land category | Error | The map lists a ground type as land but the database marks it `is_sea`, or the other way round. | Fix `is_sea` in the database, or move the ground type to the right category in the map. |
 
 ---
 

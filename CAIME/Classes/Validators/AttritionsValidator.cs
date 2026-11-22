@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using CAIME.Models;
 
 namespace CAIME.Validators
 {
@@ -10,22 +13,9 @@ namespace CAIME.Validators
             var mapHexFile = project.MapHexFile;
             var attritionsCount = mapHexFile.Attritions.Count;
 
-            if (attritionsCount != project.Database.CachedAttritions.Count)
+            if (!MatchesDatabase(mapHexFile.Attritions, project.Database.CachedAttritions))
             {
-                LoggerViewModel.Log($"Attritions validation: There is a mismatch between database attritions (count = {project.Database.CachedAttritions.Count}) and map.hex attritions (count = {attritionsCount}).", LogLevel.Error);
                 isSuccess = false;
-            }
-
-            for (int i = 0; i < attritionsCount; ++i)
-            {
-                var db_attrition = project.Database.CachedAttritions[i];
-                var hex_attrition_key = mapHexFile.GetAttritionName(i);
-
-                if (db_attrition.Key != hex_attrition_key)
-                {
-                    LoggerViewModel.Log($"Attritions validation: Attrition names mismatch. Attrition index was {i}. DB attrition key was {db_attrition.Key}. Map.hex attrition key was {hex_attrition_key}.", LogLevel.Error);
-                    isSuccess = false;
-                }
             }
 
             //Invalid attrition index (out of range)
@@ -40,6 +30,23 @@ namespace CAIME.Validators
             }
 
             return isSuccess;
+        }
+
+        private static bool MatchesDatabase(IReadOnlyList<string> mapAttritions, IReadOnlyList<DBAttrition> databaseAttritions)
+        {
+            var databaseKeys = new HashSet<string>(databaseAttritions.Select(attrition => attrition.Key));
+            var matches      = true;
+
+            foreach (var attrition in mapAttritions)
+            {
+                if (!databaseKeys.Contains(attrition))
+                {
+                    LoggerViewModel.Log($"Attritions validation: The map's attrition '{attrition}' is not in the database.", LogLevel.Error);
+                    matches = false;
+                }
+            }
+
+            return matches;
         }
     }
 }

@@ -249,8 +249,9 @@ namespace CAIME.Rpfm
         public string Table { get; }
 
         /// <summary>
-        /// The fragment's file name inside its pack, e.g. <c>data__</c>. Decides which fragment wins
-        /// when two define the same row, the same way the game decides it.
+        /// The fragment's file name inside its pack, e.g. <c>data__</c>. Decides where a row sits in
+        /// the merged table, and which of two fragments from the same side wins when both define it
+        /// (see <see cref="DatabaseTableConverter.MergeTsv"/>).
         /// </summary>
         public string FragmentName { get; }
 

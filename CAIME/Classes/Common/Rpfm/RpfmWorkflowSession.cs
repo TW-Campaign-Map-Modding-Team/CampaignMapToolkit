@@ -10,10 +10,10 @@ namespace CAIME.Rpfm
     /// Reads the database tables a project needs through rpfm_server, as Assembly Kit data XML held
     /// in memory. For each required table it gathers every fragment of that table found anywhere - the
     /// game's own packs and the project's mod with the mods it depends on - and merges them the same
-    /// way the game itself does: when two fragments define a row for the same primary key, the
-    /// fragment whose name sorts earlier wins; rows unique to any one fragment are all kept. When a mod
-    /// and the game share the exact same fragment name too (so fragment name breaks no tie), the mod
-    /// wins, since its fragments are read first.
+    /// way the game itself does: when a mod and the game both define a row for the same primary key,
+    /// the mod's row replaces the game's values without moving or duplicating the row; between two
+    /// fragments from the same side, the one whose name sorts earlier wins; rows unique to any one
+    /// fragment are all kept.
     ///
     /// Nothing is written to the Assembly Kit. Its TWaD schemas give each table's fields, and its own
     /// copy of each table is read for the fields no pack carries (see
@@ -112,28 +112,31 @@ namespace CAIME.Rpfm
         }
 
         // Extracts every fragment of each required table into the temporary folder, the mods' first,
-        // then the game's, and groups them by table in that order. The order is what makes a mod win
-        // over the game when both use the exact same fragment name (see the class summary). The mods
-        // and the game land in separate folders because their fragments can share a path - every
+        // then the game's, and groups them by table in that order, each marked with the side it came
+        // from so a mod's rows can override the game's (see the class summary). The mods and the
+        // game land in separate folders because their fragments can share a path - every
         // pack's default "db/<table>_tables/data__", say. A failure reading the game propagates and
         // aborts the workflow; a failure reading the mods only drops them. Every required table must
         // turn up in one or the other: the Assembly Kit's own copy is never a stand-in for game data.
-        private Dictionary<string, List<ExtractedTableFragment>> ExtractFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
+        private Dictionary<string, List<SourcedFragment>> ExtractFragments(RpfmService rpfm, IReadOnlyList<string> requiredTables)
         {
-            var fragmentsByTable = new Dictionary<string, List<ExtractedTableFragment>>(StringComparer.OrdinalIgnoreCase);
+            var fragmentsByTable = new Dictionary<string, List<SourcedFragment>>(StringComparer.OrdinalIgnoreCase);
 
             var fromMods = ExtractModFragments(rpfm, requiredTables);
             var fromGame = rpfm.ExtractGameTables(requiredTables, Path.Combine(_tempExtractDir, "game"));
 
-            foreach (var fragment in fromMods.Concat(fromGame))
+            var sourced = fromMods.Select(f => new SourcedFragment(f, isFromMod: true))
+                .Concat(fromGame.Select(f => new SourcedFragment(f, isFromMod: false)));
+
+            foreach (var entry in sourced)
             {
-                if (!fragmentsByTable.TryGetValue(fragment.Table, out var fragments))
+                if (!fragmentsByTable.TryGetValue(entry.Fragment.Table, out var fragments))
                 {
-                    fragments = new List<ExtractedTableFragment>();
-                    fragmentsByTable[fragment.Table] = fragments;
+                    fragments = new List<SourcedFragment>();
+                    fragmentsByTable[entry.Fragment.Table] = fragments;
                 }
 
-                fragments.Add(fragment);
+                fragments.Add(entry);
             }
 
             LogTableSources("the mods", fromMods);
@@ -203,17 +206,17 @@ namespace CAIME.Rpfm
         // campaign_map_regions puts on this map that the hex map does not have yet is still kept, so
         // the project opens. Rows keep their order, and with it the region ids CAIME numbers by table
         // order.
-        private IReadOnlyDictionary<string, TsvRowFilter> RestrictRegionsToThisMap(Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable)
+        private IReadOnlyDictionary<string, TsvRowFilter> RestrictRegionsToThisMap(Dictionary<string, List<SourcedFragment>> fragmentsByTable)
         {
             var regionsOnThisMap = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var fragment in fragmentsByTable[Constants.TABLE_CAMPAIGN_MAP_REGIONS])
+            foreach (var entry in fragmentsByTable[Constants.TABLE_CAMPAIGN_MAP_REGIONS])
             {
-                foreach (var row in DatabaseTableConverter.ReadTsvRows(fragment.TsvPath))
+                foreach (var row in DatabaseTableConverter.ReadTsvRows(entry.Fragment.TsvPath))
                 {
                     if (!row.TryGetValue("campaign_map", out var campaignMap) || !row.TryGetValue("region", out var region))
                     {
-                        throw new InvalidDataException($"'{fragment.TsvPath}' has no campaign_map and region columns.");
+                        throw new InvalidDataException($"'{entry.Fragment.TsvPath}' has no campaign_map and region columns.");
                     }
 
                     if (string.Equals(campaignMap, _campaignMapName, StringComparison.OrdinalIgnoreCase))
@@ -234,7 +237,7 @@ namespace CAIME.Rpfm
         // Merges each table's extracted fragments into an Assembly Kit data XML document, keeping only
         // the rows rowFilters selects for the tables it covers.
         private Dictionary<string, XDocument> MergeTables(
-            IReadOnlyList<string> tables, Dictionary<string, List<ExtractedTableFragment>> fragmentsByTable,
+            IReadOnlyList<string> tables, Dictionary<string, List<SourcedFragment>> fragmentsByTable,
             IReadOnlyDictionary<string, TsvRowFilter> rowFilters)
         {
             var merged = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
@@ -255,17 +258,15 @@ namespace CAIME.Rpfm
 
                 var existingRecords = DatabaseTableConverter.LoadExistingRecords(Path.Combine(_dbRootPath, table + ".xml"), table, primaryKeyColumns);
 
-                var fragments = new List<(string TsvPath, string FragmentName)>();
-                foreach (var fragment in fragmentsByTable[table])
+                var fragments = new List<(string TsvPath, string FragmentName, bool IsFromMod)>();
+                foreach (var entry in fragmentsByTable[table])
                 {
-                    if (!File.Exists(fragment.TsvPath))
+                    if (!File.Exists(entry.Fragment.TsvPath))
                     {
-                        throw new FileNotFoundException($"RPFM extraction produced no file at '{fragment.TsvPath}'.");
+                        throw new FileNotFoundException($"RPFM extraction produced no file at '{entry.Fragment.TsvPath}'.");
                     }
 
-                    // The fragment's own filename decides merge order when two sources define the same
-                    // primary key - the same rule the game uses to combine table fragments across packs.
-                    fragments.Add((fragment.TsvPath, fragment.FragmentName));
+                    fragments.Add((entry.Fragment.TsvPath, entry.Fragment.FragmentName, entry.IsFromMod));
                 }
 
                 rowFilters.TryGetValue(table, out var rowFilter);
@@ -312,6 +313,19 @@ namespace CAIME.Rpfm
             {
                 LoggerViewModel.Log($"RPFM workflow - failed to delete temporary extraction folder: {ex.Message}", LogLevel.Warning);
             }
+        }
+
+        private sealed class SourcedFragment
+        {
+            public SourcedFragment(ExtractedTableFragment fragment, bool isFromMod)
+            {
+                Fragment  = fragment;
+                IsFromMod = isFromMod;
+            }
+
+            public ExtractedTableFragment Fragment { get; }
+
+            public bool IsFromMod { get; }
         }
     }
 }

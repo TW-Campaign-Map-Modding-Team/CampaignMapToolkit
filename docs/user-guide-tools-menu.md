@@ -412,8 +412,7 @@ Checks that the attrition zone data painted on the map is consistent with the ga
 
 1. Click **Tools** → **Validate** → **Attritions**.
 2. Common issues reported:
-   - The number of attrition zones in the database does not match the number stored in the map file.
-   - An attrition zone name in the database does not match what is stored in the map file (a name mismatch).
+   - An attrition zone stored in the map file that the database does not have.
    - A hex assigned to an attrition zone index that is out of range (e.g. pointing to zone 5 when only 4 zones exist).
 
 ---
@@ -426,8 +425,7 @@ Checks that the climate zone data is consistent with the game's database.
 
 1. Click **Tools** → **Validate** → **Climates**.
 2. Common issues reported:
-   - The number of climates in the database does not match the number in the map file.
-   - A climate name mismatch between the database and the map file.
+   - A climate stored in the map file that the database does not have.
    - A hex with no climate assigned at all.
    - A hex assigned to a climate index that is out of range.
 
@@ -447,7 +445,7 @@ Checks the terrain type (ground type) painted on every hex for consistency error
    - A land-category ground type used on a sea-region hex (e.g. "forest" painted over open water).
    - A hex flagged as land terrain but sitting inside a sea region, or vice versa.
    - A lone land hex completely surrounded by sea hexes (usually a stray painting mistake).
-   - A mismatch between the ground type names in the database and those stored in the map file.
+   - A ground type stored in the map file that the database does not have, or has in the other sea/land category.
 
 ---
 

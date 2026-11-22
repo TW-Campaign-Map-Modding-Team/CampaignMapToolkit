@@ -168,7 +168,7 @@ namespace CAIME.Tests.Unit
             var schemaFields      = DatabaseTableConverter.GetFields(schemaPath);
 
             var merged = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvFromFirstPack, "!!!mod"), (tsvFromSecondPack, "!!!mod") },
+                new[] { (tsvFromFirstPack, "!!!mod", true), (tsvFromSecondPack, "!!!mod", true) },
                 "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
             var records = merged.Root.Elements("test_table").ToList();
@@ -179,7 +179,7 @@ namespace CAIME.Tests.Unit
             // Reversing the listed order must reverse the winner - proves the tiebreak really tracks
             // input order rather than, say, file path or an unstable sort.
             var reversed = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvFromSecondPack, "!!!mod"), (tsvFromFirstPack, "!!!mod") },
+                new[] { (tsvFromSecondPack, "!!!mod", true), (tsvFromFirstPack, "!!!mod", true) },
                 "test_table", booleans, primaryKeyColumns, schemaFields, null, null);
 
             var reversedRecords = reversed.Root.Elements("test_table").ToList();
@@ -202,7 +202,7 @@ namespace CAIME.Tests.Unit
                 "aa_kept\t3\tfalse\ttrue\n");
 
             var merged = DatabaseTableConverter.MergeTsv(
-                new[] { (tsvPath, "rom_test") }, "test_table",
+                new[] { (tsvPath, "rom_test", true) }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),
@@ -223,7 +223,7 @@ namespace CAIME.Tests.Unit
             File.WriteAllText(tsvPath, Tsv);
 
             Assert.ThrowsException<InvalidDataException>(() => DatabaseTableConverter.MergeTsv(
-                new[] { (tsvPath, "rom_test") }, "test_table",
+                new[] { (tsvPath, "rom_test", true) }, "test_table",
                 DatabaseTableConverter.GetBooleanColumns(schemaPath),
                 DatabaseTableConverter.GetPrimaryKeyColumns(schemaPath),
                 DatabaseTableConverter.GetFields(schemaPath),
