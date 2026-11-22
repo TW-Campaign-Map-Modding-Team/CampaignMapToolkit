@@ -248,7 +248,7 @@ Every required table must be found in one of these. If RPFM can't find one, the 
 
 When two sources both define a row for the same primary key, the merged table still has that row only once, the same way the game resolves it:
 
-- **A mod and the game** (e.g. a mod's `rom_campaign_ground_types` fragment redefines the game's `river`): the mod's values replace the game's. The row is not duplicated, and when the game's fragment name sorts first (as `campaign_ground_types` does before `rom_campaign_ground_types`) it keeps the game row's place in the table.
+- **A mod and the game** (e.g. your mod's `my_mod_ground_types` fragment redefines a ground type the game's `campaign_ground_types` fragment already has): the mod's values replace the game's. The row is not duplicated, and when the game's fragment name sorts first (as `campaign_ground_types` does before `my_mod_ground_types`) it keeps the game row's place in the table.
 - **Two mod fragments, or two game fragments**: the row from the earlier-sorting *fragment* name wins (e.g. `db/campaign_map_regions_tables/!!!my_mod` before `.../data__`), whatever the `.pack` file is called or the order mods are listed in. If your mod and one of the mods it depends on both have a fragment at the identical path, your mod's copy is the one used.
 
 Each row sits where its key first appears when the fragments are taken in name order.
