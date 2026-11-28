@@ -48,15 +48,6 @@ namespace CAIME
             },
             new Setting
             {
-                Key         = "vanilla-pack-path",
-                Description = "Vanilla .pack the RPFM database source reads a game's\ntables from. Needs --game.",
-                IsPerGame   = true,
-                Read        = game => Preferences.GetVanillaPackPath(game),
-                Normalise   = TryExistingFile,
-                Write       = (game, value) => Preferences.SetVanillaPackPath(game, value),
-            },
-            new Setting
-            {
                 Key         = "database-source",
                 Description = "Where database tables come from: assembly-kit or rpfm.",
                 Read        = _ => Preferences.DatabaseSource == DatabaseSource.RPFM ? "rpfm" : "assembly-kit",
@@ -259,7 +250,6 @@ namespace CAIME
             }
 
             Preferences.Save();
-            WarnAboutIncompleteRpfmSetup(game);
 
             return CliConsole.ExitSuccess;
         }
@@ -306,21 +296,6 @@ namespace CAIME
             }
 
             return true;
-        }
-
-        private static void WarnAboutIncompleteRpfmSetup(GameTemplate? game)
-        {
-            if (Preferences.DatabaseSource != DatabaseSource.RPFM || game == null)
-            {
-                return;
-            }
-
-            var vanillaPack = Preferences.GetVanillaPackPath(game.Value);
-            if (string.IsNullOrEmpty(vanillaPack) || File.Exists(vanillaPack) == false)
-            {
-                CliConsole.Warning($"The database source is rpfm, but {CliNames.Game(game.Value)} has no vanilla pack set. " +
-                                   $"Its projects won't open until vanilla-pack-path is set for it.");
-            }
         }
 
         private static bool TryFindSetting(string key, out Setting setting)
@@ -376,23 +351,6 @@ namespace CAIME
             }
 
             return Directory.Exists(value) || Invalid($"{key}: folder not found: '{value}'.", out value);
-        }
-
-        private static bool TryExistingFile(string key, string input, out string value)
-        {
-            value = null;
-
-            if (input.Length == 0)
-            {
-                return true;
-            }
-
-            if (CliPaths.TryGetFullPath(input, key, out value) == false)
-            {
-                return false;
-            }
-
-            return File.Exists(value) || Invalid($"{key}: file not found: '{value}'.", out value);
         }
 
         private static bool TryRpfmFolder(string key, string input, out string value)

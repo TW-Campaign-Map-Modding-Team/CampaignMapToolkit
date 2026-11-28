@@ -242,7 +242,6 @@ namespace CAIME
             }
             finally
             {
-                project?.CleanupRpfmSession();
                 projectManager.CloseProject();
             }
         }

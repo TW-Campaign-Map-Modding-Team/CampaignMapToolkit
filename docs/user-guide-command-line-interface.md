@@ -77,7 +77,7 @@ The CLI uses the same settings as the editor. Make sure the following are in pla
    ```
    and they require the Assembly Kit application (Tweak.AssemblyKit) to be **closed**. Everything else can work with a `.hex` file in any location.
 
-3. **If RPFM is your database source,** every command that opens a map prepares the database tables through RPFM, just as opening a project in the editor does. The RPFM path and the game's vanilla pack must be set — see [Database Source](user-guide-settings-and-preferences.md#10-database-source-assembly-kit-or-rpfm).
+3. **If RPFM is your database source,** every command that opens a map prepares the database tables through RPFM, just as opening a project in the editor does. The RPFM path must be set — see [Database Source](user-guide-settings-and-preferences.md#10-database-source-assembly-kit-or-rpfm).
 
 > **Tip:** Close the editor before running commands that edit a map you have open in it, or that change settings. The editor does not notice changes made behind its back, and saving in the editor would overwrite them.
 
@@ -545,9 +545,8 @@ CAIME.exe config set <key>=<value> [<key>=<value> ...] [--game <game>]
 | Key | Setting | Values |
 |---|---|---|
 | `assembly-kit-path` | The game's Assembly Kit folder. Per game. | An existing folder |
-| `vanilla-pack-path` | The vanilla `.pack` the RPFM database source reads. Per game. | An existing file |
 | `database-source` | Where database tables come from. | `assembly-kit` or `rpfm` |
-| `rpfm-path` | The RPFM installation folder. | A folder containing a working `rpfm_cli.exe` |
+| `rpfm-path` | The RPFM installation folder. | A folder containing a working `rpfm_server.exe` |
 | `hex-spacing` | The gap drawn between hexes in the editor. | `0` to `0.2` |
 | `log-to-file` | Also write the log to a file. | `true` or `false` |
 | `auto-save` | Auto-save open projects. | `true` or `false` |

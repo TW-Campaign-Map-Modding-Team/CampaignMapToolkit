@@ -437,10 +437,6 @@ namespace CAIME
                 LoggerViewModel.Log($"{mapHexPath} could not be renamed to {mapName}!\n\nReason: {ex.Message}", LogLevel.ErrorMessageBox);
                 return false;
             }
-            finally
-            {
-                templateProject.CleanupRpfmSession();
-            }
         }
 
         public static string GetProjectPath(string projectsDir, string mapName)
