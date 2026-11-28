@@ -22,67 +22,21 @@ namespace CAIME.Painters
             public override int RecordCount => Records.Count;
         }
 
-        private Func<Hex, Hex, bool> _groundTypeConditionMatch;
-        private Func<Hex, Hex, bool> _climateConditionMatch;
-        private Func<Hex, Hex, bool> _attritionConditionMatch;
-        private Func<Hex, Hex, bool> _regionsConditionMatch;
-        private Func<Hex, Hex, bool> _nogoConditionMatch;
         private Func<Hex, Hex, bool> _currentConditionMatch;
-        private Func<Hex, Hex, bool> _roadsConditionMatch;
-        private Func<Hex, Hex, bool> _tradeRoutesConditionMatch;
-        private Func<Hex, Hex, bool> _restrictionsConditionMatch;
 
         private Layer _sourceLayer;
         private Layer _targetLayer;
 
         public FloodFillPainter(ViewportViewModel vvm, EditorViewModel evm) : base(vvm, evm)
         {
-            _groundTypeConditionMatch   = new Func<Hex, Hex, bool>((hex, nbr) => hex.GroundTypeIndex == nbr.GroundTypeIndex);
-            _climateConditionMatch      = new Func<Hex, Hex, bool>((hex, nbr) => hex.ClimateIndex    == nbr.ClimateIndex);
-            _attritionConditionMatch    = new Func<Hex, Hex, bool>((hex, nbr) => hex.AttritionIndex  == nbr.AttritionIndex);
-            _regionsConditionMatch      = new Func<Hex, Hex, bool>((hex, nbr) => hex.RegionId        == nbr.RegionId);
-            _nogoConditionMatch         = new Func<Hex, Hex, bool>((hex, nbr) => hex.IsImpassable    == nbr.IsImpassable);
-            _roadsConditionMatch        = new Func<Hex, Hex, bool>((hex, nbr) => hex.IsRoad          == nbr.IsRoad);
-            _tradeRoutesConditionMatch  = new Func<Hex, Hex, bool>((hex, nbr) => hex.IsTradeRoute    == nbr.IsTradeRoute);
-            _restrictionsConditionMatch = new Func<Hex, Hex, bool>((hex, nbr) => hex.RestrictionLvl  == nbr.RestrictionLvl);
         }
 
         public bool SetSource(Layer layer)
         {
-            switch (layer.Type)
+            if (HexShapes.TryGetFloodFillMatch(layer.Type, out _currentConditionMatch))
             {
-                case LayerType.GroundTypes:
-                    _currentConditionMatch = _groundTypeConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Attritions:
-                    _currentConditionMatch = _attritionConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Climates:
-                    _currentConditionMatch = _climateConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Regions:
-                    _currentConditionMatch = _regionsConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Impassable:
-                    _currentConditionMatch = _nogoConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Roads:
-                    _currentConditionMatch = _roadsConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.TradeRoutes:
-                    _currentConditionMatch = _tradeRoutesConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
-                case LayerType.Restrictions:
-                    _currentConditionMatch = _restrictionsConditionMatch;
-                    _sourceLayer = layer;
-                    return true;
+                _sourceLayer = layer;
+                return true;
             }
 
             _sourceLayer = null;
@@ -142,40 +96,11 @@ namespace CAIME.Painters
 
         private void FloodFill(PaintData data, Func<Hex, Hex, bool> fillConditionMatched)
         {
-            var isVisited   = new bool[project.MapHexFile.Capacity];
-            var queue       = new Queue<Hex>();
             var start       = data.HitHex;
             var startIndex  = HexGridUtility.IndexFromCoords(start.R, start.Q, (int)project.MapHexFile.MapWidth);
 
-            queue.Enqueue(start);
-            isVisited[startIndex] = true;
-
             // Collect indices in BFS order so we can read old colours before painting.
-            var hexIndices = new List<int>();
-            hexIndices.Add(startIndex);
-
-            while (queue.Count > 0)
-            {
-                var hex = queue.Dequeue();
-
-                for (ushort dir = 0; dir < HexGridUtility.NEIGHBOURS_COUNT; ++dir)
-                {
-                    var nbrIndex = project.MapHexFile.GetNeighbourIndex(hex, dir);
-                    if (nbrIndex == -1)
-                        continue;
-
-                    if (isVisited[nbrIndex])
-                        continue;
-
-                    var nbr = project.MapHexFile.HexData[nbrIndex];
-                    if (fillConditionMatched(hex, nbr))
-                    {
-                        hexIndices.Add(nbrIndex);
-                        queue.Enqueue(nbr);
-                        isVisited[nbrIndex] = true;
-                    }
-                }
-            }
+            var hexIndices  = HexShapes.FloodRegion(project.MapHexFile, startIndex, fillConditionMatched);
 
             // A beach fill target may include hexes that aren't eligible for beach (e.g. inland
             // hexes swept in via a different source layer's match) - drop those before recording
